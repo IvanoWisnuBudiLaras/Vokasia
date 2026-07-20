@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Vokasia.Api/Vokasia.Api.csproj" />
+    <Project Path="src/Vokasia.Domain/Vokasia.Domain.csproj" />
+    <Project Path="src/Vokasia.Infrastructure/Vokasia.Infrastructure.csproj" />
+    <Project Path="src/Vokasia.Worker/Vokasia.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Vokasia.Tests/Vokasia.Tests.csproj" />
+  </Folder>
+</Solution>
