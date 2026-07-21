@@ -60,12 +60,38 @@ export default async function SchoolDashboardPage() {
       )}
 
       {stats && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Card title="Jumlah Siswa">
-            <p className="text-3xl font-semibold text-ink">{stats.studentCount}</p>
+        // Hallmark-flow, component-scope (DECISIONS.md D19): sebelumnya 2 kartu SAMA besar
+        // berdampingan — "equal-card default" yang hallmark macrostructures.md tandai sbg tanda
+        // AI-generik ("visual rhythm harus dari variasi ukuran, bukan keseragaman kartu"). Diganti
+        // hierarki asli: Placement Aktif jadi lead (2 kolom, angka lebih besar) krn itu metrik
+        // operasional yang berubah tiap hari (yang dicek admin sekolah paling sering); Jumlah
+        // Siswa jadi pendukung (1 kolom). Pola angka+kata dari macrostructure Stat-Led hallmark
+        // ("angka besar TIDAK PERNAH berdiri sendiri sbg headline, wajib disandingkan baris kata")
+        // diterapkan di skala kartu, bukan skala hero halaman — tanpa animasi count-up (motion.md
+        // hallmark sarankan itu utk hero marketing; DESIGN.md membekukan stance motion-cut utk
+        // app fungsional ini, jadi angka tampil langsung). Kedua angka memakai tabular-nums (rata
+        // kanan visual saat berubah, konvensi Stat-Led). Tak ada metrik baru/karangan — tetap 2
+        // angka nyata yang sama dari loadStats().
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <Card className="md:col-span-2">
+            <div className="flex flex-col gap-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                Placement Aktif{stats.periodName ? ` · ${stats.periodName}` : ""}
+              </p>
+              <p className="text-5xl font-semibold tabular-nums text-ink">{stats.activePlacementCount}</p>
+              <p className="text-sm text-ink-muted">
+                {stats.periodName
+                  ? `Siswa PKL berjalan periode ${stats.periodName}.`
+                  : "Belum ada periode aktif — buat periode dulu di menu Periode."}
+              </p>
+            </div>
           </Card>
-          <Card title={stats.periodName ? `Placement Aktif (${stats.periodName})` : "Placement Aktif"}>
-            <p className="text-3xl font-semibold text-ink">{stats.activePlacementCount}</p>
+          <Card className="md:col-span-1">
+            <div className="flex flex-col gap-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Jumlah Siswa</p>
+              <p className="text-3xl font-semibold tabular-nums text-ink">{stats.studentCount}</p>
+              <p className="text-sm text-ink-muted">Total siswa terdaftar.</p>
+            </div>
           </Card>
         </div>
       )}

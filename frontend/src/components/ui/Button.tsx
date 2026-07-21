@@ -22,7 +22,15 @@ const sizeClass: Record<Size, string> = {
   lg: "h-[var(--tap-min)] px-6 text-base",
 };
 
-/** Tombol seragam satu-satunya di seluruh app — jangan buat tombol custom di luar ini. */
+/**
+ * Tombol seragam satu-satunya di seluruh app — jangan buat tombol custom di luar ini.
+ *
+ * Celah ditemukan+ditambal sesi hallmark-flow (DECISIONS.md D19): sebelumnya TANPA focus-visible
+ * sama sekali (bergantung ke outline default browser, yang di banyak browser nyaris tak
+ * kelihatan pada tombol berwarna) — dgn Button dipakai di puluhan tempat (termasuk retry
+ * ErrorState & LogoutButton), ini satu perbaikan yang otomatis menjalar ke seluruh app. Pakai
+ * --color-focus (token ada sejak D18, sebelumnya tak dipakai satu komponen pun).
+ */
 export function Button({
   variant = "primary",
   size = "md",
@@ -35,7 +43,8 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed",
+        "inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-medium outline-none transition-opacity disabled:opacity-50 disabled:cursor-not-allowed",
+        "focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2",
         variantClass[variant],
         sizeClass[size],
         className
