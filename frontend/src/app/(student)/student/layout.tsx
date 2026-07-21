@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { LogoutButton } from "@/components/LogoutButton";
 
 const NAV = [
   { href: "/student", label: "Hari Ini", icon: "📓" },
@@ -12,7 +13,10 @@ export default function StudentLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen flex-col">
       <header className="flex items-center justify-between border-b border-border p-4">
         <span className="text-lg font-semibold text-ink">Vokasia</span>
-        <span aria-hidden="true">🔔</span>
+        <div className="flex items-center gap-3">
+          <span aria-hidden="true">🔔</span>
+          <LogoutButton />
+        </div>
       </header>
       <main className="flex-1 p-4 pb-20">{children}</main>
       <nav className="fixed inset-x-0 bottom-0 flex border-t border-border bg-surface">

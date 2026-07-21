@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { LogoutButton } from "@/components/LogoutButton";
 
 const NAV = [
   { href: "/app", label: "Dashboard" },
@@ -15,7 +16,7 @@ const NAV = [
 export default function SchoolLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-56 shrink-0 border-r border-border bg-surface-muted p-4 md:block">
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-surface-muted p-4 md:flex">
         <div className="mb-6 text-lg font-semibold text-ink">Vokasia</div>
         <nav className="flex flex-col gap-1">
           {NAV.map((item) => (
@@ -28,6 +29,9 @@ export default function SchoolLayout({ children }: { children: ReactNode }) {
             </a>
           ))}
         </nav>
+        <div className="mt-auto pt-4">
+          <LogoutButton />
+        </div>
       </aside>
       <main className="flex-1 p-6">{children}</main>
     </div>
