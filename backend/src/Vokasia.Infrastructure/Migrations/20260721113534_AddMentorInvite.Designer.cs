@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Vokasia.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Vokasia.Infrastructure.Persistence;
 namespace Vokasia.Infrastructure.Migrations
 {
     [DbContext(typeof(VokasiaDbContext))]
-    partial class VokasiaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260721113534_AddMentorInvite")]
+    partial class AddMentorInvite
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

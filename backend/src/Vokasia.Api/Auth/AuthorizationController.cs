@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
 using System.Security.Claims;
+using Vokasia.Api.Auth.MagicLink;
 using Vokasia.Infrastructure.Identity;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -24,12 +25,18 @@ public class AuthorizationController : ControllerBase
     private readonly UserManager<AppUser> _userManager;
     private readonly SignInManager<AppUser> _signInManager;
     private readonly VokasiaClaimsFactory _claimsFactory;
+    private readonly MagicLinkService _magicLinkService;
 
-    public AuthorizationController(UserManager<AppUser> userManager, SignInManager<AppUser> signInManager, VokasiaClaimsFactory claimsFactory)
+    public AuthorizationController(
+        UserManager<AppUser> userManager,
+        SignInManager<AppUser> signInManager,
+        VokasiaClaimsFactory claimsFactory,
+        MagicLinkService magicLinkService)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _claimsFactory = claimsFactory;
+        _magicLinkService = magicLinkService;
     }
 
     [HttpGet("~/connect/authorize")]
@@ -95,6 +102,42 @@ public class AuthorizationController : ControllerBase
             var identity = await _claimsFactory.GenerateClaimsAsync(user);
             identity.SetDestinations(GetDestinations);
             return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        }
+
+        if (request.GrantType == OpenIddictSetup.MagicLinkGrantType)
+        {
+            // VOK-H2-E3 §3 ExchangeMagicToken — mentor tak punya password (FR-AUTH-03), tak bisa
+            // lewat authorization_code (butuh cookie login lolos AuthenticateAsync). Grant kustom
+            // ini validasi+konsumsi token (MagicLinkService), lalu terbitkan identity SAMA PERSIS
+            // (VokasiaClaimsFactory) spt grant lain — access/refresh token dari jalur OpenIddict
+            // yang sama, bukan sesi ad-hoc paralel.
+            var token = request.GetParameter("token")?.ToString();
+            if (string.IsNullOrEmpty(token))
+            {
+                return Forbid(
+                    authenticationSchemes: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+                    properties: new AuthenticationProperties(new Dictionary<string, string?>
+                    {
+                        [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                        [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "Parameter token wajib diisi.",
+                    }));
+            }
+
+            var (ok, user, error) = await _magicLinkService.ExchangeAsync(token, HttpContext.RequestAborted);
+            if (!ok || user is null)
+            {
+                return Forbid(
+                    authenticationSchemes: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+                    properties: new AuthenticationProperties(new Dictionary<string, string?>
+                    {
+                        [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                        [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = error ?? "Token magic link tidak valid.",
+                    }));
+            }
+
+            var mentorIdentity = await _claimsFactory.GenerateClaimsAsync(user);
+            mentorIdentity.SetDestinations(GetDestinations);
+            return SignIn(new ClaimsPrincipal(mentorIdentity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
         throw new NotImplementedException("Grant type belum didukung.");

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Auth.MagicLink;
 using Vokasia.Api.Endpoints;
 using Vokasia.Infrastructure;
 using Vokasia.Infrastructure.Identity;
@@ -17,6 +18,7 @@ builder.Services.AddVokasiaIdentity();
 builder.Services.AddVokasiaOpenIddict(builder.Configuration, builder.Environment);
 builder.Services.AddVokasiaRbacPolicies(); // AddAuthorizationBuilder() di dalamnya — jangan tambah AddAuthorization() lagi.
 builder.Services.AddControllers();
+builder.Services.AddScoped<MagicLinkService>(); // VOK-H2-E3 §3
 
 var app = builder.Build();
 
@@ -37,6 +39,7 @@ app.MapCompaniesAndPlacementsEndpoints();
 app.MapSchoolUsersEndpoints();
 app.MapAccountEndpoints(); // VOK-H2-E3: tambal gap /account/login (LoginPath H1-E3, lihat DECISIONS.md D17)
 app.MapAuditEndpoints(); // VOK-H2-E3 §2: WriteAuditLog — dipanggil BFF (TokenReuseDetected dst.)
+app.MapMagicLinkEndpoints(); // VOK-H2-E3 §3: create+validate magic link mentor
 
 // Smoke endpoint H1 — dibuktikan compose+migration hidup end-to-end (gate M0).
 app.MapGet("/health/ping", () => Results.Ok(new { status = "ok", service = "Vokasia.Api" }));

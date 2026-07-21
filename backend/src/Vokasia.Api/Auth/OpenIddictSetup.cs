@@ -13,6 +13,17 @@ public static class OpenIddictSetup
 {
     public const string BffClientId = "vokasia-bff";
 
+    /// <summary>
+    /// Grant kustom VOK-H2-E3 §3 (magic link mentor) — mentor tak punya password (FR-AUTH-03),
+    /// jadi tak bisa lewat authorization_code (yang butuh cookie login/AuthorizationController
+    /// .Authorize() lolos AuthenticateAsync Cookies). Ditangani AuthorizationController.Exchange()
+    /// sbg cabang baru: validasi+konsumsi token magic link (MagicLinkService), lalu terbitkan
+    /// identity persis sama (VokasiaClaimsFactory) spt grant lain — access/refresh token yang
+    /// dihasilkan TIDAK berbeda sama sekali dari flow OAuth normal (satu jalur penerbitan token,
+    /// bukan jalur sesi paralel ad-hoc — pelajaran D17 soal bahaya default-scheme diam-diam).
+    /// </summary>
+    public const string MagicLinkGrantType = "urn:vokasia:params:oauth:grant-type:magic-link";
+
     public static IServiceCollection AddVokasiaOpenIddict(this IServiceCollection services, IConfiguration config, IHostEnvironment env)
     {
         services.AddOpenIddict()
@@ -30,11 +41,31 @@ public static class OpenIddictSetup
 
                 options.AllowAuthorizationCodeFlow()
                        .RequireProofKeyForCodeExchange()
-                       .AllowRefreshTokenFlow();
+                       .AllowRefreshTokenFlow()
+                       .AllowCustomFlow(MagicLinkGrantType);
 
                 options.SetAccessTokenLifetime(TimeSpan.FromMinutes(15));
                 options.SetRefreshTokenLifetime(TimeSpan.FromDays(14));
                 options.UseReferenceRefreshTokens();
+
+                // GAP ditemukan+ditambal sesi VOK-H2-E3 (DECISIONS.md D22): rolling refresh token
+                // (redeem token lama + terbitkan token baru tiap refresh) SUDAH default sejak
+                // OpenIddict 3.0+ — TAPI ada "reuse leeway" default 30 DETIK (didesain resmi utk
+                // toleransi request konkuren/retry jaringan, lihat komentar maintainer kevinchalet di
+                // openiddict-core#1274): dalam jendela itu, token yg BARU SAJA diredeem tetap diterima
+                // dipakai ulang (200 OK), bukan ditolak. Ketahuan lewat
+                // RefreshRotationTests.OldRefreshToken_AfterRotation_IsRejected (Security/): reuse
+                // langsung sesudah rotasi pertama (dalam hitungan milidetik, jauh di bawah 30 detik)
+                // ternyata TETAP 200 OK — awalnya dikira bug "rotasi tak jalan", ternyata memang
+                // perilaku leeway yg terdokumentasi, BUKAN kegagalan konfigurasi UseReferenceRefreshTokens.
+                // AC VOK-H2-E3 §4 minta reuse lama -> DITOLAK (memicu revokeAllSessionsForUser di
+                // frontend/src/lib/refresh.ts) — model ancaman proyek ini (curi token lama, replay stlh
+                // korban sudah lanjut ke token baru) TIDAK butuh toleransi 30 detik itu (beda dari kasus
+                // retry-jaringan yg leeway ini memang ditujukan utk). SetRefreshTokenReuseLeeway(Zero)
+                // = tolak reuse SEKETIKA, sesuai model ancaman AC, mengorbankan toleransi retry-konkuren
+                // (trade-off SADAR, bukan default yg tak diperiksa). Diverifikasi PROMPT D: leeway
+                // default (baris ini dihapus) -> test merah (200 OK) -> pasang Zero -> hijau (400).
+                options.SetRefreshTokenReuseLeeway(TimeSpan.Zero);
 
                 // GAP ditemukan+ditambal sesi VOK-H2-E3 (DECISIONS.md D17): default OpenIddict
                 // men-ENKRIPSI access token (JWE, 5 segmen: header.key.iv.ciphertext.tag), bukan
@@ -135,6 +166,7 @@ public static class OpenIddictSetup
                 Permissions.Endpoints.Revocation, // VOK-H2-E3: BFF handleLogout panggil /connect/revoke (FR-AUTH-04)
                 Permissions.GrantTypes.AuthorizationCode,
                 Permissions.GrantTypes.RefreshToken,
+                Permissions.Prefixes.GrantType + MagicLinkGrantType, // VOK-H2-E3 §3
                 Permissions.ResponseTypes.Code,
                 Permissions.Scopes.Profile,
                 Permissions.Prefixes.Scope + "api",

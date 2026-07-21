@@ -1,15 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.DependencyInjection;
 using Vokasia.Domain.Common;
-using Vokasia.Infrastructure.Identity;
 
 namespace Vokasia.Tests.Auth;
 
@@ -27,6 +19,10 @@ namespace Vokasia.Tests.Auth;
 /// default true) sampai memanggil endpoint resource sungguhan dgn Bearer token hasil exchange —
 /// sengaja end-to-end (bukan cuma assert DefaultScheme di options) krn bug aslinya HANYA muncul
 /// lewat request Bearer sungguhan, tidak lewat pengecekan konfigurasi statis.
+///
+/// SeedUserAsync/LoginAndExchangeAsync dipindah ke <see cref="AuthTestHelpers"/> (VOK-H2-E3 §4,
+/// slice ditulis menyusul) saat RbacPolicyTests/RefreshRotationTests butuh persis logika yang
+/// sama — lihat doc-comment di sana.
 /// </summary>
 public class BearerAuthenticationTest : IClassFixture<VokasiaApiFactory>
 {
@@ -34,101 +30,13 @@ public class BearerAuthenticationTest : IClassFixture<VokasiaApiFactory>
 
     public BearerAuthenticationTest(VokasiaApiFactory factory) => _factory = factory;
 
-    private const string RedirectUri = "http://localhost:3000/api/auth/callback";
-    private const string ClientSecret = "dev-only-secret-change-me"; // cermin default OpenIddictSetup.cs bila OIDC_BFF_CLIENT_SECRET tak diset.
-    private const string Password = "Password123!";
-
-    private static (string Verifier, string Challenge) GeneratePkce()
-    {
-        var verifierBytes = RandomNumberGenerator.GetBytes(32);
-        var verifier = Convert.ToBase64String(verifierBytes).Replace("+", "-").Replace("/", "_").TrimEnd('=');
-        var challengeBytes = SHA256.HashData(Encoding.ASCII.GetBytes(verifier));
-        var challenge = Convert.ToBase64String(challengeBytes).Replace("+", "-").Replace("/", "_").TrimEnd('=');
-        return (verifier, challenge);
-    }
-
-    private async Task<AppUser> SeedUserAsync(string emailLocalPart, UserRole role, Guid? tenantId)
-    {
-        using var scope = _factory.Services.CreateScope();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
-        var email = $"{emailLocalPart}-{Guid.NewGuid():N}@vokasia.test";
-
-        var user = new AppUser
-        {
-            UserName = email,
-            Email = email,
-            FullName = "Bearer Test " + emailLocalPart,
-            Role = role,
-            TenantId = tenantId,
-            IsActive = true,
-        };
-        var created = await userManager.CreateAsync(user, Password);
-        Assert.True(created.Succeeded, string.Join(", ", created.Errors.Select(e => e.Description)));
-        return user;
-    }
-
-    /// <summary>Jalankan seluruh dance code+PKCE (authorize -> login form -> authorize lagi -> token) dan kembalikan access_token + refresh_token.</summary>
-    private static async Task<(string AccessToken, string? RefreshToken)> LoginAndExchangeAsync(
-        HttpClient client, string email, string scope = "api offline_access")
-    {
-        var (verifier, challenge) = GeneratePkce();
-
-        var authorizeUrl = "/connect/authorize" +
-            "?client_id=" + Uri.EscapeDataString(Vokasia.Api.Auth.OpenIddictSetup.BffClientId) +
-            "&response_type=code" +
-            "&redirect_uri=" + Uri.EscapeDataString(RedirectUri) +
-            "&scope=" + Uri.EscapeDataString(scope) +
-            "&state=teststate" +
-            "&code_challenge=" + challenge +
-            "&code_challenge_method=S256";
-
-        // 1. Belum ada cookie auth -> AuthorizationController redirect manual ke /account/login (DECISIONS.md D17, gantikan Challenge() lama).
-        var resp1 = await client.GetAsync(authorizeUrl);
-        Assert.Equal(HttpStatusCode.Found, resp1.StatusCode);
-        var loginLoc = resp1.Headers.Location!.ToString();
-        Assert.StartsWith("/account/login", loginLoc);
-
-        var loginQuery = QueryHelpers.ParseQuery(new Uri("http://test" + loginLoc).Query);
-        var returnUrl = loginQuery["ReturnUrl"].ToString();
-
-        // 2. POST kredensial ke /account/login (AccountEndpoints.cs, ditambah sesi ini krn gap H1-E3 -> DECISIONS.md D17).
-        var form = new Dictionary<string, string> { ["email"] = email, ["password"] = Password, ["returnUrl"] = returnUrl };
-        var resp2 = await client.PostAsync("/account/login", new FormUrlEncodedContent(form));
-        Assert.Equal(HttpStatusCode.SeeOther, resp2.StatusCode); // 303 - AccountEndpoints.SeeOther (DECISIONS.md D17).
-
-        // 3. GET returnUrl (sudah authenticated via cookie) -> 302 dgn ?code=...
-        var resp3 = await client.GetAsync(resp2.Headers.Location);
-        Assert.Equal(HttpStatusCode.Found, resp3.StatusCode);
-        var callbackLoc = resp3.Headers.Location!;
-        var code = QueryHelpers.ParseQuery(callbackLoc.Query)["code"].ToString();
-        Assert.False(string.IsNullOrEmpty(code));
-
-        // 4. Tukar code -> token (mirip frontend/src/app/api/auth/callback/route.ts).
-        var tokenForm = new Dictionary<string, string>
-        {
-            ["grant_type"] = "authorization_code",
-            ["code"] = code,
-            ["redirect_uri"] = RedirectUri,
-            ["client_id"] = Vokasia.Api.Auth.OpenIddictSetup.BffClientId,
-            ["client_secret"] = ClientSecret,
-            ["code_verifier"] = verifier,
-        };
-        var tokenResp = await client.PostAsync("/connect/token", new FormUrlEncodedContent(tokenForm));
-        Assert.Equal(HttpStatusCode.OK, tokenResp.StatusCode);
-        var tokenJson = await tokenResp.Content.ReadFromJsonAsync<JsonElement>();
-
-        var accessToken = tokenJson.GetProperty("access_token").GetString()!;
-        var refreshToken = tokenJson.TryGetProperty("refresh_token", out var rt) ? rt.GetString() : null;
-        return (accessToken, refreshToken);
-    }
-
     [Fact]
     public async Task ProtectedResourceEndpoint_WithValidBearerToken_ReturnsOk_NotLoginRedirect()
     {
-        var user = await SeedUserAsync("resource", UserRole.TenantAdmin, Guid.NewGuid());
+        var user = await AuthTestHelpers.SeedUserAsync(_factory, "resource", UserRole.TenantAdmin, Guid.NewGuid());
         var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        var (accessToken, _) = await LoginAndExchangeAsync(client, user.Email!);
+        var (accessToken, _) = await AuthTestHelpers.LoginAndExchangeAsync(client, user.Email!);
 
         // Access token HARUS berupa JWS 3-segmen (DisableAccessTokenEncryption, DECISIONS.md D17) - BFF/test bisa baca isinya.
         Assert.Equal(3, accessToken.Split('.').Length);
@@ -155,11 +63,12 @@ public class BearerAuthenticationTest : IClassFixture<VokasiaApiFactory>
     [Fact]
     public async Task RefreshToken_AfterRevocation_IsRejected()
     {
-        // AC VOK-H2-E3 §2 RevocationTests: FR-AUTH-04 "logout -> refresh dicabut instan".
-        var user = await SeedUserAsync("revoke", UserRole.TenantAdmin, Guid.NewGuid());
+        // AC VOK-H2-E3 §2/§4 RevocationTests (separuh "logout"): FR-AUTH-04 "logout -> refresh dicabut instan".
+        // Separuh "deactivate" ada di Security/RevocationTests.cs (ditulis menyusul, lihat doc-comment di sana).
+        var user = await AuthTestHelpers.SeedUserAsync(_factory, "revoke", UserRole.TenantAdmin, Guid.NewGuid());
         var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        var (_, refreshToken) = await LoginAndExchangeAsync(client, user.Email!);
+        var (_, refreshToken) = await AuthTestHelpers.LoginAndExchangeAsync(client, user.Email!);
         Assert.False(string.IsNullOrEmpty(refreshToken));
 
         var revokeForm = new Dictionary<string, string>
@@ -167,7 +76,7 @@ public class BearerAuthenticationTest : IClassFixture<VokasiaApiFactory>
             ["token"] = refreshToken!,
             ["token_type_hint"] = "refresh_token",
             ["client_id"] = Vokasia.Api.Auth.OpenIddictSetup.BffClientId,
-            ["client_secret"] = ClientSecret,
+            ["client_secret"] = AuthTestHelpers.ClientSecret,
         };
         var revokeResp = await client.PostAsync("/connect/revoke", new FormUrlEncodedContent(revokeForm));
         Assert.Equal(HttpStatusCode.OK, revokeResp.StatusCode);
@@ -177,7 +86,7 @@ public class BearerAuthenticationTest : IClassFixture<VokasiaApiFactory>
             ["grant_type"] = "refresh_token",
             ["refresh_token"] = refreshToken!,
             ["client_id"] = Vokasia.Api.Auth.OpenIddictSetup.BffClientId,
-            ["client_secret"] = ClientSecret,
+            ["client_secret"] = AuthTestHelpers.ClientSecret,
         };
         var refreshResp = await client.PostAsync("/connect/token", new FormUrlEncodedContent(refreshForm));
 

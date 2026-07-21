@@ -52,6 +52,7 @@ public class VokasiaDbContext : IdentityDbContext<AppUser, AppRole, Guid>
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<ProcessedMessage> ProcessedMessages => Set<ProcessedMessage>();
+    public DbSet<MentorInvite> MentorInvites => Set<MentorInvite>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -118,6 +119,14 @@ public class VokasiaDbContext : IdentityDbContext<AppUser, AppRole, Guid>
 
         b.Entity<OutboxMessage>(e => e.HasIndex(x => x.PublishedAt));
         b.Entity<ProcessedMessage>(e => e.HasKey(x => new { x.ConsumerName, x.MessageId }));
+
+        // VOK-H2-E3 §3 (magic link mentor, slice ditunda-lalu-dikerjakan): TIDAK di-ApplyTenantQueryFilters
+        // (tanpa kolom TenantId) — isolasi diwariskan dari Placement (lihat doc-comment MentorInvite).
+        b.Entity<MentorInvite>(e =>
+        {
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasIndex(x => x.PlacementId);
+        });
 
         ApplyTenantQueryFilters(b);
 
