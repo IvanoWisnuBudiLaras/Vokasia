@@ -68,6 +68,12 @@ services:
     environment:
       ConnectionStrings__Default: Host=postgres;Port=5432;Database=${POSTGRES_DB:-vokasia};Username=${POSTGRES_USER:-vokasia};Password=${POSTGRES_PASSWORD:-vokasia_dev}
       Redis__Connection: redis:6379
+      # GAP ditemukan+ditambal Gate M0 redeploy VOK-H3-E1 (DECISIONS.md D24): tanpa baris ini, api
+      # jatuh ke fallback DependencyInjection.cs ("localhost:9000") - DARI DALAM container api
+      # sendiri, "localhost" itu loopback container itu sendiri, BUKAN container minio terpisah ->
+      # BucketExistsAsync (dipanggil Program.cs startup, VOK-H3-E1) gagal connect -> container api
+      # crash saat startup (exit 139) - ketahuan lewat docker logs nyata, bukan diasumsikan.
+      Minio__Endpoint: minio:9000
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }

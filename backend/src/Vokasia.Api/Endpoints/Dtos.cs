@@ -27,3 +27,38 @@ public record BulkResult(List<Guid> SuccessIds, List<ImportRowError> Errors);
 
 public record InviteUserRequest(string Email, string FullName, UserRole Role);
 public record SchoolUserDto(Guid Id, string Email, string FullName, UserRole Role, bool IsActive);
+
+// VOK-H3-E1: jurnal siswa/mentor/guru.
+public record CompetencyDto(Guid Id, string Name, Guid MajorId);
+
+public record JournalSlotDto(Guid Id, DateOnly Date, JournalSlotStatus Status);
+public record WeekDayStatusDto(DateOnly Date, JournalSlotStatus Status);
+public record PhotoDto(Guid Id, string ObjectKey, string? ThumbKey, PhotoStatus Status);
+
+public record JournalDto(
+    Guid Id, Guid SlotId, Guid PlacementId, string Text, JournalEntryStatus Status,
+    string? MentorNote, DateTimeOffset SubmittedAt, DateTimeOffset? ApprovedAt,
+    List<PhotoDto> Photos, List<Guid> CompetencyIds);
+
+public record TodayJournalDto(
+    JournalSlotDto Slot, JournalDto? Entry, List<CompetencyDto> Competencies,
+    List<WeekDayStatusDto> WeekStatus, int Streak);
+
+public record SubmitJournalRequest(Guid SlotId, string Text, List<Guid> CompetencyIds, List<Guid>? PhotoIds);
+
+public record UploadRequest(string FileName, string ContentType, long SizeBytes);
+public record PresignedUploadDto(string UploadUrl, string ObjectKey, int ExpiresIn);
+public record AttachPhotoRequest(string ObjectKey);
+
+public record JournalFilter(Guid? PlacementId, JournalEntryStatus? Status, DateOnly? From, DateOnly? To);
+
+public record PendingGroupDto(Guid StudentId, string StudentFullName, List<JournalDto> Entries);
+
+public record ApproveJournalRequest(string? Note);
+public record RejectJournalRequest(string Reason);
+public record BatchApproveRequest(List<Guid> Ids);
+public record BatchFailure(Guid Id, string Reason);
+public record BatchResult(List<Guid> Approved, List<BatchFailure> Failed);
+
+public record AddCommentRequest(string Text);
+public record CommentDto(Guid Id, Guid JournalEntryId, Guid TeacherId, string Text, DateTimeOffset CreatedAt);
