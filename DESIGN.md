@@ -1,6 +1,6 @@
 # DESIGN.md — Kontrak Visual Vokasia
 
-**STATUS: PROPOSAL — menunggu approval Dev.** Tokens & voice di bawah diisi via metodologi hallmark (skill nyata `nutlope/hallmark`, terinstal manual sesi ini krn tak tersedia sbg skill Cowork bawaan — lihat DECISIONS.md D18 utk detail lengkap: alasan genre/tone/anchor hue, hasil verifikasi kontras WCAG). **Belum beku** — Developer perlu review lalu ganti baris status ini jadi "BEKU" (PRD 3.6 change control berlaku sejak saat itu, bukan sebelum).
+**STATUS: BEKU.** Disetujui Dev 2026-07-21 (chat: "approve") — lihat DECISIONS.md D20. Tokens & voice di bawah diisi via metodologi hallmark (skill nyata `nutlope/hallmark`, terinstal manual sesi ini krn tak tersedia sbg skill Cowork bawaan — lihat DECISIONS.md D18 utk alasan genre/tone/anchor hue + verifikasi kontras WCAG; D19 utk penerapan komponen di `/app` dashboard). Perubahan dari titik ini = change control PRD 3.6 (butuh entry DECISIONS.md baru, bukan edit diam-diam).
 
 ## Beku dari PRD (berlaku sekarang, tidak menunggu hallmark)
 
