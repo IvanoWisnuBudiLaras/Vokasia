@@ -1,44 +1,65 @@
 @import "tailwindcss";
 
 /*
- * DESIGN TOKENS — PROVISIONAL (lihat DESIGN.md; hallmark belum dijalankan Dev).
- * [ASSUMPTION] palet netral fungsional dipilih sendiri sebagai placeholder — nilai literal
- * di file ini SATU-SATUNYA tempat warna/spacing hardcode boleh muncul; semua komponen lain
- * WAJIB memakai token @theme di bawah, bukan hex langsung (VOK-H1-E2 AC).
+ * DESIGN TOKENS — diisi via metodologi hallmark (DECISIONS.md D18), MENUNGGU APPROVAL DEV
+ * sebelum resmi "beku" per DESIGN.md §freeze (PRD 3.6 change control) — proposal, bukan final.
+ * OKLCH menggantikan hex placeholder (nilai lama gagal kontras border 1.3:1, jauh di bawah
+ * 3:1 WCAG 1.4.11 non-text — lihat verifikasi di D18). Anchor hue 222° (teal-biru, bukan
+ * biru generik ~250-265° yang dipakai hampir semua SaaS/AI — hallmark color.md eksplisit
+ * memperingatkan ini) — dipilih agar (a) tetap terbaca "institusional/tepercaya" utk konteks
+ * sekolah, (b) beda jelas dari hue RAG (green~155/amber~75-85/red~25) supaya warna brand tak
+ * pernah rancu dgn status, (c) chroma rendah-sedang (0.10-0.16) sesuai tone utilitarian/teknis
+ * — bukan luxury/playful. RAG mempertahankan makna beku dari PRD (hijau=beres/kuning=perhatian
+ * /merah=bermasalah); hanya representasi OKLCH-nya yang diperbaiki (lihat kontras di D18).
+ * SEMUA warna/spacing hardcode HANYA boleh muncul di sini; komponen lain WAJIB pakai token
+ * @theme di bawah (VOK-H1-E2 AC, tidak berubah).
  */
 :root {
-  /* Warna dasar */
-  --color-surface: #ffffff;
-  --color-surface-muted: #f4f5f7;
-  --color-ink: #14181f;
-  --color-ink-muted: #5b6472;
-  --color-border: #dde1e7;
+  /* Warna dasar — anchor hue 222 (teal-biru institusional, lihat catatan di atas) */
+  --color-surface: oklch(98% 0.004 222);
+  --color-surface-muted: oklch(95% 0.006 222);
+  --color-ink: oklch(19% 0.014 222);
+  --color-ink-muted: oklch(46% 0.020 222);
+  --color-border: oklch(62% 0.016 222);
 
-  /* Brand */
-  --color-primary: #1d5fd6;
-  --color-primary-ink: #ffffff;
-  --color-primary-muted: #e7eefc;
+  /* Brand — accent tunggal, dipakai hemat (link, fokus, CTA, item nav aktif) — bukan fill besar */
+  --color-primary: oklch(48% 0.12 222);
+  --color-primary-ink: oklch(99% 0.003 222);
+  --color-primary-muted: oklch(94% 0.025 222);
+  --color-focus: oklch(58% 0.15 222);
 
-  /* Status RAG — konsisten lintas surface (W2/W3) */
-  --color-status-green: #1e8e5a;
-  --color-status-green-bg: #e5f6ee;
-  --color-status-amber: #b0730c;
-  --color-status-amber-bg: #fdf1dc;
-  --color-status-red: #c62b2b;
-  --color-status-red-bg: #fbe6e6;
+  /* Status RAG — makna beku dari PRD, representasi OKLCH diperbaiki (kontras diverifikasi D18) */
+  --color-status-green: oklch(46% 0.11 155);
+  --color-status-green-bg: oklch(95% 0.03 155);
+  --color-status-amber: oklch(52% 0.13 75);
+  --color-status-amber-bg: oklch(95% 0.04 85);
+  --color-status-red: oklch(50% 0.16 25);
+  --color-status-red-bg: oklch(95% 0.03 25);
 
-  /* Spacing scale (px, dipetakan ke rem via Tailwind) */
+  /* Spacing scale 4pt, nama peran bukan ukuran (hallmark layout-and-space.md) */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-6: 24px;
   --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 64px;
 
   /* Radius */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
+
+  /* Motion — stance motion-cut (tanpa pustaka animasi terpasang; DESIGN.md beku: "minimal,
+     tanpa animasi berat di 3G"). Tiga easing bernama + tiga durasi, TIDAK lebih (hallmark
+     motion.md) — animasikan transform/opacity saja, hormati prefers-reduced-motion (di bawah). */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
 
   /* Target sentuh minimum (NFR-UX-02) */
   --tap-min: 44px;
@@ -46,12 +67,28 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-surface: #14181f;
-    --color-surface-muted: #1c212b;
-    --color-ink: #f4f5f7;
-    --color-ink-muted: #9aa4b2;
-    --color-border: #2b323d;
-    --color-primary-muted: #1a2c4d;
+    --color-surface: oklch(16% 0.012 222);
+    --color-surface-muted: oklch(20% 0.014 222);
+    --color-ink: oklch(95% 0.006 222);
+    --color-ink-muted: oklch(74% 0.014 222);
+    --color-border: oklch(52% 0.018 222);
+    --color-primary: oklch(68% 0.10 222);
+    --color-primary-muted: oklch(24% 0.03 222);
+    --color-focus: oklch(72% 0.13 222);
+    --color-status-green: oklch(72% 0.10 155);
+    --color-status-green-bg: oklch(22% 0.03 155);
+    --color-status-amber: oklch(76% 0.11 85);
+    --color-status-amber-bg: oklch(22% 0.04 85);
+    --color-status-red: oklch(74% 0.13 25);
+    --color-status-red-bg: oklch(22% 0.03 25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 150ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 150ms !important;
   }
 }
 
@@ -64,6 +101,7 @@
   --color-primary: var(--color-primary);
   --color-primary-ink: var(--color-primary-ink);
   --color-primary-muted: var(--color-primary-muted);
+  --color-focus: var(--color-focus);
   --color-status-green: var(--color-status-green);
   --color-status-green-bg: var(--color-status-green-bg);
   --color-status-amber: var(--color-status-amber);
