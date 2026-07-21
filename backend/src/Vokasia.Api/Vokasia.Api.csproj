@@ -13,15 +13,20 @@
     <PackageReference Include="MassTransit.RabbitMQ" Version="8.5.10" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+    <!-- Pin transitif: GHSA-v5pm-xwqc-g5wc (High) di Microsoft.OpenApi 2.0.0 yang otomatis
+         terpilih. Versi 3.9.0 bentrok dgn source-generator Microsoft.AspNetCore.OpenApi
+         10.0.10 (CS0200), jadi tetap di jalur mayor 2.x versi terpatch. -->
+    <PackageReference Include="Microsoft.OpenApi" Version="2.1.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.OpenApi" Version="3.9.0" />
     <PackageReference Include="Minio" Version="7.0.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="OpenIddict.AspNetCore" Version="7.6.0" />
     <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="7.6.0" />
+    <PackageReference Include="OpenIddict.Server.AspNetCore" Version="7.6.0" />
+    <PackageReference Include="OpenIddict.Validation.AspNetCore" Version="7.6.0" />
     <PackageReference Include="StackExchange.Redis" Version="3.0.17" />
   </ItemGroup>
 
