@@ -18,7 +18,11 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddVokasiaInfrastructure(this IServiceCollection services, IConfiguration config)
     {
-        services.AddScoped<ITenantContext>(_ => new AmbientTenantContext());
+        // AC VOK-H2-E3: AmbientTenantContext didaftar SEBAGAI kelas konkret scoped (bukan cuma
+        // interface) agar TenantResolutionMiddleware (Vokasia.Api) & VokasiaDbContext berbagi
+        // INSTANCE SAMA per-request — middleware set nilai, DbContext baca nilai yg sama itu.
+        services.AddScoped<AmbientTenantContext>();
+        services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<AmbientTenantContext>());
 
         services.AddDbContext<VokasiaDbContext>(opt =>
             opt.UseNpgsql(config.GetConnectionString("Default")

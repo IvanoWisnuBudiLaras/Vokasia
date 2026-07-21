@@ -126,14 +126,12 @@ public class VokasiaDbContext : IdentityDbContext<AppUser, AppRole, Guid>
     }
 
     /// <summary>
-    /// Global query filter tenant isolation (FR-AUTH-06). STUB di H1: filter aktif secara mekanis
-    /// tapi ITenantContext masih diisi manual (belum ada middleware). Diaktifkan PENUH — lewat
-    /// TenantResolutionMiddleware yang membaca claims JWT — di H2-E3. Marker: // ACTIVATED-H2E3.
+    /// Global query filter tenant isolation (FR-AUTH-06). AKTIF PENUH sejak H2-E3:
+    /// TenantResolutionMiddleware (Vokasia.Api/Auth) mengisi AmbientTenantContext dari claims JWT
+    /// setiap request; DbContext ini membaca instance scoped yang SAMA (lihat DependencyInjection.cs).
     /// </summary>
     private void ApplyTenantQueryFilters(ModelBuilder b)
     {
-        // ACTIVATED-H2E3: filter di bawah sudah otomatis berlaku begitu AmbientTenantContext
-        // diisi middleware per-request. Tidak ada perubahan model diperlukan di H2-E3.
         b.Entity<Period>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
         b.Entity<Holiday>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
         b.Entity<Major>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
