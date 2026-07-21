@@ -101,9 +101,22 @@ public class JournalStudentEndpointsTests : IClassFixture<VokasiaApiFactory>
     [Fact]
     public async Task SubmitJournal_HappyPath_CreatesEntryAndFillsSlotAndPublishesOutbox()
     {
-        var (client, _, placementId, _, _, tenantId) = await SeedStudentWithActivePlacementAsync();
+        var (client, _, placementId, _, majorId, tenantId) = await SeedStudentWithActivePlacementAsync();
         var slotId = await SeedTodaySlotAsync(placementId, tenantId);
-        var competencyId = Guid.NewGuid();
+
+        // VOK-H3-E3 §2: SubmitJournalValidator SEKARANG memverifikasi CompetencyIds benar2 milik
+        // major siswa pemanggil (async, query Competencies) - guid acak tanpa baris Competency
+        // sungguhan (perilaku test lama) kini DITOLAK 400 by design. Seed baris nyata dgn MajorId
+        // yang sama persis dgn siswa ini, supaya "happy path" tetap benar2 valid di bawah aturan baru.
+        Guid competencyId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var seedDb = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
+            var competency = new Competency { Id = Guid.NewGuid(), TenantId = tenantId, MajorId = majorId, Name = "Pemrograman Web" };
+            seedDb.Competencies.Add(competency);
+            await seedDb.SaveChangesAsync();
+            competencyId = competency.Id;
+        }
 
         int outboxBefore;
         using (var scope = _factory.Services.CreateScope())

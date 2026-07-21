@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Vokasia.Api.RateLimiting;
+using Vokasia.Api.Validation;
 
 namespace Vokasia.Api.Auth.MagicLink;
 
@@ -11,7 +13,10 @@ public static class MagicLinkEndpoints
 {
     public static IEndpointRouteBuilder MapMagicLinkEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/mentor-invites").WithTags("MagicLink");
+        // VOK-H3-E3 §2: ValidationFilter global (CreateMentorInviteRequest BELUM punya validator
+        // ticket-named — di luar daftar 8 named §2, dicatat sbg gap eksplisit DECISIONS.md, bukan
+        // diam-diam; filter tetap dipasang agar otomatis aktif begitu validator ditambahkan nanti).
+        var group = app.MapGroup("/api/mentor-invites").WithTags("MagicLink").AddEndpointFilter<ValidationFilter>();
 
         // TeacherPlus (TenantAdmin/DeptHead/Teacher): guru yang membimbing placement sehari-hari
         // biasanya yang mengundang mentor DUDI-nya, sama semangat dgn AssignTeacher/H2-E1.
@@ -19,7 +24,9 @@ public static class MagicLinkEndpoints
 
         // Anonim BY DESIGN: dipanggil halaman publik /mentor-invite (FE) SEBELUM mentor punya
         // sesi apa pun — mustahil digerbangi RBAC (mentor belum jadi AppUser saat validasi).
-        group.MapGet("/validate", Validate);
+        // VOK-H3-E3 §3: rate limit "public" (10/mnt per IP) — endpoint anonim paling rawan brute-force
+        // token magic link (coba banyak token acak sampai kena satu yang valid).
+        group.MapGet("/validate", Validate).RequireRateLimiting(VokasiaRateLimiting.PublicPolicy);
 
         return app;
     }

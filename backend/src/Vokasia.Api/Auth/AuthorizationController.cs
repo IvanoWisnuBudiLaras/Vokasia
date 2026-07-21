@@ -73,6 +73,18 @@ public class AuthorizationController : ControllerBase
     [HttpPost("~/connect/token")]
     [IgnoreAntiforgeryToken]
     [Produces("application/json")]
+    // VOK-H3-E3 §3 [DEVIASI dicatat, bukan diam-diam - DECISIONS.md D25]: SENGAJA TIDAK diberi
+    // [EnableRateLimiting] di sini. Dicoba dulu ("public" 10/mnt per IP), TERBUKTI SALAH lewat test
+    // nyata: endpoint ini dipakai bersama oleh BANYAK user berbeda dari IP yang sama (setiap login
+    // sukses + setiap refresh rutin BFF - dlm test, 1 factory/IP dipakai belasan user berbeda dlm
+    // 1 class; di produksi nyata, banyak siswa di jaringan sekolah yang sama) - rate-limit IP-only
+    // di sini akan mengunci user LAIN yang sah, bukan cuma penyerang (dibuktikan: JournalStudentEndpointsTests
+    // - 12 login berbeda dari 1 factory - gagal 429 palsu begitu policy dipasang di sini). Kredensial
+    // yang ditukar endpoint ini (authorization_code, refresh_token, magic-link token - lihat Exchange()
+    // di bawah) SEMUANYA ber-entropi tinggi (sudah diterbitkan lebih dulu lewat jalur lain), TIDAK
+    // bisa ditebak lewat volume percobaan spt password pendek - maka tidak butuh rate-limit ketat di
+    // titik INI. Permukaan password SUNGGUHAN (POST /account/login) yang dibatasi ketat (policy
+    // "login", partisi IP+email - lihat AccountEndpoints.cs + doc-comment VokasiaRateLimiting.cs).
     public async Task<IActionResult> Exchange()
     {
         var request = HttpContext.GetOpenIddictServerRequest()

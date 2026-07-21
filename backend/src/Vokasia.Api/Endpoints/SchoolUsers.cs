@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Infrastructure.Identity;
 using Vokasia.Infrastructure.Persistence;
@@ -16,7 +17,10 @@ public static class SchoolUsersEndpoints
 {
     public static IEndpointRouteBuilder MapSchoolUsersEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/school-users").WithTags("SchoolUsers").RequireAuthorization(RbacPolicies.TenantAdminOnly);
+        // VOK-H3-E3 §2: ValidationFilter global (InviteUserValidator: email format + role whitelist).
+        var group = app.MapGroup("/api/school-users").WithTags("SchoolUsers")
+            .RequireAuthorization(RbacPolicies.TenantAdminOnly)
+            .AddEndpointFilter<ValidationFilter>();
 
         group.MapPost("/", InviteSchoolUser);
         group.MapPut("/{userId:guid}/role", AssignRole);

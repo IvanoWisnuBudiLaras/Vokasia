@@ -29,13 +29,17 @@ public class JournalEntry : ITenantScoped
     public DateTimeOffset? ApprovedAt { get; set; }
 
     /// <summary>
-    /// Domain guard immutability (FR-JRN-04). Dipanggil semua path mutasi. Implementasi penuh +
-    /// exception type khusus disiapkan H3-E3 — untuk H1 disediakan agar kontrak method stabil.
+    /// Domain guard immutability (FR-JRN-04, NFR-SEC-08). Dipanggil SEMUA path mutasi: update teks
+    /// (resubmit), attach foto, delete — lihat JournalEndpoints.cs (SubmitJournal menolak resubmit
+    /// selain saat Rejected; Approve/Reject/BatchApprove memanggil ini eksplisit sebelum mutasi).
+    /// Rejected TIDAK immutable by design (AC ticket H3-E1: siswa boleh isi ulang) — hanya Approved
+    /// yang terkunci permanen. Implementasi H3-E3: exception type khusus (bukan generik) supaya
+    /// middleware Api bisa memetakan ke 409 + {code,message} konsisten, bukan 500.
     /// </summary>
     public void EnsureMutable()
     {
         if (Status == JournalEntryStatus.Approved)
-            throw new InvalidOperationException("journal-approved-immutable");
+            throw new DomainImmutableException("journal-approved-immutable", "Jurnal yang sudah disetujui tidak bisa diubah.");
     }
 }
 

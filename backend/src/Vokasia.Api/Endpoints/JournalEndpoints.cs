@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Minio;
 using Minio.DataModel.Args;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
 using Vokasia.Infrastructure.Persistence;
@@ -24,14 +25,22 @@ public static class JournalEndpoints
 {
     private const string BucketConfigKey = "Minio:Bucket";
     private const string DefaultBucket = "vokasia-journal";
-    private static readonly string[] AllowedContentTypes = ["image/jpeg", "image/png", "image/webp"];
-    private const long MaxPhotoSizeBytes = 5 * 1024 * 1024;
-    private const int MaxPhotosPerEntry = 3;
-    private const int MaxCompetenciesPerEntry = 5;
+
+    // VOK-H3-E3 §2: internal (bukan private) — dijadikan SATU sumber kebenaran, dipakai juga oleh
+    // UploadRequestValidator/SubmitJournalValidator (Validation/) supaya batas ContentType/ukuran/
+    // jumlah foto/kompetensi tak pernah drift antara validator dan endpoint ini.
+    internal static readonly string[] AllowedContentTypes = ["image/jpeg", "image/png", "image/webp"];
+    internal const long MaxPhotoSizeBytes = 5 * 1024 * 1024;
+    internal const int MaxPhotosPerEntry = 3;
+    internal const int MaxCompetenciesPerEntry = 5;
 
     public static IEndpointRouteBuilder MapJournalEndpoints(this IEndpointRouteBuilder app)
     {
-        var journals = app.MapGroup("/api/journals").WithTags("Journals");
+        // VOK-H3-E3 §2: ValidationFilter global — jalan utk SEMUA route grup ini SEBELUM handler,
+        // memvalidasi request via IValidator<T> terdaftar (SubmitJournalValidator, UploadRequestValidator,
+        // RejectJournalValidator, dst - lihat Validation/). Request tanpa validator terdaftar lolos
+        // apa adanya (lihat doc-comment ValidationFilter).
+        var journals = app.MapGroup("/api/journals").WithTags("Journals").AddEndpointFilter<ValidationFilter>();
 
         // --- §2 siswa — StudentSelf ---
         journals.MapGet("/today", GetTodayJournal).RequireAuthorization(RbacPolicies.StudentSelf);
@@ -58,7 +67,7 @@ public static class JournalEndpoints
         // --- §4 guru — TeacherPlus ---
         journals.MapPost("/{id:guid}/comments", AddTeacherComment).RequireAuthorization(RbacPolicies.TeacherPlus);
 
-        var competencies = app.MapGroup("/api/competencies").WithTags("Journals");
+        var competencies = app.MapGroup("/api/competencies").WithTags("Journals").AddEndpointFilter<ValidationFilter>();
         competencies.MapGet("/", ListCompetencies).RequireAuthorization(RbacPolicies.TeacherPlus);
 
         return app;
@@ -154,19 +163,10 @@ public static class JournalEndpoints
 
     private static async Task<IResult> SubmitJournal(Guid slotId, SubmitJournalRequest req, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
     {
-        if (req.Text.Length > 500)
-        {
-            return Results.ValidationProblem(new Dictionary<string, string[]> { ["Text"] = ["Teks jurnal maksimal 500 karakter."] });
-        }
-        if (req.CompetencyIds.Count > MaxCompetenciesPerEntry)
-        {
-            return Results.ValidationProblem(new Dictionary<string, string[]> { ["CompetencyIds"] = [$"Maksimal {MaxCompetenciesPerEntry} kompetensi per jurnal."] });
-        }
-        if (req.PhotoIds is { Count: > MaxPhotosPerEntry })
-        {
-            return Results.ValidationProblem(new Dictionary<string, string[]> { ["PhotoIds"] = [$"Maksimal {MaxPhotosPerEntry} foto per jurnal."] });
-        }
-
+        // VOK-H3-E3 §2: batas Text<=500/CompetencyIds 1-5(+milik major siswa)/PhotoIds<=3 SEKARANG
+        // ditegakkan SubmitJournalValidator lewat ValidationFilter global (jalan sebelum handler ini
+        // dipanggil sama sekali) - inline check manual yang dulu di sini DIHAPUS (bukan lagi dead
+        // code redundan), FluentValidation jadi SATU-SATUNYA sumber kebenaran limit ini.
         var placement = await ResolveActivePlacementAsync(db, tenant, ct);
         if (placement is null)
         {
@@ -180,9 +180,17 @@ public static class JournalEndpoints
         }
 
         var entry = await db.JournalEntries.FirstOrDefaultAsync(e => e.SlotId == slotId, ct);
-        if (entry is not null && entry.Status != JournalEntryStatus.Rejected)
+        if (entry is not null)
         {
-            return Results.Conflict(new { message = "Slot sudah terisi." });
+            // VOK-H3-E3 §1: EnsureMutable() DULU - kalau Approved, lempar DomainImmutableException
+            // spesifik (409 {code:"journal-approved-immutable",...} via exception middleware) SEBELUM
+            // jatuh ke Conflict generik di bawah. Rejected TIDAK throw (EnsureMutable hanya menjaga
+            // Approved) - lolos ke isResubmit=true di bawah, sesuai AC "Rejected boleh isi ulang".
+            entry.EnsureMutable();
+            if (entry.Status != JournalEntryStatus.Rejected)
+            {
+                return Results.Conflict(new { message = "Slot sudah terisi." });
+            }
         }
 
         var isResubmit = entry is not null;
@@ -191,7 +199,7 @@ public static class JournalEndpoints
             entry = new JournalEntry { Id = Guid.NewGuid(), TenantId = placement.TenantId, SlotId = slotId, PlacementId = placement.Id };
             db.JournalEntries.Add(entry);
         }
-        entry.Text = req.Text;
+        entry.Text = TextSanitizer.Clean(req.Text); // VOK-H3-E3 §2: strip HTML/script sebelum simpan (FR-JRN teks bebas).
         entry.Status = JournalEntryStatus.Submitted;
         entry.MentorNote = null;
         entry.SubmittedAt = DateTimeOffset.UtcNow;
@@ -225,17 +233,12 @@ public static class JournalEndpoints
 
     private static async Task<IResult> GetPresignedUploadUrl(UploadRequest req, IMinioClient minio, ITenantContext tenant, IConfiguration config, CancellationToken ct)
     {
+        // VOK-H3-E3 §2: ContentType whitelist + ukuran<=5MB SEKARANG ditegakkan UploadRequestValidator
+        // (Validation/UploadRequestValidator.cs, sumber batas sama persis: AllowedContentTypes/
+        // MaxPhotoSizeBytes di atas) lewat ValidationFilter global - inline check lama dihapus.
         if (!tenant.TenantId.HasValue)
         {
             return Results.Forbid();
-        }
-        if (!AllowedContentTypes.Contains(req.ContentType))
-        {
-            return Results.ValidationProblem(new Dictionary<string, string[]> { ["ContentType"] = ["Tipe berkas hanya image/jpeg, image/png, atau image/webp."] });
-        }
-        if (req.SizeBytes > MaxPhotoSizeBytes)
-        {
-            return Results.ValidationProblem(new Dictionary<string, string[]> { ["SizeBytes"] = ["Ukuran berkas maksimal 5MB."] });
         }
 
         var bucket = config[BucketConfigKey] ?? DefaultBucket;
@@ -271,6 +274,13 @@ public static class JournalEndpoints
         {
             return Results.NotFound();
         }
+
+        // VOK-H3-E3 §1: GAP ditemukan+ditambal - AttachPhoto SEBELUMNYA tak punya guard status sama
+        // sekali (siswa bisa lampir foto ke entry yang SUDAH Approved, padahal ticket §1 eksplisit
+        // menyebut "attach foto" sbg salah satu path wajib EnsureMutable()). Test PROMPT-D: hapus
+        // baris ini -> AttachPhoto_OnApprovedEntry_Returns409 (Guard/ImmutabilityTests.cs) merah
+        // (200 bukan 409) -> baris ini kembalikan -> hijau.
+        entry.EnsureMutable();
 
         var existingCount = await db.JournalPhotos.CountAsync(p => p.JournalEntryId == id, ct);
         if (existingCount >= MaxPhotosPerEntry)
@@ -396,15 +406,21 @@ public static class JournalEndpoints
             return Results.Forbid();
         }
 
+        // VOK-H3-E3 §1: EnsureMutable() DULU (bukan setelah check status!=Submitted) - urutan lama
+        // membuat EnsureMutable() TAK PERNAH benar2 throw di sini (Approved sudah keburu ke-tangkap
+        // check generik di bawah lebih dulu, dead code sesungguhnya) - dibalik supaya Approved
+        // spesifik memberi 409 {code:"journal-approved-immutable",...} via middleware (BUKAN pesan
+        // generik "bukan berstatus menunggu persetujuan" yang sebelumnya menyamarkan kasus ini).
+        // Rejected TIDAK throw (EnsureMutable hanya menjaga Approved) - lolos ke Conflict generik di bawah.
+        entry.EnsureMutable();
         if (entry.Status != JournalEntryStatus.Submitted)
         {
             return Results.Conflict(new { message = "Jurnal ini bukan berstatus menunggu persetujuan." });
         }
 
-        entry.EnsureMutable(); // AC §1: hook wajib dipanggil - penegakan penuh dipasang H3-E3.
         entry.Status = JournalEntryStatus.Approved;
         entry.ApprovedAt = DateTimeOffset.UtcNow;
-        entry.MentorNote = req.Note;
+        entry.MentorNote = req.Note is null ? null : TextSanitizer.Clean(req.Note); // VOK-H3-E3 §2: sanitasi, null tetap null (bukan "").
 
         db.OutboxMessages.Add(new OutboxMessage
         {
@@ -423,11 +439,8 @@ public static class JournalEndpoints
         Guid id, RejectJournalRequest req, System.Security.Claims.ClaimsPrincipal user,
         IAuthorizationService authService, VokasiaDbContext db, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.Reason))
-        {
-            return Results.ValidationProblem(new Dictionary<string, string[]> { ["Reason"] = ["Alasan penolakan wajib diisi."] });
-        }
-
+        // VOK-H3-E3 §2: Reason 5-300 karakter SEKARANG ditegakkan RejectJournalValidator lewat
+        // ValidationFilter global - inline check kosong/whitespace lama dihapus (tercakup MinimumLength).
         var (entry, placement) = await LoadEntryWithPlacementAsync(db, id, ct);
         if (entry is null || placement is null)
         {
@@ -440,14 +453,15 @@ public static class JournalEndpoints
             return Results.Forbid();
         }
 
+        // VOK-H3-E3 §1: EnsureMutable() DULU - lihat komentar sama persis di ApproveJournal di atas.
+        entry.EnsureMutable();
         if (entry.Status != JournalEntryStatus.Submitted)
         {
             return Results.Conflict(new { message = "Jurnal ini bukan berstatus menunggu persetujuan." });
         }
 
-        entry.EnsureMutable();
         entry.Status = JournalEntryStatus.Rejected;
-        entry.MentorNote = req.Reason;
+        entry.MentorNote = TextSanitizer.Clean(req.Reason); // VOK-H3-E3 §2: sanitasi alasan reject sebelum simpan.
         // Slot TETAP Filled (bukan direset Empty) - siswa isi ulang lewat SubmitJournal yang
         // sudah menangani "entry.Status == Rejected -> update in-place" (lihat SubmitJournal di atas).
 
@@ -483,13 +497,32 @@ public static class JournalEndpoints
                 continue;
             }
 
+            // VOK-H3-E3 §1: Approved ditangani TERPISAH dari check status!=Submitted di bawah, dan
+            // EnsureMutable() ditangkap LOKAL (try/catch) - BUKAN dibiarkan lempar ke exception
+            // middleware global spt single-item Approve/RejectJournal. Kalau dibiarkan, satu item
+            // Approved di tengah batch akan membatalkan SELURUH response (exception tak tertangani
+            // = 409 utk seluruh request) - melanggar AC eksplisit "satu gagal tak membatalkan
+            // lainnya". EnsureMutable() TETAP dipanggil (bukan if-check manual terpisah) supaya teks
+            // pesan kegagalan identik 1 sumber kebenaran dgn jalur single-item.
+            if (entry.Status == JournalEntryStatus.Approved)
+            {
+                try
+                {
+                    entry.EnsureMutable();
+                }
+                catch (DomainImmutableException ex)
+                {
+                    failed.Add(new BatchFailure(id, ex.Message));
+                }
+                continue;
+            }
+
             if (entry.Status != JournalEntryStatus.Submitted)
             {
                 failed.Add(new BatchFailure(id, "Bukan berstatus menunggu persetujuan."));
                 continue;
             }
 
-            entry.EnsureMutable();
             entry.Status = JournalEntryStatus.Approved;
             entry.ApprovedAt = DateTimeOffset.UtcNow;
 
@@ -525,7 +558,7 @@ public static class JournalEndpoints
             return Results.NotFound();
         }
 
-        var comment = new TeacherComment { Id = Guid.NewGuid(), TenantId = entry.TenantId, JournalEntryId = id, TeacherId = tenant.UserId.Value, Text = req.Text };
+        var comment = new TeacherComment { Id = Guid.NewGuid(), TenantId = entry.TenantId, JournalEntryId = id, TeacherId = tenant.UserId.Value, Text = TextSanitizer.Clean(req.Text) };
         db.TeacherComments.Add(comment);
 
         // Notifikasi siswa pemilik jurnal (FR-JRN-05).

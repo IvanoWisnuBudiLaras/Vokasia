@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
 using Vokasia.Infrastructure.Persistence;
@@ -13,12 +14,13 @@ public static class CompaniesAndPlacementsEndpoints
 {
     public static IEndpointRouteBuilder MapCompaniesAndPlacementsEndpoints(this IEndpointRouteBuilder app)
     {
-        var companies = app.MapGroup("/api/companies").WithTags("Companies");
+        // VOK-H3-E3 §2: ValidationFilter global (ProposeCompanyValidator, CreatePlacementValidator).
+        var companies = app.MapGroup("/api/companies").WithTags("Companies").AddEndpointFilter<ValidationFilter>();
         companies.MapPost("/link/{companyId:guid}", LinkCompanyToTenant).RequireAuthorization(RbacPolicies.TenantAdminOnly);
         companies.MapPost("/propose", ProposeCompany).RequireAuthorization(RbacPolicies.TenantAdminOnly);
         companies.MapPost("/{companyId:guid}/periods/{periodId:guid}/slots", SetCompanySlots).RequireAuthorization(RbacPolicies.DeptHeadPlus);
 
-        var placements = app.MapGroup("/api/placements").WithTags("Placements");
+        var placements = app.MapGroup("/api/placements").WithTags("Placements").AddEndpointFilter<ValidationFilter>();
         placements.MapPost("/", CreatePlacement).RequireAuthorization(RbacPolicies.DeptHeadPlus);
         placements.MapPost("/bulk", BulkCreatePlacements).RequireAuthorization(RbacPolicies.DeptHeadPlus);
         placements.MapPut("/{id:guid}/teacher/{teacherId:guid}", AssignTeacher).RequireAuthorization(RbacPolicies.DeptHeadPlus);

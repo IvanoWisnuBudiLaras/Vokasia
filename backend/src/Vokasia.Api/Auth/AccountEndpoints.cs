@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Vokasia.Api.RateLimiting;
 using Vokasia.Infrastructure.Identity;
 
 namespace Vokasia.Api.Auth;
@@ -23,7 +24,9 @@ public static class AccountEndpoints
     public static IEndpointRouteBuilder MapAccountEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/account/login", GetLoginForm);
-        app.MapPost("/account/login", PostLogin).DisableAntiforgery();
+        // VOK-H3-E3 §3: policy "login" (5/mnt, partisi IP+email) - INI permukaan password sungguhan
+        // (lihat doc-comment VokasiaRateLimiting utk kenapa bukan /connect/token).
+        app.MapPost("/account/login", PostLogin).DisableAntiforgery().RequireRateLimiting(VokasiaRateLimiting.LoginPolicy);
         return app;
     }
 

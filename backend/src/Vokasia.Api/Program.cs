@@ -1,9 +1,12 @@
+using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 using Minio;
 using Minio.DataModel.Args;
 using Vokasia.Api.Auth;
 using Vokasia.Api.Auth.MagicLink;
 using Vokasia.Api.Endpoints;
+using Vokasia.Api.Middleware;
+using Vokasia.Api.RateLimiting;
 using Vokasia.Infrastructure;
 using Vokasia.Infrastructure.Identity;
 using Vokasia.Infrastructure.Persistence;
@@ -22,6 +25,20 @@ builder.Services.AddVokasiaRbacPolicies(); // AddAuthorizationBuilder() di dalam
 builder.Services.AddControllers();
 builder.Services.AddScoped<MagicLinkService>(); // VOK-H2-E3 §3
 
+// VOK-H3-E3 §1: DomainImmutableException -> 409 {code,message} (bukan 500 generik) + ProblemDetails
+// bawaan framework utk exception lain yang tak sengaja lolos (tetap format JSON konsisten, bukan
+// halaman HTML dev-exception-page di Production).
+builder.Services.AddExceptionHandler<DomainImmutableExceptionHandler>();
+builder.Services.AddProblemDetails();
+
+// VOK-H3-E3 §2: FluentValidation — semua Validator di assembly ini (Vokasia.Api) otomatis terdaftar
+// sbg IValidator<T> DI, dibaca ValidationFilter (Endpoints/*.cs) per request type. Assembly-scan
+// (bukan daftar manual satu-satu) supaya validator baru otomatis kepakai tanpa sentuh Program.cs lagi.
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+
+// VOK-H3-E3 §3: rate limit login (/connect/token) + endpoint publik (/api/mentor-invites/validate).
+builder.Services.AddVokasiaRateLimiting();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -29,10 +46,31 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+// VOK-H3-E3 §1: paling awal — tangkap exception dari SEMUA middleware/endpoint di bawahnya.
+app.UseExceptionHandler();
+
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseMiddleware<TenantResolutionMiddleware>(); // AC VOK-H2-E3: isi ITenantContext sebelum endpoint apa pun jalan.
 app.UseAuthorization();
+
+// VOK-H3-E3 §3: pre-buffer form body ASYNC sebelum UseRateLimiter() - partition-key selector
+// kebijakan "login" (VokasiaRateLimiting.cs) baca httpContext.Request.Form["email"] secara SINKRON;
+// tanpa pre-read async di sini, akses sync thd body yang belum pernah dibaca BISA throw
+// "Synchronous operations are disallowed" di Kestrel produksi (AllowSynchronousIO=false default -
+// TIDAK terlihat lewat TestServer yang dipakai test, kelas gap yang berulang kali ditemukan sesi
+// ini). Form yang sudah di-cache di sini aman dibaca ulang PostLogin (AccountEndpoints.cs) tanpa
+// re-read stream. No-op (murah) utk request tanpa form-content-type (mayoritas: JSON API).
+app.Use(async (context, next) =>
+{
+    if (context.Request.HasFormContentType)
+    {
+        await context.Request.ReadFormAsync();
+    }
+    await next();
+});
+
+app.UseRateLimiter(); // VOK-H3-E3 §3: setelah UseAuthorization - policy per-endpoint via [EnableRateLimiting]/RequireRateLimiting.
 
 app.MapControllers();
 app.MapPeriodsEndpoints();

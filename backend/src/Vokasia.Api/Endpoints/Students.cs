@@ -1,7 +1,9 @@
+using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
 using Vokasia.Infrastructure.Persistence;
@@ -13,7 +15,10 @@ public static class StudentsEndpoints
 {
     public static IEndpointRouteBuilder MapStudentsEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/students").WithTags("Students");
+        // VOK-H3-E3 §2: ValidationFilter global (baru CreateStudentRequest/UpdateStudentRequest tanpa
+        // validator terdaftar sampai saat ini - lolos apa adanya, dicatat DECISIONS.md; ImportStudentRow
+        // divalidasi manual per-baris di ImportStudentsCsv, BUKAN lewat filter ini - lihat komentarnya).
+        var group = app.MapGroup("/api/students").WithTags("Students").AddEndpointFilter<ValidationFilter>();
 
         group.MapPost("/import", ImportStudentsCsv).RequireAuthorization(RbacPolicies.DeptHeadPlus).DisableAntiforgery();
         group.MapPost("/", CreateStudent).RequireAuthorization(RbacPolicies.DeptHeadPlus);
@@ -30,7 +35,8 @@ public static class StudentsEndpoints
     /// dryRun=true → validasi saja, tidak ada baris ditulis ke DB.
     /// </summary>
     private static async Task<IResult> ImportStudentsCsv(
-        IFormFile file, [FromQuery] bool dryRun, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
+        IFormFile file, [FromQuery] bool dryRun, VokasiaDbContext db, ITenantContext tenant,
+        IValidator<ImportStudentRow> rowValidator, CancellationToken ct)
     {
         if (!tenant.TenantId.HasValue)
         {
@@ -68,26 +74,23 @@ public static class StudentsEndpoints
             }
 
             var cols = line.Split(',').Select(c => c.Trim()).ToArray();
-            var fullName = cols.ElementAtOrDefault(iFullName);
-            var majorName = cols.ElementAtOrDefault(iMajor);
-            var classroom = cols.ElementAtOrDefault(iClassroom);
+            var fullName = cols.ElementAtOrDefault(iFullName) ?? "";
+            var majorName = cols.ElementAtOrDefault(iMajor) ?? "";
+            var classroom = cols.ElementAtOrDefault(iClassroom) ?? "";
             var nisn = iNisn >= 0 ? cols.ElementAtOrDefault(iNisn) : null;
 
-            if (string.IsNullOrWhiteSpace(fullName))
+            // VOK-H3-E3 §2: ImportStudentRowValidator dipanggil manual per baris (bukan lewat
+            // ValidationFilter global — baris ini dikonstruksi dari teks CSV, bukan argumen endpoint
+            // yang diikat framework). Semua field yang gagal pada baris ini dikumpulkan sekaligus
+            // (bukan berhenti di kegagalan pertama seperti inline check lama) — lebih informatif
+            // utk staf yang memperbaiki CSV, kontrak ImportResultDto tak berubah (tetap List<ImportRowError>).
+            var rowResult = await rowValidator.ValidateAsync(new ImportStudentRow(fullName, nisn, majorName, classroom), ct);
+            if (!rowResult.IsValid)
             {
-                errors.Add(new ImportRowError(rowNum, "FullName", "Wajib diisi."));
-                continue;
-            }
-
-            if (string.IsNullOrWhiteSpace(majorName))
-            {
-                errors.Add(new ImportRowError(rowNum, "MajorName", "Wajib diisi."));
-                continue;
-            }
-
-            if (string.IsNullOrWhiteSpace(classroom))
-            {
-                errors.Add(new ImportRowError(rowNum, "Classroom", "Wajib diisi."));
+                foreach (var failure in rowResult.Errors)
+                {
+                    errors.Add(new ImportRowError(rowNum, failure.PropertyName, failure.ErrorMessage));
+                }
                 continue;
             }
 

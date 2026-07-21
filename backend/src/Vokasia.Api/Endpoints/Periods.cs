@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
 using Vokasia.Infrastructure.Persistence;
@@ -12,7 +13,11 @@ public static class PeriodsEndpoints
 {
     public static IEndpointRouteBuilder MapPeriodsEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/periods").WithTags("Periods");
+        // VOK-H3-E3 §2: ValidationFilter global - CreatePeriodValidator menegakkan Start<End+ClassLevels
+        // utk CreatePeriodRequest; UpdatePeriodRequest BELUM punya validator terdaftar (di luar daftar
+        // 8 named ticket) - inline check StartDate>=EndDate di UpdatePeriod() SENGAJA dipertahankan,
+        // dicatat sbg gap eksplisit di DECISIONS.md (bukan celah diam-diam).
+        var group = app.MapGroup("/api/periods").WithTags("Periods").AddEndpointFilter<ValidationFilter>();
 
         group.MapPost("/", CreatePeriod).RequireAuthorization(RbacPolicies.DeptHeadPlus);
         group.MapPut("/{id:guid}", UpdatePeriod).RequireAuthorization(RbacPolicies.DeptHeadPlus);
@@ -25,14 +30,7 @@ public static class PeriodsEndpoints
     private static async Task<IResult> CreatePeriod(
         CreatePeriodRequest req, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
     {
-        if (req.StartDate >= req.EndDate)
-        {
-            return Results.ValidationProblem(new Dictionary<string, string[]>
-            {
-                ["StartDate"] = ["StartDate harus sebelum EndDate."],
-            });
-        }
-
+        // VOK-H3-E3 §2: Start<End + ClassLevels ⊆ {X,XI,XII} sekarang di CreatePeriodValidator (ValidationFilter global).
         if (!tenant.TenantId.HasValue)
         {
             return Results.Forbid();

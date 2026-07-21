@@ -18,6 +18,9 @@ public record UpdateStudentRequest(string FullName, string? Nisn, Guid MajorId, 
 public record ImportRowError(int Row, string Column, string Message);
 public record ImportResultDto(int Imported, List<ImportRowError> Errors);
 
+/// <summary>VOK-H3-E3 §2: bentuk satu baris CSV import siswa, DIVALIDASI via ImportStudentRowValidator per baris (bukan lewat ValidationFilter global — baris ini dikonstruksi manual di dalam handler, bukan argumen endpoint terikat framework).</summary>
+public record ImportStudentRow(string FullName, string? Nisn, string MajorName, string Classroom);
+
 public record CompanyDto(Guid Id, string Name, string? Sector, string? City, string? Address, string? ContactPerson, bool IsVerified);
 public record ProposeCompanyRequest(string Name, string? Sector, string? City, string? Address, string? ContactPerson);
 
