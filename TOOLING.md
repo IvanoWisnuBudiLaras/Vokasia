@@ -58,3 +58,16 @@ npx skills add nutlope/hallmark
 
 - **Figma MCP** — terpasang tapi PRD 4.1 eksplisit tanpa fase Figma MVP → pasca-MVP.
 - Midtrans/WA/belajar.id tooling — out-of-scope (PRD 1.3).
+
+## 6. OmniRoute — AI gateway hemat token
+
+Status per 21 Jul 2026. Endpoint lokal `http://localhost:20128/v1`. 2 penyedia tersambung: **Claude Code**, **Antigravity** (keduanya subscription flat-rate → $0/token, dibatasi kuota sesi/mingguan bukan biaya).
+
+| Lapis | Konfigurasi | Kenapa |
+|---|---|---|
+| Kompresi global (semua request, `Dashboard→Context→Settings`) | Pipeline `session-dedup → ccr → lite → rtk(standard) → headroom → caveman(full)` + output style Terse Prose(full) & Less Code(lite). **Off**: Relevance, Aggressive, Ultra, LLMLingua, OmniGlyph | RTK memfilter persis output `dotnet build/test`, `bun test`, `git diff/status` — command loop runner (AGENTS.md §Perintah). Caveman/dedup/CCR bersifat lossless utk prosa & context berulang. ~89% hemat token rata² tanpa mengubah makna. Engine lossy/eksperimental dimatikan agar tak kehilangan akurasi |
+| Preserve System Prompt | `Always` | AGENTS.md/SOUL.md tak boleh terpotong kompresi |
+| Kombo `vokasia-quality` (strategy: priority) | 1) `claude/claude-opus-4-8` → 2) `antigravity/gemini-3.1-pro-high` (fallback) | Lane akurasi tinggi utk kode yang menyentuh 14 aturan non-negotiable AGENTS.md (tenant isolation, RBAC, auth, immutability, dst). Kedua langkah lulus tes (Opus 4.8 ~4.5 detik, Gemini 3.1 Pro High ~6.4 detik) — 21 Jul, dikonfirmasi Dev. Fallback awal `gemini-2.5-pro`/`gemini-3-pro-preview` sempat timeout ~20d; diganti `gemini-3.1-pro-high` yang stabil |
+| Lane hemat (zero-config, tanpa setup) | Isi field model dengan `auto/best-free` atau `auto/offline` | Utk tugas rutin (VPM review, docs, brainstorm) — auto-rute ke provider/akun dgn kuota paling longgar, sisakan kuota Claude Code utk kerja ENG |
+
+**Belum dilakukan** (butuh kredensial Dev, di luar wewenang setup otomatis): sambungkan 1–2 penyedia gratis permanen (SiliconFlow / GLM-Flash / Kilo / OpenCode Zen) via `Providers` utk headroom di luar 2 akun subscription; Quota-Share antar key Dev/VPM/ENG belum perlu (baru 1 API key aktif, belum ada kontensi).
