@@ -4,8 +4,23 @@
     <ProjectReference Include="..\Vokasia.Domain\Vokasia.Domain.csproj" />
   </ItemGroup>
 
+  <!-- Classlib biasa tidak otomatis dapat shared framework ASP.NET Core. Identity's
+       IdentityBuilder extensions (AddDefaultTokenProviders dkk) hidup di situ. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Bogus" Version="35.6.5" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="7.6.0" />
+    <PackageReference Include="StackExchange.Redis" Version="3.0.17" />
+    <PackageReference Include="Minio" Version="7.0.0" />
   </ItemGroup>
 
   <PropertyGroup>
