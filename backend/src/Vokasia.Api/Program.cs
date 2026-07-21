@@ -14,7 +14,7 @@ builder.Services.AddVokasiaInfrastructure(builder.Configuration);
 // Identity (SignInManager, UserManager, cookie scheme, claims factory) — satu titik di IdentitySetup.cs (VOK-H1-E3).
 builder.Services.AddVokasiaIdentity();
 
-builder.Services.AddVokasiaOpenIddict(builder.Configuration);
+builder.Services.AddVokasiaOpenIddict(builder.Configuration, builder.Environment);
 builder.Services.AddVokasiaRbacPolicies(); // AddAuthorizationBuilder() di dalamnya — jangan tambah AddAuthorization() lagi.
 builder.Services.AddControllers();
 
@@ -35,6 +35,8 @@ app.MapPeriodsEndpoints();
 app.MapStudentsEndpoints();
 app.MapCompaniesAndPlacementsEndpoints();
 app.MapSchoolUsersEndpoints();
+app.MapAccountEndpoints(); // VOK-H2-E3: tambal gap /account/login (LoginPath H1-E3, lihat DECISIONS.md D17)
+app.MapAuditEndpoints(); // VOK-H2-E3 §2: WriteAuditLog — dipanggil BFF (TokenReuseDetected dst.)
 
 // Smoke endpoint H1 — dibuktikan compose+migration hidup end-to-end (gate M0).
 app.MapGet("/health/ping", () => Results.Ok(new { status = "ok", service = "Vokasia.Api" }));

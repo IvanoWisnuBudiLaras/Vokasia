@@ -39,9 +39,13 @@ export default async function SchoolDashboardPage() {
   let loadError = false;
   try {
     stats = await loadStats();
-  } catch {
-    // BFF /api/proxy/* (H2-E3) belum ada saat ticket ini dikerjakan -> fallback tampilan, bukan
-    // crash. Lihat DECISIONS.md D15/D16.
+  } catch (err) {
+    // GAP ditemukan+ditambal sesi VOK-H2-E3 (DECISIONS.md D17): catch INI dulu sepenuhnya diam
+    // (tanpa log apa pun) — bikin kegagalan data-load sisi server MUSTAHIL didiagnosis dari log
+    // (satu2nya jejak adalah pesan generik di UI). console.error di sini aman (server-side only,
+    // tak pernah sampai ke client/browser) dan krusial utk operasional produksi nanti juga,
+    // bukan cuma debugging sesi ini.
+    console.error("[dashboard] loadStats gagal:", err);
     loadError = true;
   }
 

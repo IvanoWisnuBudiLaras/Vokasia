@@ -43,10 +43,14 @@ public class AuthorizationController : ControllerBase
         var result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         if (result?.Succeeded != true)
         {
-            // Belum login — arahkan ke halaman login sederhana (H1), UI penuh di H2-E2.
-            return Challenge(
-                authenticationSchemes: CookieAuthenticationDefaults.AuthenticationScheme,
-                properties: new AuthenticationProperties { RedirectUri = Request.PathBase + Request.Path + Request.QueryString });
+            // GAP ditemukan+ditambal sesi VOK-H2-E3 (DECISIONS.md D17): Challenge() bawaan
+            // menghasilkan 401 + header Location (bukan 3xx sungguhan) — browser TIDAK mengikuti
+            // 401 otomatis, jadi flow interaktif nyata macet total di sini (ketahuan lewat smoke
+            // test HTTP asli, bukan test tersembunyi). Redirect() manual = 302 Found biasa, pasti
+            // diikuti browser (dan curl -L). Belum login -> arahkan ke halaman login sederhana
+            // (H1), UI penuh di H2-E2.
+            var returnUrl = Request.PathBase + Request.Path + Request.QueryString;
+            return Redirect($"/account/login?ReturnUrl={Uri.EscapeDataString(returnUrl)}");
         }
 
         var user = await _userManager.GetUserAsync(result.Principal!)

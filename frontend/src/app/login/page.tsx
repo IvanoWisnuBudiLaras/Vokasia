@@ -47,11 +47,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         ini.
       </p>
 
-      <form action={`/api/auth/login${nextParam}`} method="POST">
-        <Button type="submit" size="lg">
-          Masuk
-        </Button>
-      </form>
+      {/* GET, bukan POST: kontrak BFF persis VOK-H2-E3 §1 ("GET /login -> handleLogin(req)") —
+          memulai flow cuma navigasi/redirect-chain, bukan aksi yang mengubah state server. */}
+      <a href={`/api/auth/login${nextParam}`}>
+        <Button size="lg">Masuk</Button>
+      </a>
     </main>
   );
 }

@@ -105,8 +105,10 @@ services:
     env_file: .env
     environment:
       API_INTERNAL_URL: http://api:8080
+      REDIS_URL: redis://redis:6379 # VOK-H2-E3: BFF session store (Next.js, bukan Redis__Connection milik .NET)
     depends_on:
       api: { condition: service_healthy }
+      redis: { condition: service_healthy }
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000 || exit 1"]
       interval: 10s
