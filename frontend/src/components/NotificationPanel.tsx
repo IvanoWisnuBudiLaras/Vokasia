@@ -15,6 +15,8 @@ const ICON_BY_TYPE: Record<string, string> = {
   PhotoProcessingFailed: "⚠️",
   MentorWelcome: "🤝",
   PlacementWelcome: "🎉",
+  AssessmentPhaseOpened: "📝",
+  ExportReady: "📦",
 };
 
 const LABEL_BY_TYPE: Record<string, string> = {
@@ -26,7 +28,26 @@ const LABEL_BY_TYPE: Record<string, string> = {
   PhotoProcessingFailed: "Foto gagal diproses",
   MentorWelcome: "Selamat datang, mentor",
   PlacementWelcome: "Placement baru",
+  AssessmentPhaseOpened: "Fase penilaian dibuka",
+  ExportReady: "Export rekap nilai siap",
 };
+
+/**
+ * VOK-H5-E2 §3 — ExportReady SATU-SATUNYA tipe yang butuh link unduh nyata (AC ExportButton:
+ * "notif ExportReady -> link unduh"), sisanya SENGAJA tetap tanpa navigasi kontekstual (lihat
+ * doc-comment komponen ini persis di atas — kebanyakan tipe lain belum py halaman detail). Parse
+ * `payloadJson` defensif (try/catch) — bentuknya `{Id, downloadUrl, expiresAt}` (PascalCase+
+ * camelCase CAMPUR, cermin persis `ExportRequestedConsumer.cs` yang serialize anonymous object
+ * TANPA opsi naming policy - lihat baris `new { exportRequest.Id, downloadUrl, expiresAt }`).
+ */
+function extractDownloadUrl(payloadJson: string): string | null {
+  try {
+    const parsed = JSON.parse(payloadJson) as { downloadUrl?: string };
+    return typeof parsed.downloadUrl === "string" ? parsed.downloadUrl : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * VOK-H4-E2 §3 NotificationPanel({items, onMarkRead, onMarkAllRead}) — daftar notif ber-ikon per
@@ -57,27 +78,39 @@ export function NotificationPanel({ items, onMarkRead, onMarkAllRead }: Notifica
 
         {items.length > 0 && (
           <ul>
-            {items.map((n) => (
-              <li key={n.id}>
-                <button
-                  type="button"
-                  onClick={() => !n.isRead && onMarkRead(n.id)}
-                  className={
-                    "flex w-full items-start gap-2 border-b border-border p-3 text-left text-sm outline-none last:border-b-0 " +
-                    "hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2 " +
-                    (n.isRead ? "text-ink-muted" : "bg-primary-muted/40 font-medium text-ink")
-                  }
-                >
-                  <span aria-hidden="true">{ICON_BY_TYPE[n.type] ?? "🔔"}</span>
-                  <span className="flex flex-col gap-0.5">
-                    <span>{LABEL_BY_TYPE[n.type] ?? n.type}</span>
-                    <span className="text-xs text-ink-muted">
-                      {new Date(n.createdAt).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+            {items.map((n) => {
+              const downloadUrl = n.type === "ExportReady" ? extractDownloadUrl(n.payloadJson) : null;
+              return (
+                <li key={n.id}>
+                  <button
+                    type="button"
+                    onClick={() => !n.isRead && onMarkRead(n.id)}
+                    className={
+                      "flex w-full items-start gap-2 border-b border-border p-3 text-left text-sm outline-none last:border-b-0 " +
+                      "hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2 " +
+                      (n.isRead ? "text-ink-muted" : "bg-primary-muted/40 font-medium text-ink")
+                    }
+                  >
+                    <span aria-hidden="true">{ICON_BY_TYPE[n.type] ?? "🔔"}</span>
+                    <span className="flex flex-col gap-0.5">
+                      <span>{LABEL_BY_TYPE[n.type] ?? n.type}</span>
+                      <span className="text-xs text-ink-muted">
+                        {new Date(n.createdAt).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      </span>
                     </span>
-                  </span>
-                </button>
-              </li>
-            ))}
+                  </button>
+                  {downloadUrl && (
+                    <a
+                      href={downloadUrl}
+                      onClick={(e) => e.stopPropagation()}
+                      className="ml-9 mb-2 mt-[-6px] inline-block text-xs font-medium text-primary hover:underline"
+                    >
+                      ⬇ Unduh file export
+                    </a>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

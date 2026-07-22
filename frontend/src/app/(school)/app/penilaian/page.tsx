@@ -69,9 +69,14 @@ export default async function PenilaianPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold text-ink">Penilaian</h1>
-        <p className="text-sm text-ink-muted">Isi nilai aspek softskill siswa bimbinganmu.</p>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold text-ink">Penilaian</h1>
+          <p className="text-sm text-ink-muted">Isi nilai aspek softskill siswa bimbinganmu.</p>
+        </div>
+        <a href="/app/penilaian/rekap" className="text-sm font-medium text-primary hover:underline">
+          Lihat Rekap →
+        </a>
       </div>
 
       {loadError && <ErrorState message="Daftar penilaian belum bisa dimuat." />}
