@@ -105,8 +105,10 @@ public record FinalizeAssessmentResult(List<Guid> Finalized, List<IncompleteAsse
 
 public record RecapRowDto(Guid PlacementId, string StudentName, string CompanyName, decimal? MentorAvg, decimal? TeacherAvg, decimal? FinalScore, string Status);
 
-public enum ExportFormat { Xlsx, Pdf }
-public record RequestExportRequest(Guid PeriodId, ExportFormat Format);
+// ExportFormat/ExportStatus pindah ke Vokasia.Domain.Common (dipakai jg oleh ExportRequest entity
+// + Vokasia.Worker consumer, dua assembly terpisah dari Vokasia.Api - lihat Enums.cs).
+// PeriodId TIDAK diulang di body - sudah ada di route (POST /api/periods/{periodId}/exports).
+public record RequestExportRequest(ExportFormat Format);
 public record ExportAcceptedDto(Guid ExportId);
 
 public record CertificateDownloadDto(string DownloadUrl);

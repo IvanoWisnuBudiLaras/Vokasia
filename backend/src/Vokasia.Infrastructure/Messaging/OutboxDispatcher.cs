@@ -52,6 +52,10 @@ public class OutboxDispatcher(IServiceScopeFactory scopeFactory, ILogger<OutboxD
         // VOK-H4-E3: GAP ditutup - sebelum baris ini, Type ini SELALU "tak dikenal" (lihat doc-comment
         // GhostingAlertEmailRequestedEvent, OutboxEventContracts.cs).
         ["GhostingAlertEmailRequested"] = typeof(GhostingAlertEmailRequestedEvent),
+        // VOK-H5-E1: didaftarkan SEJAK AWAL (bukan ditambal belakangan spt GhostingAlert) - lihat
+        // doc-comment masing-masing event, OutboxEventContracts.cs.
+        ["AssessmentFinalized"] = typeof(AssessmentFinalizedEvent),
+        ["ExportRequested"] = typeof(ExportRequestedEvent),
     };
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

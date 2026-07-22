@@ -9,6 +9,11 @@ using Vokasia.Worker;
 using Vokasia.Worker.Consumers;
 using Vokasia.Worker.Jobs;
 
+// VOK-H5-E1 §4/§5: QuestPDF (pre-approved PRD.md baris 82) wajib deklarasi lisensi eksplisit
+// sebelum Document.Create dipanggil manapun (versi modern QuestPDF melempar exception saat
+// generate kalau belum di-set) - Community cukup (non-komersial/proyek internal skala kita).
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
 var builder = Host.CreateApplicationBuilder(args);
 
 // DbContext (Npgsql, fallback conn string sama dgn Vokasia.Api) + Redis + MinIO client — satu
@@ -51,6 +56,8 @@ builder.Services.AddVokasiaMassTransit(builder.Configuration, x =>
     // pernah punya consumer (lihat doc-comment masing-masing event, OutboxEventContracts.cs).
     x.AddConsumer<JournalReminderEmailConsumer>();
     x.AddConsumer<GhostingAlertEmailConsumer>();
+    // VOK-H5-E1 §4: export rekap nilai async.
+    x.AddConsumer<ExportRequestedConsumer>();
 });
 
 // VOK-H4-E1 §1: OutboxDispatcher (poll 2 dtk, publish OutboxMessage unpublished ke RabbitMQ) - satu2nya

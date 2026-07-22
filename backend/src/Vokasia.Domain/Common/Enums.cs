@@ -31,6 +31,11 @@ public enum ScoredBy { Mentor, Teacher }
 
 public enum InvoiceStatus { Issued, ProofUploaded, Paid }
 
+/// <summary>VOK-H5-E1 §4 — format export rekap nilai (FR-ASM-06). Dipakai request DTO (Api) + ExportRequest entity + Worker consumer.</summary>
+public enum ExportFormat { Xlsx, Pdf }
+
+public enum ExportStatus { Requested, Completed, Failed }
+
 /// <summary>
 /// VOK-H4-E1 — tipe notifikasi in-app (Notification.Type disimpan sbg ToString() nilai ini, string
 /// biasa di DB - konsisten dgn nilai string yang SUDAH dipakai H3-E1/cron sebelum enum ini ada:
@@ -49,4 +54,6 @@ public enum NotificationType
     PlacementWelcome,
     /// <summary>VOK-H5-E1 §3 — OpenAssessmentPhase cron: periode masuk fase penilaian (H-14 dari EndDate).</summary>
     AssessmentPhaseOpened,
+    /// <summary>VOK-H5-E1 §4 — ExportRequestedConsumer: file rekap (Xlsx/Pdf) siap diunduh (presigned 24 jam).</summary>
+    ExportReady,
 }

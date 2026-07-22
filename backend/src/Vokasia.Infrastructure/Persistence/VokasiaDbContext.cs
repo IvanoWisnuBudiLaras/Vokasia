@@ -45,6 +45,7 @@ public class VokasiaDbContext : IdentityDbContext<AppUser, AppRole, Guid>
     public DbSet<AssessmentScore> AssessmentScores => Set<AssessmentScore>();
     public DbSet<Certificate> Certificates => Set<Certificate>();
     public DbSet<Portfolio> Portfolios => Set<Portfolio>();
+    public DbSet<ExportRequest> ExportRequests => Set<ExportRequest>();
     public DbSet<Plan> Plans => Set<Plan>();
     public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
@@ -161,6 +162,7 @@ public class VokasiaDbContext : IdentityDbContext<AppUser, AppRole, Guid>
         b.Entity<Assessment>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
         b.Entity<Certificate>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
         b.Entity<Portfolio>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<ExportRequest>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
         // Company, Plan, FeatureFlag(plan-level) TIDAK difilter — entitas global by design.
     }
 }

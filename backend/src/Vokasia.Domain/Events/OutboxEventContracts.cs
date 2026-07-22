@@ -86,3 +86,16 @@ public record JournalReminderEmailRequestedEvent(Guid UserId, Guid SlotId, strin
 /// ditutup di sini (bukan cuma tambah consumer, tipe CLR-nya sendiri memang belum pernah ada).
 /// </summary>
 public record GhostingAlertEmailRequestedEvent(Guid PlacementId, string StudentName, int Days);
+
+/// <summary>
+/// VOK-H5-E1 §3 — payload nyata AssessmentEndpoints.FinalizeAssessment. TIDAK ADA consumer utk
+/// event ini di scope ticket ini (EnqueueCertificateBatch adalah cron yg poll Assessment.IsFinal
+/// langsung, BUKAN subscribe ke event ini - lihat ticket §5) - didaftarkan di TypeRegistry SEMATA
+/// supaya OutboxDispatcher benar2 mempublish (bukan "unknown type" - GAP yang SAMA persis pernah
+/// terjadi ke GhostingAlertEmailRequestedEvent sebelum H4-E3, lihat doc-comment di atas - tak
+/// diulang di sini SEJAK AWAL ditulis, bukan ditambal belakangan).
+/// </summary>
+public record AssessmentFinalizedEvent(Guid PlacementId, decimal? FinalScore);
+
+/// <summary>Payload nyata GradeRecapEndpoints.RequestExport — dikonsumsi ExportRequestedConsumer (Worker).</summary>
+public record ExportRequestedEvent(Guid Id, Guid PeriodId, Guid TenantId, Guid RequestedByUserId, string Format);
