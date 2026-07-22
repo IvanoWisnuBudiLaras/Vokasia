@@ -33,6 +33,7 @@ builder.Services.AddHangfire(config => config
 builder.Services.AddHangfireServer();
 
 builder.Services.AddScoped<JournalCronJobs>();
+builder.Services.AddScoped<AssessmentCronJobs>(); // VOK-H5-E1 §3: OpenAssessmentPhase
 
 // VOK-H4-E1 §1/§2: MassTransit+RabbitMQ HANYA di Worker (bukan Api - lihat doc-comment
 // VokasiaMassTransit.cs). Consumer didaftar di sini (Worker) via callback - Infrastructure tak bisa
@@ -89,6 +90,13 @@ recurringJobs.AddOrUpdate<JournalCronJobs>(
     "flag-ghosting-students",
     job => job.FlagGhostingStudents(),
     "0 21 * * *",
+    new RecurringJobOptions { TimeZone = JournalCronJobs.JakartaTimeZone });
+
+// VOK-H5-E1 §3: 06:00 WIB, sebelum jam kerja sekolah/DUDI mulai.
+recurringJobs.AddOrUpdate<AssessmentCronJobs>(
+    "open-assessment-phase",
+    job => job.OpenAssessmentPhase(null),
+    "0 6 * * *",
     new RecurringJobOptions { TimeZone = JournalCronJobs.JakartaTimeZone });
 
 host.Run();

@@ -47,4 +47,6 @@ public enum NotificationType
     PhotoProcessingFailed,
     MentorWelcome,
     PlacementWelcome,
+    /// <summary>VOK-H5-E1 §3 — OpenAssessmentPhase cron: periode masuk fase penilaian (H-14 dari EndDate).</summary>
+    AssessmentPhaseOpened,
 }
