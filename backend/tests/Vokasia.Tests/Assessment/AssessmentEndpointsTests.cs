@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
+using Vokasia.Infrastructure.Identity;
 using Vokasia.Infrastructure.Persistence;
 using Vokasia.Tests.Auth;
 
@@ -307,5 +308,89 @@ public class AssessmentEndpointsTests : IClassFixture<VokasiaApiFactory>
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
         return await db.Placements.Where(p => p.Id == placementId).Select(p => p.PeriodId).FirstAsync();
+    }
+
+    // ---------- ListMentorAssessmentPlacements (VOK-H5-E2, gap ditambal — lihat DECISIONS.md D34) ----------
+
+    private async Task<(Guid PlacementId, Guid MentorUserId)> SeedMentorPlacementAsync(PeriodStatus periodStatus, Guid mentorUserId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
+        var tenantId = Guid.NewGuid();
+        var mentorId = mentorUserId;
+        var period = new Period { Id = Guid.NewGuid(), TenantId = tenantId, Name = "Periode Antrean Nilai", StartDate = new DateOnly(2026, 1, 1), EndDate = new DateOnly(2026, 12, 31), ClassLevels = "XII", Status = periodStatus };
+        var company = new Company { Id = Guid.NewGuid(), Name = "PT Antrean Nilai" };
+        var student = new Student { Id = Guid.NewGuid(), TenantId = tenantId, FullName = "Siswa Antrean Nilai", MajorId = Guid.NewGuid(), Classroom = "XII A" };
+        var placement = new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = student.Id, CompanyId = company.Id, PeriodId = period.Id, TeacherId = Guid.NewGuid(), MentorUserId = mentorId, Status = PlacementStatus.Active };
+
+        db.Periods.Add(period);
+        db.Companies.Add(company);
+        db.Students.Add(student);
+        db.Placements.Add(placement);
+        await db.SaveChangesAsync();
+        return (placement.Id, mentorId);
+    }
+
+    private async Task<HttpClient> MentorClientAsync(AppUser mentor)
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var (token, _) = await AuthTestHelpers.LoginAndExchangeAsync(client, mentor.Email!);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    [Fact]
+    public async Task ListMentorAssessmentPlacements_PeriodInAssessmentPhase_ReturnsPlacement()
+    {
+        var mentor = await AuthTestHelpers.SeedUserAsync(_factory, "queue-mentor-ok", UserRole.IndustryMentor, null);
+        var (placementId, _) = await SeedMentorPlacementAsync(PeriodStatus.Assessment, mentor.Id);
+        var client = await MentorClientAsync(mentor);
+
+        var resp = await client.GetAsync("/api/mentors/assessment-queue");
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(1, body.GetArrayLength());
+        Assert.Equal(placementId, body[0].GetProperty("placementId").GetGuid());
+        Assert.Equal("Siswa Antrean Nilai", body[0].GetProperty("studentName").GetString());
+    }
+
+    [Fact]
+    public async Task ListMentorAssessmentPlacements_PeriodNotAssessmentPhase_ExcludesIt()
+    {
+        var mentor = await AuthTestHelpers.SeedUserAsync(_factory, "queue-mentor-notyet", UserRole.IndustryMentor, null);
+        await SeedMentorPlacementAsync(PeriodStatus.Active, mentor.Id);
+        var client = await MentorClientAsync(mentor);
+
+        var resp = await client.GetAsync("/api/mentors/assessment-queue");
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, body.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task ListMentorAssessmentPlacements_OtherMentorsPlacement_NotIncluded()
+    {
+        var otherMentor = await AuthTestHelpers.SeedUserAsync(_factory, "queue-mentor-other", UserRole.IndustryMentor, null);
+        await SeedMentorPlacementAsync(PeriodStatus.Assessment, otherMentor.Id); // milik mentor LAIN.
+        var myMentor = await AuthTestHelpers.SeedUserAsync(_factory, "queue-mentor-scoped", UserRole.IndustryMentor, null);
+        var client = await MentorClientAsync(myMentor);
+
+        var resp = await client.GetAsync("/api/mentors/assessment-queue");
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, body.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task ListMentorAssessmentPlacements_TeacherRole_Forbidden()
+    {
+        var client = await AuthClientAsync(UserRole.Teacher, Guid.NewGuid(), "queue-teacher-forbidden");
+
+        var resp = await client.GetAsync("/api/mentors/assessment-queue");
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
     }
 }

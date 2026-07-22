@@ -111,5 +111,15 @@ public record RecapRowDto(Guid PlacementId, string StudentName, string CompanyNa
 public record RequestExportRequest(ExportFormat Format);
 public record ExportAcceptedDto(Guid ExportId);
 
+// VOK-H5-E2 (FE) — gap ditambal, lihat DECISIONS.md D34: mentor (lintas-tenant, TenantId=null)
+// TIDAK bisa panggil GET /api/periods (policy TenantMember butuh klaim tenant_id) utk cari periode
+// fase Assessment sendiri, DAN ListPlacements (H2-E1) tak py filter mentorUserId sama sekali -
+// dua gap sekaligus yang jadikan "daftar siswa fase Assessment" (AC literal mentor/nilai/page.tsx)
+// mustahil dibangun dari endpoint yang ADA. Endpoint baru INI (bukan menambal 2 endpoint lama)
+// dipilih krn paling konsisten dgn precedent GetPendingApprovals (JournalEndpoints) - "placements
+// milikku" query MANDIRI, tanpa perlu periodId dari caller sama sekali (mentor lintas-tenant/
+// lintas-periode by design).
+public record MentorAssessmentPlacementDto(Guid PlacementId, string StudentName, string CompanyName, string PeriodName);
+
 public record CertificateDownloadDto(string DownloadUrl);
 public record VerifyCertificateDto(string StudentName, string SchoolName, string CompanyName, string PeriodLabel, DateTimeOffset IssuedAt, bool Valid);

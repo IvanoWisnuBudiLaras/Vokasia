@@ -36,7 +36,32 @@ public static class AssessmentEndpoints
         var periods = app.MapGroup("/api/periods/{periodId:guid}/assessments").WithTags("Assessment").AddEndpointFilter<ValidationFilter>();
         periods.MapPost("/finalize", FinalizeAssessment).RequireAuthorization(RbacPolicies.TenantAdminOnly);
 
+        // [GAP ditambal, VOK-H5-E2 (FE), lihat DECISIONS.md D34] — lihat doc-comment MentorAssessmentPlacementDto (Dtos.cs).
+        app.MapGet("/api/mentors/assessment-queue", ListMentorAssessmentPlacements).WithTags("Assessment").RequireAuthorization();
+
         return app;
+    }
+
+    private static async Task<IResult> ListMentorAssessmentPlacements(ITenantContext tenant, VokasiaDbContext db, CancellationToken ct)
+    {
+        if (tenant.Role != nameof(UserRole.IndustryMentor) || !tenant.UserId.HasValue)
+        {
+            return Results.Forbid();
+        }
+
+        // TenantId ambient NULL utk mentor (lintas-tenant by design, sama pola JournalEndpoints
+        // GetPendingApprovals) - filter tenant EF otomatis "mati", query LINTAS SEMUA tenant sengaja.
+        var rows = await (
+            from p in db.Placements.AsNoTracking()
+            where p.MentorUserId == tenant.UserId.Value
+            join per in db.Periods.AsNoTracking() on p.PeriodId equals per.Id
+            where per.Status == PeriodStatus.Assessment
+            join s in db.Students.AsNoTracking() on p.StudentId equals s.Id
+            join c in db.Companies.AsNoTracking() on p.CompanyId equals c.Id
+            select new MentorAssessmentPlacementDto(p.Id, s.FullName, c.Name, per.Name)
+            ).ToListAsync(ct);
+
+        return Results.Ok(rows);
     }
 
     /// <summary>Teknis+Kehadiran = sisi DUDI/mentor; sisanya (Softskill) = sisi sekolah/guru (AC §3).</summary>
