@@ -1,6 +1,7 @@
 # Secrets & env
 .env
 *.log
+.claude/settings.json
 
 # .NET
 backend/**/bin/
