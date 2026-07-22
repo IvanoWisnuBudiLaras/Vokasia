@@ -84,3 +84,30 @@ public record SchoolDashboardDto(double JournalTodayPct, int PendingApprovals, i
 /// JournalDto(...)` yang sudah ada) - dipasang di endpoint BARU `GET /api/journals/for-teacher/{placementId}`.
 /// </summary>
 public record JournalWithCommentsDto(JournalDto Entry, List<CommentDto> Comments);
+
+// VOK-H5-E1: kunjungan guru, rubrik, penilaian dua sisi, rekap+export, sertifikat.
+public record VisitDto(Guid Id, Guid PlacementId, Guid TeacherId, DateOnly Date, string Notes, string? PhotoKey, string? SignatureKey, DateTimeOffset CreatedAt);
+public record CreateVisitRequest(DateOnly Date, string Notes, string? PhotoKey, string? SignatureDataUrl);
+
+public record RubricAspectInput(string Name, RubricAspectKind Kind, int Weight);
+public record RubricAspectDto(Guid Id, string Name, RubricAspectKind Kind, int Weight);
+public record CreateRubricRequest(string Name, List<RubricAspectInput> Aspects);
+public record UpdateRubricRequest(string Name, List<RubricAspectInput> Aspects);
+public record RubricDto(Guid Id, string Name, bool IsDefault, List<RubricAspectDto> Aspects);
+
+public record ScoreInput(Guid AspectId, decimal Value);
+public record AssessmentAspectDto(Guid AspectId, string AspectName, RubricAspectKind Kind, int Weight, decimal? MentorValue, decimal? TeacherValue);
+public record AssessmentDto(Guid Id, Guid PlacementId, List<AssessmentAspectDto> Aspects, bool MentorDone, bool TeacherDone, decimal? FinalScore, bool IsFinal);
+
+public record FinalizeAssessmentRequest(Guid PeriodId, Guid? PlacementId);
+public record IncompleteAssessmentDto(Guid PlacementId, List<string> MissingAspectNames);
+public record FinalizeAssessmentResult(List<Guid> Finalized, List<IncompleteAssessmentDto> Incomplete);
+
+public record RecapRowDto(Guid PlacementId, string StudentName, string CompanyName, decimal? MentorAvg, decimal? TeacherAvg, decimal? FinalScore, string Status);
+
+public enum ExportFormat { Xlsx, Pdf }
+public record RequestExportRequest(Guid PeriodId, ExportFormat Format);
+public record ExportAcceptedDto(Guid ExportId);
+
+public record CertificateDownloadDto(string DownloadUrl);
+public record VerifyCertificateDto(string StudentName, string SchoolName, string CompanyName, string PeriodLabel, DateTimeOffset IssuedAt, bool Valid);
