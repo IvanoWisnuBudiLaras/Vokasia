@@ -49,6 +49,9 @@ public class OutboxDispatcher(IServiceScopeFactory scopeFactory, ILogger<OutboxD
         ["MentorInvited"] = typeof(MentorInvitedEvent),
         ["PlacementCreated"] = typeof(PlacementCreatedEvent),
         ["JournalReminderEmailRequested"] = typeof(JournalReminderEmailRequestedEvent),
+        // VOK-H4-E3: GAP ditutup - sebelum baris ini, Type ini SELALU "tak dikenal" (lihat doc-comment
+        // GhostingAlertEmailRequestedEvent, OutboxEventContracts.cs).
+        ["GhostingAlertEmailRequested"] = typeof(GhostingAlertEmailRequestedEvent),
     };
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

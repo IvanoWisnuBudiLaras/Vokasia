@@ -75,3 +75,14 @@ public record PlacementCreatedEvent(
 /// H4-E3 menambah consumer-nya).
 /// </summary>
 public record JournalReminderEmailRequestedEvent(Guid UserId, Guid SlotId, string StudentName, string Date);
+
+/// <summary>
+/// Payload nyata JournalCronJobs.FlagGhostingStudents (PascalCase implisit, BEDA dari
+/// JournalReminderEmailRequestedEvent di atas yg camelCase - lihat komentar kelas). VOK-H4-E3:
+/// consumer BARU (GhostingAlertEmailConsumer) - sebelum ticket ini, Type string
+/// "GhostingAlertEmailRequested" TAK TERDAFTAR di TypeRegistry OutboxDispatcher sama sekali =>
+/// setiap baris outbox ini SELALU jatuh ke cabang "tipe tak dikenal" (ditandai published TANPA
+/// pernah dipublish, log ERROR) sejak kode FlagGhostingStudents ditulis H4-E1 - GAP nyata,
+/// ditutup di sini (bukan cuma tambah consumer, tipe CLR-nya sendiri memang belum pernah ada).
+/// </summary>
+public record GhostingAlertEmailRequestedEvent(Guid PlacementId, string StudentName, int Days);

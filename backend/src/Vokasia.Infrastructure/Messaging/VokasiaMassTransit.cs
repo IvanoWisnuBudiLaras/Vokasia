@@ -32,29 +32,37 @@ public static class VokasiaMassTransit
                 var host = config["RabbitMq:Host"] ?? "localhost";
                 var username = config["RabbitMq:Username"] ?? "vokasia";
                 var password = config["RabbitMq:Password"] ?? "vokasia_dev";
+                // VOK-H4-E3 §1: port opsional - dev/prod TAK PERNAH set kunci ini (fallback 5672,
+                // NOL perubahan perilaku) - hanya suite Async/ (Testcontainers.RabbitMq, port host
+                // di-mapping RANDOM demi hindari bentrok) yang mengisinya. Overload host+port
+                // (bukan cuma host) dipilih drpd bikin config MassTransit terpisah utk test, supaya
+                // suite Async/ menguji RIWAYAT CONFIG PRODUKSI yang SAMA PERSIS (MessagingDefaults
+                // dst di bawah), bukan tiruan yang bisa diam2 menyimpang dari yang sungguhan dipakai.
+                var port = ushort.TryParse(config["RabbitMq:Port"], out var pt) ? pt : (ushort)5672;
 
-                cfg.Host(host, "/", h =>
+                cfg.Host(host, port, "/", h =>
                 {
                     h.Username(username);
                     h.Password(password);
                 });
 
-                // Retry cepat (in-memory, tanpa requeue) 5x exponential 1s->30s (AC ticket) SEBELUM
-                // redelivery (requeue via delay exchange, utk kegagalan yg butuh waktu lebih -
-                // broker restart, dependency downstream hiccup dst.). Kalau KEDUANYA habis, MassTransit
-                // otomatis pindah pesan ke "{queue}_error" (DLQ per queue, AC ticket) - bawaan
-                // transport RabbitMQ, tanpa config tambahan.
+                // Retry cepat (in-memory, tanpa requeue) SEBELUM redelivery (requeue via delay
+                // exchange, utk kegagalan yg butuh waktu lebih - broker restart, dependency
+                // downstream hiccup dst.). Kalau KEDUANYA habis, MassTransit otomatis pindah pesan
+                // ke "{queue}_error" (DLQ per queue, AC ticket) - bawaan transport RabbitMQ, tanpa
+                // config tambahan. VOK-H4-E3 §3: angka dipindah ke MessagingDefaults (satu sumber,
+                // TIDAK diubah nilainya dari H4-E1 - lihat doc-comment kelas itu).
                 cfg.UseMessageRetry(r => r.Exponential(
-                    retryLimit: 5,
-                    minInterval: TimeSpan.FromSeconds(1),
-                    maxInterval: TimeSpan.FromSeconds(30),
-                    intervalDelta: TimeSpan.FromSeconds(5)));
-                cfg.UseDelayedRedelivery(r => r.Intervals(
-                    TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(5)));
+                    retryLimit: MessagingDefaults.RetryLimit,
+                    minInterval: MessagingDefaults.RetryMinInterval,
+                    maxInterval: MessagingDefaults.RetryMaxInterval,
+                    intervalDelta: MessagingDefaults.RetryIntervalDelta));
+                cfg.UseDelayedRedelivery(r => r.Intervals(MessagingDefaults.RedeliveryIntervals));
 
                 // Prefetch wajar (AC ticket) - app skala ratusan siswa/tenant, bukan jutaan pesan/dtk;
-                // 16 cukup utk paralelisme berguna tanpa consumer kebanjiran batch besar sekaligus.
-                cfg.PrefetchCount = 16;
+                // MessagingDefaults.PrefetchCount cukup utk paralelisme berguna tanpa consumer
+                // kebanjiran batch besar sekaligus.
+                cfg.PrefetchCount = MessagingDefaults.PrefetchCount;
 
                 cfg.ConfigureEndpoints(context);
             });

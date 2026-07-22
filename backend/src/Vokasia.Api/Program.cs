@@ -15,7 +15,7 @@ using Vokasia.Infrastructure.Seeding;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
-builder.Services.AddVokasiaInfrastructure(builder.Configuration);
+builder.Services.AddVokasiaInfrastructure(builder.Configuration, builder.Environment);
 
 // Identity (SignInManager, UserManager, cookie scheme, claims factory) — satu titik di IdentitySetup.cs (VOK-H1-E3).
 builder.Services.AddVokasiaIdentity();

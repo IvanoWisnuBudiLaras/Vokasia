@@ -16,7 +16,7 @@ var builder = Host.CreateApplicationBuilder(args);
 // TIDAK punya AmbientTenantContext yang di-set (tak ada HTTP request) -> query filter tenant di
 // VokasiaDbContext otomatis "mati", cron LINTAS SEMUA TENANT by design (lihat doc-comment
 // JournalCronJobs).
-builder.Services.AddVokasiaInfrastructure(builder.Configuration);
+builder.Services.AddVokasiaInfrastructure(builder.Configuration, builder.Environment);
 
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? builder.Configuration["ConnectionStrings:Default"]
@@ -46,6 +46,10 @@ builder.Services.AddVokasiaMassTransit(builder.Configuration, x =>
     x.AddConsumer<JournalRejectedConsumer>();
     x.AddConsumer<MentorInvitedConsumer>();
     x.AddConsumer<PlacementCreatedConsumer>();
+    // VOK-H4-E3 §2: dua consumer BARU utk event yg SUDAH ditulis outbox sejak H4-E1 tapi belum
+    // pernah punya consumer (lihat doc-comment masing-masing event, OutboxEventContracts.cs).
+    x.AddConsumer<JournalReminderEmailConsumer>();
+    x.AddConsumer<GhostingAlertEmailConsumer>();
 });
 
 // VOK-H4-E1 §1: OutboxDispatcher (poll 2 dtk, publish OutboxMessage unpublished ke RabbitMQ) - satu2nya

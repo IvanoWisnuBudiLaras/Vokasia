@@ -13,6 +13,14 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.10" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.13.0" />
+    <!-- VOK-H4-E3 §1: suite Async/ butuh broker RabbitMQ SUNGGUHAN (bukan in-memory/mock) - itulah
+         SATU-SATUNYA cara jujur membuktikan retry/redelivery/DLQ nyata (lihat doc-comment
+         AsyncTestFixture). -->
+    <PackageReference Include="Testcontainers.RabbitMq" Version="4.13.0" />
+    <!-- VOK-H4-E3 §1: inspeksi/replay langsung queue `_error` (DLQ) - dipakai DlqReplayTests. Sudah
+         jadi dependensi TRANSITIF lewat MassTransit.RabbitMQ (Worker->Infrastructure), direferensi
+         eksplisit di sini supaya versi jelas & tak diam-diam berubah ikut upstream. -->
+    <PackageReference Include="RabbitMQ.Client" Version="7.2.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>

@@ -53,6 +53,7 @@ public class VokasiaDbContext : IdentityDbContext<AppUser, AppRole, Guid>
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<ProcessedMessage> ProcessedMessages => Set<ProcessedMessage>();
     public DbSet<MentorInvite> MentorInvites => Set<MentorInvite>();
+    public DbSet<SentEmail> SentEmails => Set<SentEmail>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -119,6 +120,9 @@ public class VokasiaDbContext : IdentityDbContext<AppUser, AppRole, Guid>
 
         b.Entity<OutboxMessage>(e => e.HasIndex(x => x.PublishedAt));
         b.Entity<ProcessedMessage>(e => e.HasKey(x => new { x.ConsumerName, x.MessageId }));
+        // VOK-H4-E3 §2: unique -> DbUpdateException kalau 2 SaveChanges "menang" race bersamaan utk
+        // kunci yg sama (lihat doc-comment IdempotentEmailSender utk penanganannya).
+        b.Entity<SentEmail>(e => e.HasIndex(x => x.IdempotencyKey).IsUnique());
 
         // VOK-H2-E3 §3 (magic link mentor, slice ditunda-lalu-dikerjakan): TIDAK di-ApplyTenantQueryFilters
         // (tanpa kolom TenantId) — isolasi diwariskan dari Placement (lihat doc-comment MentorInvite).
