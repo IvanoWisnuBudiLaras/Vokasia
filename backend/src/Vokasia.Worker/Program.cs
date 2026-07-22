@@ -58,6 +58,8 @@ builder.Services.AddVokasiaMassTransit(builder.Configuration, x =>
     x.AddConsumer<GhostingAlertEmailConsumer>();
     // VOK-H5-E1 §4: export rekap nilai async.
     x.AddConsumer<ExportRequestedConsumer>();
+    // VOK-H5-E1 §5: generate sertifikat PDF.
+    x.AddConsumer<CertificateGeneratorConsumer>();
 });
 
 // VOK-H4-E1 §1: OutboxDispatcher (poll 2 dtk, publish OutboxMessage unpublished ke RabbitMQ) - satu2nya
@@ -104,6 +106,14 @@ recurringJobs.AddOrUpdate<AssessmentCronJobs>(
     "open-assessment-phase",
     job => job.OpenAssessmentPhase(null),
     "0 6 * * *",
+    new RecurringJobOptions { TimeZone = JournalCronJobs.JakartaTimeZone });
+
+// VOK-H5-E1 §5: 06:30 WIB, SETELAH open-assessment-phase (06:00) - urutan tak saling bergantung
+// datanya, tapi konsisten "cron pagi PKL" dijadwalkan berurutan.
+recurringJobs.AddOrUpdate<AssessmentCronJobs>(
+    "enqueue-certificate-batch",
+    job => job.EnqueueCertificateBatch(null),
+    "30 6 * * *",
     new RecurringJobOptions { TimeZone = JournalCronJobs.JakartaTimeZone });
 
 host.Run();

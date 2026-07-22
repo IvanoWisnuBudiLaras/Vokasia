@@ -56,6 +56,7 @@ public class OutboxDispatcher(IServiceScopeFactory scopeFactory, ILogger<OutboxD
         // doc-comment masing-masing event, OutboxEventContracts.cs.
         ["AssessmentFinalized"] = typeof(AssessmentFinalizedEvent),
         ["ExportRequested"] = typeof(ExportRequestedEvent),
+        ["CertificateRequested"] = typeof(CertificateRequestedEvent),
     };
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

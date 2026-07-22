@@ -79,4 +79,68 @@ public class AssessmentCronJobsTests : IClassFixture<VokasiaApiFactory>
         var mentorNotifCount = db.Notifications.Count(n => n.UserId == mentorUserId && n.Type == nameof(NotificationType.AssessmentPhaseOpened));
         Assert.Equal(1, mentorNotifCount); // BUKAN 2 - status sudah Assessment, run kedua tak temukan periode lagi (filter Status==Active).
     }
+
+    // ---------- EnqueueCertificateBatch (VOK-H5-E1 §5) ----------
+
+    private async Task<(Guid PlacementId, Guid TenantId)> SeedFinalizedAssessmentAsync(IServiceScope scope, DateTimeOffset finalizedAt)
+    {
+        var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
+        var tenantId = Guid.NewGuid();
+        var placement = new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = Guid.NewGuid(), CompanyId = Guid.NewGuid(), PeriodId = Guid.NewGuid(), TeacherId = Guid.NewGuid(), Status = PlacementStatus.Completed };
+        var assessment = new Vokasia.Domain.Entities.Assessment { Id = Guid.NewGuid(), TenantId = tenantId, PlacementId = placement.Id, RubricTemplateId = Guid.NewGuid(), IsFinal = true, FinalScore = 88m, FinalizedAt = finalizedAt };
+        db.Placements.Add(placement);
+        db.Assessments.Add(assessment);
+        await db.SaveChangesAsync();
+        return (placement.Id, tenantId);
+    }
+
+    [Fact]
+    public async Task EnqueueCertificateBatch_FinalizedYesterdayJakartaTime_EnqueuesCertificateRequested()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
+        var today = new DateOnly(2026, 7, 15);
+        // 2026-07-14 23:00 UTC = 2026-07-15 06:00 WIB (UTC+7) -> HARI INI di Jakarta, BUKAN kemarin.
+        // Dipakai nilai yg jelas2 "kemarin siang WIB" spy tak ambigu lintas tengah malam:
+        // 2026-07-14 03:00 UTC = 2026-07-14 10:00 WIB -> kemarin, jelas.
+        var finalizedYesterdayWib = new DateTimeOffset(2026, 7, 14, 3, 0, 0, TimeSpan.Zero);
+        var (placementId, tenantId) = await SeedFinalizedAssessmentAsync(scope, finalizedYesterdayWib);
+
+        await Jobs(db).EnqueueCertificateBatch(today);
+
+        var outboxRow = await db.OutboxMessages.FirstOrDefaultAsync(o => o.Type == "CertificateRequested" && o.PayloadJson.Contains(placementId.ToString()));
+        Assert.NotNull(outboxRow);
+    }
+
+    [Fact]
+    public async Task EnqueueCertificateBatch_FinalizedTodayNotYesterday_DoesNotEnqueue()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
+        var today = new DateOnly(2026, 7, 15);
+        var finalizedTodayWib = new DateTimeOffset(2026, 7, 15, 3, 0, 0, TimeSpan.Zero); // 10:00 WIB HARI INI, bukan kemarin.
+        var (placementId, _) = await SeedFinalizedAssessmentAsync(scope, finalizedTodayWib);
+
+        await Jobs(db).EnqueueCertificateBatch(today);
+
+        var outboxRow = await db.OutboxMessages.FirstOrDefaultAsync(o => o.Type == "CertificateRequested" && o.PayloadJson.Contains(placementId.ToString()));
+        Assert.Null(outboxRow);
+    }
+
+    [Fact]
+    public async Task EnqueueCertificateBatch_AlreadyHasCertificate_Idempotent_DoesNotEnqueueAgain()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
+        var today = new DateOnly(2026, 7, 15);
+        var finalizedYesterdayWib = new DateTimeOffset(2026, 7, 14, 3, 0, 0, TimeSpan.Zero);
+        var (placementId, tenantId) = await SeedFinalizedAssessmentAsync(scope, finalizedYesterdayWib);
+        db.Certificates.Add(new Certificate { Id = Guid.NewGuid(), TenantId = tenantId, PlacementId = placementId, CertCode = Vokasia.Domain.Common.CertCodeGenerator.Generate(), PdfKey = "already/exists.pdf" });
+        await db.SaveChangesAsync();
+
+        await Jobs(db).EnqueueCertificateBatch(today);
+
+        var outboxRow = await db.OutboxMessages.FirstOrDefaultAsync(o => o.Type == "CertificateRequested" && o.PayloadJson.Contains(placementId.ToString()));
+        Assert.Null(outboxRow);
+    }
 }

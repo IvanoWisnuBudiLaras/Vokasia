@@ -99,3 +99,6 @@ public record AssessmentFinalizedEvent(Guid PlacementId, decimal? FinalScore);
 
 /// <summary>Payload nyata GradeRecapEndpoints.RequestExport — dikonsumsi ExportRequestedConsumer (Worker).</summary>
 public record ExportRequestedEvent(Guid Id, Guid PeriodId, Guid TenantId, Guid RequestedByUserId, string Format);
+
+/// <summary>Payload nyata CertificateCronJobs.EnqueueCertificateBatch — dikonsumsi CertificateGeneratorConsumer (Worker).</summary>
+public record CertificateRequestedEvent(Guid PlacementId, Guid TenantId);
