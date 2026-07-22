@@ -167,3 +167,102 @@ export interface StudentDto {
   classroom: string;
   userId: string | null;
 }
+
+/**
+ * VOK-H5-E1/E2 — kunjungan, rubrik, penilaian dua sisi, rekap+export, sertifikat. Sama konvensi
+ * enum-sbg-angka spt di atas (lihat komentar besar di puncak file) — TIDAK ADA pengecualian.
+ *
+ * [CATATAN, bukan diperbaiki di sini]: `PeriodSummary.status` (di atas) DITULIS sbg union string
+ * literal padahal `PeriodDto.Status` backend (Vokasia.Api/Endpoints/Dtos.cs) adalah `PeriodStatus`
+ * enum — bakal datang sbg ANGKA sama seperti semua enum lain, bukan string "Active" dst. Field itu
+ * TIDAK PERNAH dibandingkan/dipakai di mana pun sejauh ini (dikonfirmasi grep — cuma dirender jadi
+ * label nama periode, bukan status-nya) jadi bug laten itu belum pernah termanifestasi; TIDAK
+ * disentuh di sini (di luar cakupan H5-E2, bukan file yang tiket ini ubah) - kode BARU di bawah
+ * sengaja pakai `PeriodStatusNum` terpisah (angka, benar) utk kebutuhan filter periode fase
+ * Assessment di halaman nilai, supaya tidak mewarisi kesalahan yang sama.
+ */
+export const PeriodStatusNum = { Draft: 0, Active: 1, Assessment: 2, Closed: 3 } as const;
+
+export const RubricAspectKind = { Teknis: 0, Softskill: 1, Kehadiran: 2 } as const;
+export const ExportFormat = { Xlsx: 0, Pdf: 1 } as const;
+
+export interface VisitDto {
+  id: string;
+  placementId: string;
+  teacherId: string;
+  date: string;
+  notes: string;
+  photoKey: string | null;
+  signatureKey: string | null;
+  createdAt: string;
+}
+
+export interface RubricAspectDto {
+  id: string;
+  name: string;
+  kind: number; // RubricAspectKind
+  weight: number;
+}
+
+export interface RubricDto {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  aspects: RubricAspectDto[];
+}
+
+export interface AssessmentAspectDto {
+  aspectId: string;
+  aspectName: string;
+  kind: number; // RubricAspectKind
+  weight: number;
+  mentorValue: number | null;
+  teacherValue: number | null;
+}
+
+export interface AssessmentDto {
+  id: string;
+  placementId: string;
+  aspects: AssessmentAspectDto[];
+  mentorDone: boolean;
+  teacherDone: boolean;
+  finalScore: number | null;
+  isFinal: boolean;
+}
+
+export interface IncompleteAssessmentDto {
+  placementId: string;
+  missingAspectNames: string[];
+}
+
+export interface FinalizeAssessmentResult {
+  finalized: string[];
+  incomplete: IncompleteAssessmentDto[];
+}
+
+export interface RecapRowDto {
+  placementId: string;
+  studentName: string;
+  companyName: string;
+  mentorAvg: number | null;
+  teacherAvg: number | null;
+  finalScore: number | null;
+  status: "BelumDinilai" | "Draft" | "Final"; // dibangun server via ternary string literal (GetGradeRecap) - BUKAN enum, string asli.
+}
+
+export interface ExportAcceptedDto {
+  exportId: string;
+}
+
+export interface CertificateDownloadDto {
+  downloadUrl: string;
+}
+
+export interface VerifyCertificateDto {
+  studentName: string;
+  schoolName: string;
+  companyName: string;
+  periodLabel: string;
+  issuedAt: string;
+  valid: boolean;
+}

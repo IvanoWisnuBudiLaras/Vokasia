@@ -144,4 +144,56 @@ public class VisitEndpointsTests : IClassFixture<VokasiaApiFactory>
 
         Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
     }
+
+    // ---------- GetVisitPhotoUploadUrl (VOK-H5-E2, gap ditambal — lihat DECISIONS.md D34) ----------
+
+    [Fact]
+    public async Task GetVisitPhotoUploadUrl_ValidRequest_ReturnsPresignedUrlWithVisitPhotoPrefix()
+    {
+        var tenantId = Guid.NewGuid();
+        var client = await AuthenticatedTeacherClientAsync(tenantId, "visit-photo-url");
+        var placementId = await SeedPlacementAsync(tenantId);
+
+        var resp = await client.PostAsJsonAsync($"/api/placements/{placementId}/visits/upload-url", new
+        {
+            FileName = "lokasi.jpg", ContentType = "image/jpeg", SizeBytes = 123_456,
+        });
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("uploadUrl").GetString()));
+        Assert.Contains($"tenant/{tenantId}/visit-photo/", body.GetProperty("objectKey").GetString());
+    }
+
+    [Fact]
+    public async Task GetVisitPhotoUploadUrl_PlacementNotFound_Returns404()
+    {
+        var tenantId = Guid.NewGuid();
+        var client = await AuthenticatedTeacherClientAsync(tenantId, "visit-photo-url-404");
+
+        var resp = await client.PostAsJsonAsync($"/api/placements/{Guid.NewGuid()}/visits/upload-url", new
+        {
+            FileName = "lokasi.jpg", ContentType = "image/jpeg", SizeBytes = 123_456,
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetVisitPhotoUploadUrl_StudentRole_Forbidden()
+    {
+        var tenantId = Guid.NewGuid();
+        var user = await AuthTestHelpers.SeedUserAsync(_factory, "visit-photo-url-student", UserRole.Student, tenantId);
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var (accessToken, _) = await AuthTestHelpers.LoginAndExchangeAsync(client, user.Email!);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        var placementId = await SeedPlacementAsync(tenantId);
+
+        var resp = await client.PostAsJsonAsync($"/api/placements/{placementId}/visits/upload-url", new
+        {
+            FileName = "lokasi.jpg", ContentType = "image/jpeg", SizeBytes = 123_456,
+        });
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
 }

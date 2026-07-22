@@ -36,6 +36,16 @@ public static class VisitEndpoints
         var visits = app.MapGroup("/api/placements/{placementId:guid}/visits").WithTags("Visits").AddEndpointFilter<ValidationFilter>();
         visits.MapPost("/", CreateVisit).RequireAuthorization(RbacPolicies.TeacherPlus);
         visits.MapGet("/", ListVisits).RequireAuthorization(RbacPolicies.TeacherPlus);
+        // [GAP ditemukan+ditambal, VOK-H5-E2 (FE), lihat DECISIONS.md D34]: CreateVisit menerima
+        // `PhotoKey` (objectKey MinIO yg SUDAH diunggah), tapi satu2nya endpoint presign yg ada
+        // (JournalEndpoints.GetPresignedUploadUrl, "/api/journals/upload-url") dikunci policy
+        // StudentSelf - Teacher/DeptHead/TenantAdmin (pencatat kunjungan §1) TAK PUNYA jalur presign
+        // apa pun utk foto lokasi kunjungan, walau field-nya sudah ada di DTO sejak H5-E1. Endpoint
+        // BARU minimal ini SENGAJA reuse persis UploadRequest/PresignedUploadDto (H3-E1) - bukan
+        // DTO/validator baru - ValidationFilter global otomatis pakai UploadRequestValidator yg
+        // sudah ada (whitelist ContentType+ukuran, sama persis jurnal). Prefix object key beda
+        // ("visit-photo/", bukan "journal/") supaya tak campur namespace MinIO.
+        visits.MapPost("/upload-url", GetVisitPhotoUploadUrl).RequireAuthorization(RbacPolicies.TeacherPlus);
 
         return app;
     }
@@ -113,6 +123,39 @@ public static class VisitEndpoints
             .ToListAsync(ct);
 
         return Results.Ok(items);
+    }
+
+    private static async Task<IResult> GetVisitPhotoUploadUrl(
+        Guid placementId, UploadRequest req, IMinioClient minio, ITenantContext tenant, IConfiguration config, VokasiaDbContext db, CancellationToken ct)
+    {
+        if (!tenant.TenantId.HasValue)
+        {
+            return Results.Forbid();
+        }
+
+        var placementExists = await db.Placements.AnyAsync(p => p.Id == placementId, ct);
+        if (!placementExists)
+        {
+            return Results.NotFound();
+        }
+
+        var bucket = config[BucketConfigKey] ?? DefaultBucket;
+        var extension = req.ContentType switch
+        {
+            "image/jpeg" => "jpg",
+            "image/png" => "png",
+            "image/webp" => "webp",
+            _ => "bin",
+        };
+        var objectKey = $"tenant/{tenant.TenantId}/visit-photo/{Guid.NewGuid():N}.{extension}";
+        const int expirySeconds = 300;
+
+        var url = await minio.PresignedPutObjectAsync(new PresignedPutObjectArgs()
+            .WithBucket(bucket)
+            .WithObject(objectKey)
+            .WithExpiry(expirySeconds));
+
+        return Results.Ok(new PresignedUploadDto(url, objectKey, expirySeconds));
     }
 
     private static async Task<string?> TryUploadSignatureAsync(
