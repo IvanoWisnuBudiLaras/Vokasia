@@ -8,7 +8,7 @@ export default async function VerifyCertificatePage({
 }) {
   const { code } = await params;
   return (
-    <main className="mx-auto max-w-md p-6">
+    <main data-theme="sekolah" className="mx-auto max-w-md bg-surface p-6">
       <EmptyState
         icon="🔎"
         title={`Verifikasi sertifikat "${code}"`}

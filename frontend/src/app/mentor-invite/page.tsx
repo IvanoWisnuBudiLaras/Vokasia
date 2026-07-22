@@ -26,7 +26,7 @@ export default async function MentorInvitePage({
 
   if (!token) {
     return (
-      <main className="mx-auto max-w-md p-6">
+      <main data-theme="sekolah" className="mx-auto max-w-md bg-surface p-6">
         <ErrorState message="Tautan tidak lengkap — token tidak ditemukan di URL." />
       </main>
     );
@@ -49,7 +49,7 @@ export default async function MentorInvitePage({
 
   if (!valid) {
     return (
-      <main className="mx-auto max-w-md p-6">
+      <main data-theme="sekolah" className="mx-auto max-w-md bg-surface p-6">
         <ErrorState message="Tautan tidak valid atau sudah kedaluwarsa. Minta undangan baru ke sekolah." />
       </main>
     );

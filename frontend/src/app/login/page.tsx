@@ -33,7 +33,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const nextParam = next ? `?next=${encodeURIComponent(next)}` : "";
 
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
+    <main
+      data-theme="sekolah"
+      className="flex flex-1 flex-col items-center justify-center gap-4 bg-surface p-6 text-center"
+    >
       <h1 className="text-2xl font-semibold text-ink">Masuk ke Vokasia</h1>
 
       {error && (

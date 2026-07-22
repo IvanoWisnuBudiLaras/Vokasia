@@ -30,6 +30,30 @@ Anchor hue **222°** (teal-biru) — bukan biru generik ~250–265° yang dipaka
 --color-border:         oklch(62% 0.016 222);
 ```
 
+### Tema Sekolah (scoped, D31 — change control atas freeze D20)
+
+Institusional 222° di atas **tetap** untuk `/app` `/sa` (dashboard desktop). Untuk shell mobile
+`(student)` `(mentor)` + halaman publik (`login`, `verify/[code]`, `p/[slug]`, `mentor-invite`) —
+tema baru diminta user: warna sekolah #4ED7F1 / #FFFDF6(bg) / #6FE6FC / #A8F1FF, diterapkan via
+`[data-theme="sekolah"]` scoped di `globals.css`, **bukan** menimpa `:root`. Lihat DECISIONS.md
+D31 untuk rasional penuh + tabel kontras WCAG.
+
+Ringkasan: keempat warna asli (semua terang, L 82–99%) dipertahankan apa adanya sebagai
+surface/primary-muted/accent-bright/accent-light — **dekoratif/non-teks saja**. Teks & elemen
+fungsional (ink/primary/border/focus) diturunkan pada hue yang sama (~213°, cyan — turunan
+langsung dari #4ED7F1) di lightness lebih rendah, seluruhnya diverifikasi ≥ ambang WCAG:
+
+```css
+[data-theme="sekolah"] {
+  --color-surface:        oklch(99% 0.009 94);    --color-primary:       oklch(50% 0.14 213);
+  --color-ink:             oklch(18% 0.03 213);    --color-primary-ink:  oklch(99% 0.006 213);
+  --color-ink-muted:       oklch(48% 0.03 213);    --color-primary-muted: oklch(91.5% 0.074 210.8); /* =#A8F1FF */
+  --color-border:          oklch(65% 0.06 213);    --color-focus:        oklch(55% 0.18 213);
+  --color-accent-bright:   oklch(81.6% 0.121 212.8); /* =#4ED7F1 asli */
+  --color-accent-light:    oklch(86.4% 0.111 211.4); /* =#6FE6FC asli */
+}
+```
+
 RAG (hijau=beres/kuning=perhatian/merah=bermasalah) **beku dari PRD, tidak berubah maknanya** — hanya representasi OKLCH-nya diperbaiki. Semua pasangan teks/latar di atas **diverifikasi programatik** (OKLCH→sRGB→WCAG, bukan diasumsikan) terhadap target `color.md`: body ≥4,5:1, batas UI/border ≥3:1 — lihat DECISIONS.md D18 utk tabel lengkap. Temuan penting: token border/`--color-border` LAMA (hex placeholder) gagal kontras (1,3:1, jauh di bawah 3:1 WCAG 1.4.11) — ini perbaikan aksesibilitas nyata, bukan sekadar estetika.
 
 ### Typography

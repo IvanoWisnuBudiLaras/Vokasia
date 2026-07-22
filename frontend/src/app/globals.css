@@ -28,6 +28,12 @@
   --color-primary-muted: oklch(94% 0.025 222);
   --color-focus: oklch(58% 0.15 222);
 
+  /* Aksen dekoratif (fallback institusional) — dipakai penuh hanya di data-theme="sekolah"
+     (lihat D20 di DECISIONS.md); DILARANG dipakai sbg warna teks (kontras tak cukup by design,
+     ini murni dekorasi: stripe/ikon/badge). */
+  --color-accent-bright: oklch(80% 0.08 222);
+  --color-accent-light: oklch(90% 0.05 222);
+
   /* Status RAG — makna beku dari PRD, representasi OKLCH diperbaiki (kontras diverifikasi D18) */
   --color-status-green: oklch(46% 0.11 155);
   --color-status-green-bg: oklch(95% 0.03 155);
@@ -81,6 +87,62 @@
     --color-status-amber-bg: oklch(22% 0.04 85);
     --color-status-red: oklch(74% 0.13 25);
     --color-status-red-bg: oklch(22% 0.03 25);
+    --color-accent-bright: oklch(40% 0.06 222);
+    --color-accent-light: oklch(30% 0.04 222);
+  }
+}
+
+/*
+ * TEMA SEKOLAH — scoped via [data-theme="sekolah"], TIDAK menimpa :root institusional
+ * (DECISIONS.md D20, change control atas DESIGN.md beku). Dipakai HANYA di shell
+ * (student)/mentor + halaman publik (login, verify, portofolio, mentor-invite) — dashboard
+ * /app dan /sa TETAP anchor hue 222 lama, tidak disentuh.
+ *
+ * Sumber warna: brief pengguna #4ED7F1 / #FFFDF6(bg) / #6FE6FC / #A8F1FF — keempatnya
+ * terang (L 82-99%), TAK ADA yang cukup gelap utk teks (kontras vs bg cuma 1.2-1.7:1, jauh di
+ * bawah 4.5:1 WCAG). Maka: keempat warna asli dipertahankan APA ADANYA sbg surface/aksen
+ * dekoratif (bg, accent-bright, accent-light, primary-muted — semua non-teks), sedangkan
+ * ink/primary/border/focus DITURUNKAN di hue yg sama (~213°, cyan) pada lightness lebih
+ * rendah SUPAYA teks & elemen fungsional tetap kontras — bukan warna baru yg tak diminta,
+ * cuma versi gelap dari hue yg sama. Semua rasio diverifikasi programatik (OKLCH->sRGB->WCAG):
+ *   ink (18% 213) vs bg      = 18.4:1   ink-muted (48% 213) vs bg = 6.3:1
+ *   primary (50% 213) vs bg  = 5.6:1    primary-ink vs primary    = 5.5:1
+ *   border (65% 213) vs bg   = 3.1:1 (>=3:1 non-text, WCAG 1.4.11)
+ *   focus (55% 213) vs bg    = 4.5:1
+ * Genre/tone TIDAK berubah (modern-minimal/utilitarian tetap — app fungsional PKL, bukan
+ * landing konsumer); hanya anchor hue & lightness map yg diganti sesuai brief. Font tetap
+ * Geist/Geist Mono (preserve, tak ada sinyal user minta ganti font).
+ */
+[data-theme="sekolah"] {
+  --color-surface: oklch(99% 0.009 94);
+  --color-surface-muted: oklch(96% 0.012 94);
+  --color-ink: oklch(18% 0.03 213);
+  --color-ink-muted: oklch(48% 0.03 213);
+  --color-border: oklch(65% 0.06 213);
+
+  --color-primary: oklch(50% 0.14 213);
+  --color-primary-ink: oklch(99% 0.006 213);
+  --color-primary-muted: oklch(91.5% 0.074 210.8); /* = #A8F1FF asli, dipertahankan */
+  --color-focus: oklch(55% 0.18 213);
+
+  /* Dekoratif murni — nilai asli dr brief, TIDAK dipakai sbg teks */
+  --color-accent-bright: oklch(81.6% 0.121 212.8); /* = #4ED7F1 asli */
+  --color-accent-light: oklch(86.4% 0.111 211.4);  /* = #6FE6FC asli */
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="sekolah"] {
+    --color-surface: oklch(15% 0.015 94);
+    --color-surface-muted: oklch(19% 0.018 94);
+    --color-ink: oklch(95% 0.01 94);
+    --color-ink-muted: oklch(74% 0.02 213);
+    --color-border: oklch(52% 0.05 213);
+    --color-primary: oklch(72% 0.12 213);
+    --color-primary-ink: oklch(14% 0.02 213);
+    --color-primary-muted: oklch(28% 0.05 213);
+    --color-focus: oklch(75% 0.14 213);
+    --color-accent-bright: oklch(70% 0.10 213);
+    --color-accent-light: oklch(55% 0.08 213);
   }
 }
 
@@ -102,6 +164,8 @@
   --color-primary-ink: var(--color-primary-ink);
   --color-primary-muted: var(--color-primary-muted);
   --color-focus: var(--color-focus);
+  --color-accent-bright: var(--color-accent-bright);
+  --color-accent-light: var(--color-accent-light);
   --color-status-green: var(--color-status-green);
   --color-status-green-bg: var(--color-status-green-bg);
   --color-status-amber: var(--color-status-amber);

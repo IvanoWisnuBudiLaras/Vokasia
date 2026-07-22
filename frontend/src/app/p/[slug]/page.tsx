@@ -11,7 +11,7 @@ export default async function PublicPortfolioPage({
 }) {
   const { slug } = await params;
   return (
-    <main className="mx-auto max-w-md p-6">
+    <main data-theme="sekolah" className="mx-auto max-w-md bg-surface p-6">
       <EmptyState
         icon="🎓"
         title={`Portofolio "${slug}" belum tersedia`}
