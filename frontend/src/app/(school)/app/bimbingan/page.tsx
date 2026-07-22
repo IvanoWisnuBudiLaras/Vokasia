@@ -126,7 +126,15 @@ export default async function BimbinganPage({
           <div className="lg:col-span-2">
             {selected ? (
               <>
-                <h2 className="mb-2 text-sm font-semibold text-ink">Jurnal — {selected.studentName}</h2>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-ink">Jurnal — {selected.studentName}</h2>
+                  <a
+                    href={`/app/bimbingan/${selected.placementId}/kunjungan`}
+                    className="rounded-[var(--radius-md)] border border-border bg-surface-muted px-3 py-1.5 text-xs font-medium text-ink outline-none transition-colors hover:bg-border/40 focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+                  >
+                    📍 Catat Kunjungan
+                  </a>
+                </div>
                 <JournalReviewList placementId={selected.placementId} />
               </>
             ) : (

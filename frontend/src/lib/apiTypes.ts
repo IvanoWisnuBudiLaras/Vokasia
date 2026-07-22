@@ -254,6 +254,14 @@ export interface ExportAcceptedDto {
   exportId: string;
 }
 
+/** VOK-H5-E2 — GET /api/mentors/assessment-queue (gap ditambal, lihat DECISIONS.md D34). */
+export interface MentorAssessmentPlacementDto {
+  placementId: string;
+  studentName: string;
+  companyName: string;
+  periodName: string;
+}
+
 export interface CertificateDownloadDto {
   downloadUrl: string;
 }

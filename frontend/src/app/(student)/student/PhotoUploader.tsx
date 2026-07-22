@@ -18,6 +18,16 @@ interface PhotoUploaderProps {
   photos: PendingPhoto[];
   setPhotos: Dispatch<SetStateAction<PendingPhoto[]>>;
   disabled?: boolean;
+  /**
+   * VOK-H5-E2: path presign dibuat bisa diganti (default tetap jurnal, jadi seluruh caller lama
+   * di (student)/student/* TIDAK berubah perilaku) — dipakai jg oleh VisitForm.tsx
+   * (app/(school)/app/bimbingan/[placementId]/kunjungan/) via "/placements/{id}/visits/upload-url"
+   * (endpoint presign BARU, lihat DECISIONS.md D34 - Teacher tak py akses ke "/journals/upload-url"
+   * yg dikunci StudentSelf). Object key & bucket-nya beda (visit-photo/ vs journal/) tp bentuk
+   * request/response (UploadRequest/PresignedUploadDto) SAMA PERSIS, jadi komponen ini reusable
+   * apa adanya tanpa logic baru, cukup ganti path.
+   */
+  uploadUrlPath?: string;
 }
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -38,13 +48,13 @@ const MAX_SIZE_BYTES = 5 * 1024 * 1024;
  * mengembalikan entry.id (lihat handleSubmit di sana) - urutan real yang tetap valid tanpa
  * mengubah backend sama sekali (di luar wilayah ticket ini, `frontend/` saja).
  */
-export function PhotoUploader({ max, photos, setPhotos, disabled }: PhotoUploaderProps) {
+export function PhotoUploader({ max, photos, setPhotos, disabled, uploadUrlPath = "/journals/upload-url" }: PhotoUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [pickError, setPickError] = useState<string | null>(null);
 
   async function uploadFile(file: File, localId: string) {
     try {
-      const presigned = await apiClient.post<PresignedUploadDto>("/journals/upload-url", {
+      const presigned = await apiClient.post<PresignedUploadDto>(uploadUrlPath, {
         fileName: file.name,
         contentType: file.type,
         sizeBytes: file.size,
