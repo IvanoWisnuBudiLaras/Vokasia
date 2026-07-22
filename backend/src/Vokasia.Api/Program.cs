@@ -84,6 +84,7 @@ app.MapJournalEndpoints(); // VOK-H3-E1: siklus jurnal siswa/mentor/guru
 app.MapNotificationEndpoints(); // VOK-H4-E1 §4: bell notifikasi in-app lintas peran
 app.MapDashboardEndpoints(); // VOK-H4-E1 §4: GetSchoolDashboard (W3)
 app.MapVisitEndpoints(); // VOK-H5-E1 §1: kunjungan monitoring guru ke DUDI
+app.MapRubricEndpoints(); // VOK-H5-E1 §2: template rubrik penilaian
 
 // Smoke endpoint H1 — dibuktikan compose+migration hidup end-to-end (gate M0).
 app.MapGet("/health/ping", () => Results.Ok(new { status = "ok", service = "Vokasia.Api" }));
