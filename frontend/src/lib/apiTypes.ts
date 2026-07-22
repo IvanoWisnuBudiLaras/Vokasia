@@ -98,3 +98,72 @@ export interface BatchResult {
   approved: string[];
   failed: BatchFailure[];
 }
+
+/**
+ * VOK-H4-E1/E2 — dashboard sekolah (W3) + notifikasi in-app. Rag numerik mengikuti pola yang sama
+ * dengan JournalSlotStatus dkk di atas (tanpa JsonStringEnumConverter, lihat komentar file ini).
+ */
+export const RagStatus = { Green: 0, Amber: 1, Red: 2 } as const;
+
+/** Numerik (backend) -> literal string dipakai <StatusBadge> (components/ui/StatusBadge.tsx punya tipe RagStatus SENDIRI yang beda — string literal, bukan angka — sengaja TIDAK disatukan nama tipenya, lihat pemakaian). */
+export function ragToBadgeStatus(rag: number): "green" | "amber" | "red" {
+  if (rag === RagStatus.Red) return "red";
+  if (rag === RagStatus.Amber) return "amber";
+  return "green";
+}
+
+export interface DashboardFlaggedStudentDto {
+  studentId: string;
+  name: string;
+  companyName: string;
+  rag: number; // RagStatus
+  reason: string;
+}
+
+export interface SchoolDashboardDto {
+  journalTodayPct: number;
+  pendingApprovals: number;
+  lateVisits: number;
+  flagged: DashboardFlaggedStudentDto[];
+}
+
+export interface NotificationDto {
+  id: string;
+  type: string;
+  payloadJson: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface CommentDto {
+  id: string;
+  journalEntryId: string;
+  teacherId: string;
+  text: string;
+  createdAt: string;
+}
+
+/** VOK-H4-E2 — respons GET /journals/for-teacher/{placementId} (lihat backend Dtos.cs utk alasan DTO baru ini, bukan JournalDto yang dipakai ulang). */
+export interface JournalWithCommentsDto {
+  entry: JournalDto;
+  comments: CommentDto[];
+}
+
+export interface PlacementDto {
+  id: string;
+  studentId: string;
+  companyId: string;
+  periodId: string;
+  teacherId: string;
+  mentorUserId: string | null;
+  status: number; // PlacementStatus: Active=0, Completed=1, Terminated=2
+}
+
+export interface StudentDto {
+  id: string;
+  fullName: string;
+  nisn: string | null;
+  majorId: string;
+  classroom: string;
+  userId: string | null;
+}

@@ -12,7 +12,18 @@ const BFF_CLIENT_ID = "vokasia-bff";
 // SeedOAuthClientsAsync) krn representasi resource server yang nyata dipakai proxyWithBearer.
 const SCOPE = "api offline_access";
 
-/** VOK-H2-E3 handleLogin — mulai code+PKCE: generate verifier+challenge+state, simpan di Redis, redirect /connect/authorize. */
+/**
+ * VOK-H2-E3 handleLogin — mulai code+PKCE: generate verifier+challenge+state, simpan di Redis, redirect /connect/authorize.
+ *
+ * BUGFIX VOK-H4-E2 live-verification (DECISIONS.md D26 -> D28, sebelumnya diketahui tp dibiarkan
+ * "out of scope" di D26): URL di bawah ini dikirim via NextResponse.redirect() ke BROWSER (bukan
+ * fetch server-to-server spt callback/route.ts) — jadi HARUS pakai host yg bisa di-resolve browser
+ * (API_PUBLIC_URL, publish port host "localhost:5000"), BUKAN API_INTERNAL_URL (di docker-compose
+ * = "http://api:8080", Docker-internal DNS, browser di host tak bisa resolve -> hard nav error).
+ * Ketahuan lewat live browser E2E test thd docker-compose stack (bukan lewat `bun run dev` +
+ * `dotnet run` langsung di host, krn di mode itu API_INTERNAL_URL DAN API_PUBLIC_URL sama2
+ * "localhost:5000" - bug ini cuma nongol saat frontend jalan DI DALAM container).
+ */
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const next = url.searchParams.get("next") ?? "";
@@ -21,10 +32,10 @@ export async function GET(req: Request) {
   const state = generateState();
   await savePkce(state, JSON.stringify({ verifier, next }));
 
-  const apiBase = process.env.API_INTERNAL_URL ?? "http://localhost:5000";
+  const apiPublicBase = process.env.API_PUBLIC_URL ?? "http://localhost:5000";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-  const authorizeUrl = new URL("/connect/authorize", apiBase);
+  const authorizeUrl = new URL("/connect/authorize", apiPublicBase);
   authorizeUrl.searchParams.set("client_id", BFF_CLIENT_ID);
   authorizeUrl.searchParams.set("response_type", "code");
   authorizeUrl.searchParams.set("redirect_uri", `${appUrl}/api/auth/callback`);

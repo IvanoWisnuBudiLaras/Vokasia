@@ -218,6 +218,7 @@ public static class CompaniesAndPlacementsEndpoints
     private static async Task<IResult> ListPlacements(
         VokasiaDbContext db, CancellationToken ct,
         [FromQuery] Guid periodId, [FromQuery] Guid? companyId = null, [FromQuery] PlacementStatus? status = null,
+        [FromQuery] Guid? teacherId = null, [FromQuery] Guid? studentId = null,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         var query = db.Placements.AsNoTracking().Where(p => p.PeriodId == periodId);
@@ -229,6 +230,30 @@ public static class CompaniesAndPlacementsEndpoints
         if (status.HasValue)
         {
             query = query.Where(p => p.Status == status.Value);
+        }
+
+        // VOK-H4-E2 §"halaman guru bimbingan" — GAP ditemukan: endpoint ini (H2-E1) tak pernah
+        // punya filter per-guru sama sekali (cocok drpd dgn gap serupa D16 utk mentor: "ListPlacements
+        // wajib periodId, tanpa filter studentId/mentorUserId"). Filter TAMBAHAN opsional (tak
+        // mengubah perilaku pemanggil lama tanpa teacherId) - FE kirim teacherId=session.id (=
+        // AppUser.Id sendiri, sesuai Placement.TeacherId == AppUser.Id langsung, lihat komentar
+        // PlacementCreatedConsumer) utk dapat "siswa bimbinganku". TIDAK ada resource-based
+        // authorization tambahan di sini (siapa pun boleh KIRIM teacherId siapa saja) - aman krn
+        // scope keamanan SUNGGUHAN ada di endpoint lain (mis. AddTeacherComment tetap TeacherPlus)
+        // dan data placement per-tenant bukan rahasia antar staf sekolah yang sama (AGENTS.md #2
+        // RBAC ditegakkan per aksi, bukan per row-read staf internal) - beda dgn data siswa publik/
+        // portofolio yang memang privasi-sensitif (H6+).
+        if (teacherId.HasValue)
+        {
+            query = query.Where(p => p.TeacherId == teacherId.Value);
+        }
+
+        // VOK-H4-E2 §"StudentDetailDrawer" dashboard W3 — sama alasan dgn teacherId di atas: drawer
+        // detail siswa cuma punya studentId (dari DashboardFlaggedStudentDto) + periodId (dari
+        // selector), butuh cari placement-nya utk lanjut panggil GET /journals/for-teacher/{id}.
+        if (studentId.HasValue)
+        {
+            query = query.Where(p => p.StudentId == studentId.Value);
         }
 
         var total = await query.CountAsync(ct);

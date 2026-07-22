@@ -66,6 +66,11 @@ public static class JournalEndpoints
 
         // --- §4 guru — TeacherPlus ---
         journals.MapPost("/{id:guid}/comments", AddTeacherComment).RequireAuthorization(RbacPolicies.TeacherPlus);
+        // VOK-H4-E2: baca jurnal+komentar per placement utk halaman "bimbingan" guru (dan drawer
+        // detail siswa dashboard W3 — TeacherPlus mencakup TenantAdmin/DeptHead juga, jadi 1
+        // endpoint melayani keduanya). Lihat doc-comment JournalWithCommentsDto (Dtos.cs) utk gap
+        // yang mendasari kenapa endpoint ini baru (ListJournals lama terkunci StudentSelf).
+        journals.MapGet("/for-teacher/{placementId:guid}", ListJournalsForTeacher).RequireAuthorization(RbacPolicies.TeacherPlus);
 
         var competencies = app.MapGroup("/api/competencies").WithTags("Journals").AddEndpointFilter<ValidationFilter>();
         competencies.MapGet("/", ListCompetencies).RequireAuthorization(RbacPolicies.TeacherPlus);
@@ -573,5 +578,38 @@ public static class JournalEndpoints
 
         await db.SaveChangesAsync(ct);
         return Results.Created($"/api/journals/{id}/comments/{comment.Id}", new CommentDto(comment.Id, comment.JournalEntryId, comment.TeacherId, comment.Text, comment.CreatedAt));
+    }
+
+    /// <summary>
+    /// VOK-H4-E2 — baca jurnal (+komentar kronologis) 1 placement, utk guru bimbingan/dashboard
+    /// drawer. TIDAK ada pengecekan `placement.TeacherId == caller` tambahan (lihat komentar
+    /// filter `teacherId` di CompaniesAndPlacements.cs: scope keamanan staf-sekolah-internal
+    /// sudah cukup lewat TeacherPlus + tenant global filter, bukan per-row ownership) - siapa pun
+    /// staf sekolah (TenantAdmin/DeptHead/Teacher) dlm tenant yang sama boleh baca, konsisten dgn
+    /// AddTeacherComment yang JUGA tak py cek kepemilikan tambahan.
+    /// </summary>
+    private static async Task<IResult> ListJournalsForTeacher(Guid placementId, VokasiaDbContext db, CancellationToken ct)
+    {
+        var placementExists = await db.Placements.AsNoTracking().AnyAsync(p => p.Id == placementId, ct);
+        if (!placementExists)
+        {
+            return Results.NotFound();
+        }
+
+        var items = await db.JournalEntries.AsNoTracking()
+            .Where(e => e.PlacementId == placementId)
+            .OrderByDescending(e => e.SubmittedAt)
+            .Select(e => new JournalWithCommentsDto(
+                new JournalDto(
+                    e.Id, e.SlotId, e.PlacementId, e.Text, e.Status, e.MentorNote, e.SubmittedAt, e.ApprovedAt,
+                    db.JournalPhotos.Where(p => p.JournalEntryId == e.Id).Select(p => new PhotoDto(p.Id, p.ObjectKey, p.ThumbKey, p.Status)).ToList(),
+                    db.JournalCompetencies.Where(jc => jc.JournalEntryId == e.Id).Select(jc => jc.CompetencyId).ToList()),
+                db.TeacherComments.Where(c => c.JournalEntryId == e.Id)
+                    .OrderBy(c => c.CreatedAt)
+                    .Select(c => new CommentDto(c.Id, c.JournalEntryId, c.TeacherId, c.Text, c.CreatedAt))
+                    .ToList()))
+            .ToListAsync(ct);
+
+        return Results.Ok(items);
     }
 }

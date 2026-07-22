@@ -1,0 +1,21 @@
+# GAP ditemukan+ditambal VOK-H4-E2 (DECISIONS.md D28): tanpa file ini, repo tak punya definisi
+# line-ending eksplisit sama sekali - kombinasi edit lintas OS (Windows host asli vs sandbox Linux
+# vs container Linux) berulang kali membuat SELURUH pohon source tampak "modified" di `git status`
+# (dilaporkan D16, D19, dan lagi di D28 - 179 file/~18.5k baris NOL perubahan semantik, murni
+# CRLF<->LF, dikonfirmasi via git diff insertions==deletions per file sebelum direset) padahal
+# tak ada satu baris kode pun benar2 berubah. Rekomendasi D19 (".gitattributes+renormalize
+# eksplisit") akhirnya dieksekusi di sini, bukan ditunda lagi.
+#
+# HEAD/commit yang sudah ada SEMUA LF (dikonfirmasi `git show HEAD:<file> | od -c`) - jadi LF
+# dipilih sbg standar repo (BUKAN CRLF), konsisten dgn baseline yg sudah ter-commit sejak H1.
+* text=auto eol=lf
+
+# Biner - jangan disentuh git line-ending conversion apa pun.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary

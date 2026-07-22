@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { LogoutButton } from "@/components/LogoutButton";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const NAV = [
   { href: "/student", label: "Hari Ini", icon: "📓" },
@@ -14,7 +15,8 @@ export default function StudentLayout({ children }: { children: ReactNode }) {
       <header className="flex items-center justify-between border-b border-border p-4">
         <span className="text-lg font-semibold text-ink">Vokasia</span>
         <div className="flex items-center gap-3">
-          <span aria-hidden="true">🔔</span>
+          {/* VOK-H4-E2: placeholder 🔔 statis (H1-E2) diganti NotificationBell nyata (poll+badge+panel). */}
+          <NotificationBell />
           <LogoutButton />
         </div>
       </header>

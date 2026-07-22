@@ -74,6 +74,22 @@ services:
       # BucketExistsAsync (dipanggil Program.cs startup, VOK-H3-E1) gagal connect -> container api
       # crash saat startup (exit 139) - ketahuan lewat docker logs nyata, bukan diasumsikan.
       Minio__Endpoint: minio:9000
+      # GAP ditemukan+ditambal VOK-H4-E2 live-verification (DECISIONS.md D28): ASPNETCORE_ENVIRONMENT
+      # TAK PERNAH di-set di mana pun utk container (launchSettings.json cuma dibaca `dotnet run`
+      # lokal/IDE, TIDAK dibaca image yg di-`dotnet publish` lalu dijalankan via ENTRYPOINT langsung
+      # spt Dockerfile ini) - default ASP.NET Core saat env var kosong = "Production". Akibatnya
+      # DUA branch `if (env.IsDevelopment())` diam2 TAK PERNAH aktif di container SEJAK ditulis:
+      # (1) OpenIddictSetup.cs DisableTransportSecurityRequirement() - browser nyata kena 400
+      # "This server only accepts HTTPS requests" (ID2083) begitu /connect/authorize diakses via
+      # HTTP polos (compose ini TAK punya TLS listener sama sekali - ASPNETCORE_URLS cuma
+      # http://+:8080, jadi UseHttpsRedirection() Program.cs:52 sendiri sudah no-op krn tak bisa
+      # tentukan https port, TIDAK ada risiko tambahan set Development di sini); (2) Program.cs:44
+      # MapOpenApi() - endpoint /openapi diam2 hilang di container (baru ketahuan skrg krn baris
+      # (1) baru nyata diuji lewat browser sungguhan, bukan TestServer in-process H1-E3 yg tak
+      # menegakkan aturan transport sama sekali). "Development" WAJAR di compose ini krn compose
+      # ini MEMANG stack dev-only (kredensial dev, sertifikat OpenIddict ephemeral, dsb) - bukan
+      # definisi deploy prod (lihat README/H7-E1 utk itu nanti).
+      ASPNETCORE_ENVIRONMENT: Development
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -102,6 +118,11 @@ services:
       # TAK PERNAH benar2 tersambung ke broker sejak kode H4-E1 ditulis, walau container tetap
       # "healthy" krn healthcheck cuma `pgrep dotnet` - proses hidup, bukan koneksi broker sehat).
       RabbitMq__Host: rabbitmq
+      # Konsistensi dgn api (DECISIONS.md D28, lihat komentar lengkap di service api di atas) - worker
+      # tak py branch IsDevelopment() sendiri saat ini, tp disamakan supaya dua service dev-compose
+      # yang sama tak diam2 berbeda mode hosting (mencegah kelas gap yg sama muncul lain waktu tanpa
+      # disadari kalau worker nanti nambah logika ber-environment).
+      ASPNETCORE_ENVIRONMENT: Development
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }

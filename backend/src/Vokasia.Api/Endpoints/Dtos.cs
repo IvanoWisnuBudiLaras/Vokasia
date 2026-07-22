@@ -72,3 +72,15 @@ public record NotificationDto(Guid Id, string Type, string PayloadJson, bool IsR
 public record DashboardFlaggedStudentDto(Guid StudentId, string Name, string CompanyName, RagStatus Rag, string Reason);
 
 public record SchoolDashboardDto(double JournalTodayPct, int PendingApprovals, int LateVisits, List<DashboardFlaggedStudentDto> Flagged);
+
+/// <summary>
+/// VOK-H4-E2 §2 (halaman guru bimbingan) — GAP ditemukan (dicatat DECISIONS.md, bukan diam-diam):
+/// `ListJournals` yang sudah ada (H3-E1) mengunci diri ke `RbacPolicies.StudentSelf` DAN internal
+/// handler-nya look-up `Students.FirstOrDefault(s => s.UserId == caller)` — TIDAK BISA dipakai
+/// guru sama sekali (caller bukan siswa -> selalu Forbid, bukan soal query-filter). Tak ada pula
+/// endpoint utk baca `TeacherComment` (`AddTeacherComment` cuma tulis, tak pernah ada `ListComments`).
+/// `JournalWithCommentsDto` DTO baru (BUKAN ubah `JournalDto` yang sudah dipakai banyak endpoint
+/// lain sbg positional record - menambah field di situ akan pecah semua call-site `new
+/// JournalDto(...)` yang sudah ada) - dipasang di endpoint BARU `GET /api/journals/for-teacher/{placementId}`.
+/// </summary>
+public record JournalWithCommentsDto(JournalDto Entry, List<CommentDto> Comments);

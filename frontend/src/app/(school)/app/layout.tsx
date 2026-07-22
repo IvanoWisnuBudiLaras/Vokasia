@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { LogoutButton } from "@/components/LogoutButton";
+import { NotificationBell } from "@/components/NotificationBell";
 import { SidebarNav } from "@/components/SidebarNav";
 
 /**
@@ -18,7 +19,10 @@ export default function SchoolLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-surface-muted p-4 md:flex">
-        <div className="mb-6 text-lg font-semibold text-ink">Vokasia</div>
+        <div className="mb-6 flex items-center justify-between">
+          <span className="text-lg font-semibold text-ink">Vokasia</span>
+          <NotificationBell />
+        </div>
         <SidebarNav />
         <div className="mt-auto pt-4">
           <LogoutButton />

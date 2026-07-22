@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { LogoutButton } from "@/components/LogoutButton";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const NAV = [
   { href: "/mentor", label: "Approve", icon: "✅" },
@@ -12,7 +13,10 @@ export default function MentorLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen flex-col">
       <header className="flex items-center justify-between border-b border-border p-4">
         <span className="text-lg font-semibold text-ink">Vokasia · Mentor</span>
-        <LogoutButton />
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <LogoutButton />
+        </div>
       </header>
       <main className="flex-1 p-4 pb-20">{children}</main>
       <nav className="fixed inset-x-0 bottom-0 flex border-t border-border bg-surface">

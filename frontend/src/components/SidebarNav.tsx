@@ -9,6 +9,7 @@ export interface NavItem {
 
 const NAV: NavItem[] = [
   { href: "/app", label: "Dashboard" },
+  { href: "/app/bimbingan", label: "Bimbingan" },
   { href: "/app/periode", label: "Periode" },
   { href: "/app/siswa", label: "Siswa" },
   { href: "/app/dudi", label: "DUDI" },
