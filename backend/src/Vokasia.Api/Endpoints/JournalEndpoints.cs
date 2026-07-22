@@ -545,7 +545,7 @@ public static class JournalEndpoints
 
     // ---------- §4 guru ----------
 
-    private static async Task<IResult> AddTeacherComment(Guid id, AddCommentRequest req, System.Security.Claims.ClaimsPrincipal user, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
+    private static async Task<IResult> AddTeacherComment(Guid id, AddCommentRequest req, System.Security.Claims.ClaimsPrincipal user, VokasiaDbContext db, ITenantContext tenant, Vokasia.Infrastructure.Messaging.INotifier notifier, CancellationToken ct)
     {
         if (!tenant.UserId.HasValue)
         {
@@ -561,19 +561,14 @@ public static class JournalEndpoints
         var comment = new TeacherComment { Id = Guid.NewGuid(), TenantId = entry.TenantId, JournalEntryId = id, TeacherId = tenant.UserId.Value, Text = TextSanitizer.Clean(req.Text) };
         db.TeacherComments.Add(comment);
 
-        // Notifikasi siswa pemilik jurnal (FR-JRN-05).
+        // Notifikasi siswa pemilik jurnal (FR-JRN-05). VOK-H4-E1: lewat INotifier (satu pintu),
+        // bukan db.Notifications.Add inline lagi - lihat Notifier.cs.
         var studentUserId = await db.Placements.Where(p => p.Id == entry.PlacementId)
             .Join(db.Students, p => p.StudentId, s => s.Id, (p, s) => s.UserId)
             .FirstOrDefaultAsync(ct);
         if (studentUserId.HasValue)
         {
-            db.Notifications.Add(new Notification
-            {
-                Id = Guid.NewGuid(),
-                UserId = studentUserId.Value,
-                Type = "TeacherComment",
-                PayloadJson = JsonSerializer.Serialize(new { EntryId = entry.Id, CommentId = comment.Id }),
-            });
+            notifier.CreateNotification(studentUserId.Value, NotificationType.TeacherComment, new { EntryId = entry.Id, CommentId = comment.Id });
         }
 
         await db.SaveChangesAsync(ct);

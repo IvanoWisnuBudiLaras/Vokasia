@@ -81,6 +81,8 @@ app.MapAccountEndpoints(); // VOK-H2-E3: tambal gap /account/login (LoginPath H1
 app.MapAuditEndpoints(); // VOK-H2-E3 §2: WriteAuditLog — dipanggil BFF (TokenReuseDetected dst.)
 app.MapMagicLinkEndpoints(); // VOK-H2-E3 §3: create+validate magic link mentor
 app.MapJournalEndpoints(); // VOK-H3-E1: siklus jurnal siswa/mentor/guru
+app.MapNotificationEndpoints(); // VOK-H4-E1 §4: bell notifikasi in-app lintas peran
+app.MapDashboardEndpoints(); // VOK-H4-E1 §4: GetSchoolDashboard (W3)
 
 // Smoke endpoint H1 — dibuktikan compose+migration hidup end-to-end (gate M0).
 app.MapGet("/health/ping", () => Results.Ok(new { status = "ok", service = "Vokasia.Api" }));

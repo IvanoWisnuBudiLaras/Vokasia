@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Minio;
 using StackExchange.Redis;
 using Vokasia.Domain.Common;
+using Vokasia.Infrastructure.Messaging;
 using Vokasia.Infrastructure.Persistence;
 using Vokasia.Infrastructure.TenantContext;
 
@@ -37,6 +38,13 @@ public static class DependencyInjection
             .WithCredentials(config["Minio:AccessKey"] ?? "vokasia", config["Minio:SecretKey"] ?? "vokasia_dev")
             .WithSSL(false)
             .Build());
+
+        // VOK-H4-E1: IdempotencyGuard/INotifier butuh VokasiaDbContext scoped yang SAMA dgn
+        // consumer/endpoint pemanggilnya (satu ChangeTracker, satu transaksi - lihat doc-comment
+        // masing-masing). IEmailSender dev-only (log) sampai infra SMTP/Resend H4-E3.
+        services.AddScoped<IdempotencyGuard>();
+        services.AddScoped<INotifier, Notifier>();
+        services.AddScoped<IEmailSender, LoggingEmailSender>();
 
         return services;
     }

@@ -94,6 +94,14 @@ services:
     environment:
       ConnectionStrings__Default: Host=postgres;Port=5432;Database=${POSTGRES_DB:-vokasia};Username=${POSTGRES_USER:-vokasia};Password=${POSTGRES_PASSWORD:-vokasia_dev}
       Redis__Connection: redis:6379
+      # GAP ditemukan+ditambal VOK-H4-E1 live-verification (DECISIONS.md D27), pola SAMA PERSIS dgn
+      # Minio__Endpoint di atas (D24): tanpa baris ini, worker jatuh ke fallback .env
+      # (RabbitMq__Host=localhost, dimaksudkan utk `dotnet run` di host, BUKAN container) - DARI
+      # DALAM container worker sendiri, "localhost" itu loopback container itu sendiri, BUKAN
+      # container rabbitmq terpisah -> MassTransit BrokerUnreachableException permanen (worker
+      # TAK PERNAH benar2 tersambung ke broker sejak kode H4-E1 ditulis, walau container tetap
+      # "healthy" krn healthcheck cuma `pgrep dotnet` - proses hidup, bukan koneksi broker sehat).
+      RabbitMq__Host: rabbitmq
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }

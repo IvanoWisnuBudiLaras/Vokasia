@@ -12,6 +12,10 @@
 
   <ItemGroup>
     <PackageReference Include="Bogus" Version="35.6.5" />
+    <!-- VOK-H4-E1: OutboxDispatcher/AddVokasiaMassTransit/IdempotencyGuard hidup di sini (Messaging/)
+         supaya Api & Worker berbagi kontrak yang sama - versi SAMA PERSIS dgn yang sudah direferensi
+         Api/Worker sejak scaffold H1 (belum pernah benar-benar dipakai sampai ticket ini). -->
+    <PackageReference Include="MassTransit.RabbitMQ" Version="8.5.10" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

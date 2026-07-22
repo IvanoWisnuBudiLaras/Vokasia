@@ -3,7 +3,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
+using Vokasia.Infrastructure.Messaging;
 using Vokasia.Infrastructure.Persistence;
+using Vokasia.Infrastructure.Scheduling;
 
 namespace Vokasia.Worker.Jobs;
 
@@ -21,7 +23,7 @@ namespace Vokasia.Worker.Jobs;
 /// (VOK-H2-E3): DbContext scope tanpa tenant ambient = query lintas-tenant yang disengaja, bukan
 /// kebocoran.
 /// </summary>
-public class JournalCronJobs(VokasiaDbContext db, ILogger<JournalCronJobs> logger)
+public class JournalCronJobs(VokasiaDbContext db, INotifier notifier, ILogger<JournalCronJobs> logger)
 {
     /// <summary>Passthrough ke <see cref="AppTimeZone.Jakarta"/> (Domain) — dipertahankan sbg nama
     /// stabil di sini krn Program.cs & test yang sudah ada merujuknya lewat kelas ini.</summary>
@@ -132,13 +134,8 @@ public class JournalCronJobs(VokasiaDbContext db, ILogger<JournalCronJobs> logge
 
         foreach (var x in targets)
         {
-            db.Notifications.Add(new Notification
-            {
-                Id = Guid.NewGuid(),
-                UserId = x.UserId!.Value,
-                Type = "JournalReminder",
-                PayloadJson = JsonSerializer.Serialize(new { slotId = x.Slot.Id, date = date.ToString("yyyy-MM-dd") }),
-            });
+            // VOK-H4-E1: lewat INotifier (satu pintu), bukan db.Notifications.Add inline lagi.
+            notifier.CreateNotification(x.UserId!.Value, NotificationType.JournalReminder, new { slotId = x.Slot.Id, date = date.ToString("yyyy-MM-dd") });
             db.OutboxMessages.Add(new OutboxMessage
             {
                 Id = Guid.NewGuid(),
@@ -149,5 +146,87 @@ public class JournalCronJobs(VokasiaDbContext db, ILogger<JournalCronJobs> logge
 
         await db.SaveChangesAsync();
         logger.LogInformation("RemindEmptyJournals: {Date} -> {Count} reminder dibuat (Notification + outbox JournalReminderEmailRequested).", date, targets.Count);
+    }
+
+    /// <summary>
+    /// VOK-H4-E1 §3 — 21:00 WIB. Per placement AKTIF: hitung hari kerja BERTURUT-TURUT tanpa entry
+    /// (mundur dari hari ini). Krn GenerateDailyJournalSlots HANYA membuat JournalSlot utk hari
+    /// kerja (weekend+Holiday period tak pernah dapat slot sama sekali - lihat method di atas),
+    /// setiap baris JournalSlot SUDAH PASTI hari kerja - cukup hitung slot Status=Empty berturut2
+    /// dari yang TERBARU mundur, TANPA perlu BusinessCalendar lookup terpisah di sini.
+    ///
+    /// >=3 hari -> Rag=Red + notif guru&TenantAdmin (GhostingAlert) + event outbox email. 1-2 hari
+    /// -> Amber. 0 hari (slot hari ini Filled, atau belum ada slot sama sekali) -> Green. Idempoten
+    /// PER HARI by construction: StudentDailyStatusUpsert hitung ULANG dari data slot yang ada
+    /// (bukan increment/toggle) - dijalankan 2x hari yang sama menghasilkan nilai akhir yang SAMA.
+    /// </summary>
+    public async Task FlagGhostingStudents()
+    {
+        var today = TodayJakarta();
+        var activePlacements = await db.Placements.Where(p => p.Status == PlacementStatus.Active).ToListAsync();
+        var flaggedCount = 0;
+
+        foreach (var placement in activePlacements)
+        {
+            var recentSlots = await db.JournalSlots
+                .Where(s => s.PlacementId == placement.Id && s.Date <= today)
+                .OrderByDescending(s => s.Date)
+                .Take(10) // cukup utk hitung sampai ambang tertinggi (>=3) tanpa scan seluruh riwayat placement.
+                .ToListAsync();
+
+            var consecutiveEmpty = 0;
+            foreach (var slot in recentSlots)
+            {
+                if (slot.Status != JournalSlotStatus.Empty)
+                {
+                    break;
+                }
+                consecutiveEmpty++;
+            }
+
+            var rag = consecutiveEmpty switch
+            {
+                0 => RagStatus.Green,
+                1 or 2 => RagStatus.Amber,
+                _ => RagStatus.Red,
+            };
+
+            await StudentDailyStatusUpsert.ApplyAsync(
+                db, placement.TenantId, placement.StudentId, placement.PeriodId, today,
+                status => status.Rag = rag, default);
+
+            if (consecutiveEmpty < 3)
+            {
+                continue;
+            }
+
+            flaggedCount++;
+            var studentName = await db.Students.AsNoTracking().Where(s => s.Id == placement.StudentId)
+                .Select(s => s.FullName).FirstOrDefaultAsync() ?? "-";
+            var alertPayload = new { StudentName = studentName, Days = consecutiveEmpty };
+
+            // Guru = AppUser langsung (Placement.TeacherId == AppUser.Id).
+            notifier.CreateNotification(placement.TeacherId, NotificationType.GhostingAlert, alertPayload);
+
+            var tenantAdminIds = await db.Users.AsNoTracking()
+                .Where(u => u.TenantId == placement.TenantId && u.Role == UserRole.TenantAdmin)
+                .Select(u => u.Id)
+                .ToListAsync();
+            foreach (var adminId in tenantAdminIds)
+            {
+                notifier.CreateNotification(adminId, NotificationType.GhostingAlert, alertPayload);
+            }
+
+            db.OutboxMessages.Add(new OutboxMessage
+            {
+                Id = Guid.NewGuid(),
+                Type = "GhostingAlertEmailRequested",
+                PayloadJson = JsonSerializer.Serialize(new { PlacementId = placement.Id, StudentName = studentName, Days = consecutiveEmpty }),
+            });
+
+            await db.SaveChangesAsync(); // simpan notif+outbox placement ini sebelum lanjut ke placement berikutnya.
+        }
+
+        logger.LogInformation("FlagGhostingStudents: {Date} -> {Flagged}/{Total} placement ditandai ghosting (>=3 hari kerja kosong berturut-turut).", today, flaggedCount, activePlacements.Count);
     }
 }

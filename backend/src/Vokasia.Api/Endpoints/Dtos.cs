@@ -65,3 +65,10 @@ public record BatchResult(List<Guid> Approved, List<BatchFailure> Failed);
 
 public record AddCommentRequest(string Text);
 public record CommentDto(Guid Id, Guid JournalEntryId, Guid TeacherId, string Text, DateTimeOffset CreatedAt);
+
+// VOK-H4-E1 §4: notifikasi in-app + dashboard sekolah.
+public record NotificationDto(Guid Id, string Type, string PayloadJson, bool IsRead, DateTimeOffset CreatedAt);
+
+public record DashboardFlaggedStudentDto(Guid StudentId, string Name, string CompanyName, RagStatus Rag, string Reason);
+
+public record SchoolDashboardDto(double JournalTodayPct, int PendingApprovals, int LateVisits, List<DashboardFlaggedStudentDto> Flagged);

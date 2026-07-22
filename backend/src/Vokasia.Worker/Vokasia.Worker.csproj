@@ -13,6 +13,15 @@
     <PackageReference Include="MassTransit.RabbitMQ" Version="8.5.10" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <!-- VOK-H4-E1 §2 PhotoUploadedConsumer: kompres+strip EXIF-GPS+thumbnail. Dependency BARU
+         (bukan built-in .NET) - System.Drawing.Common tak lintas-platform (Windows-only sejak .NET
+         6+, tak cocok container Linux) - ImageSharp satu-satunya opsi wajar cross-platform.
+         Version DIKUNCI ke >=3.1.11 (bukan 3.1.5 awal) - consumer ini mendekode byte foto UPLOAD
+         SISWA (input tak terpercaya per definisi), persis skenario ancaman dua advisory yang
+         `dotnet build` tandai pada 3.1.5: CVE-2025-27598 (out-of-bounds write, GIF decoder, patch
+         3.1.7) dan CVE-2025-54575 (infinite loop GIF comment block, patch 3.1.11) - 3.1.11 menutup
+         keduanya. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
     <PackageReference Include="QuestPDF" Version="2026.7.1" />
   </ItemGroup>
 

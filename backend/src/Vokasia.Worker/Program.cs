@@ -2,8 +2,11 @@ using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Vokasia.Infrastructure;
+using Vokasia.Infrastructure.Messaging;
 using Vokasia.Worker;
+using Vokasia.Worker.Consumers;
 using Vokasia.Worker.Jobs;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -31,6 +34,25 @@ builder.Services.AddHangfireServer();
 
 builder.Services.AddScoped<JournalCronJobs>();
 
+// VOK-H4-E1 §1/§2: MassTransit+RabbitMQ HANYA di Worker (bukan Api - lihat doc-comment
+// VokasiaMassTransit.cs). Consumer didaftar di sini (Worker) via callback - Infrastructure tak bisa
+// reference tipe Consumer yang hidup di assembly Worker.
+builder.Services.AddVokasiaMassTransit(builder.Configuration, x =>
+{
+    x.AddConsumer<JournalSubmittedConsumer>();
+    x.AddConsumer<StreakCounterConsumer>();
+    x.AddConsumer<PhotoUploadedConsumer>();
+    x.AddConsumer<JournalApprovedConsumer>();
+    x.AddConsumer<JournalRejectedConsumer>();
+    x.AddConsumer<MentorInvitedConsumer>();
+    x.AddConsumer<PlacementCreatedConsumer>();
+});
+
+// VOK-H4-E1 §1: OutboxDispatcher (poll 2 dtk, publish OutboxMessage unpublished ke RabbitMQ) - satu2nya
+// yang benar2 mempublish; endpoint Api hanya menulis baris OutboxMessage (EF Core biasa, sudah ada
+// sejak H2-E1/H2-E3/H3-E1), tak pernah sentuh MassTransit langsung.
+builder.Services.AddHostedService<OutboxDispatcher>();
+
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();
@@ -55,6 +77,14 @@ recurringJobs.AddOrUpdate<JournalCronJobs>(
     "remind-empty-journals",
     job => job.RemindEmptyJournals(),
     "0 19 * * *",
+    new RecurringJobOptions { TimeZone = JournalCronJobs.JakartaTimeZone });
+
+// VOK-H4-E1 §3: 21:00 WIB, setelah RemindEmptyJournals (19:00) beri siswa kesempatan isi sampai
+// malam sebelum ditandai ghosting.
+recurringJobs.AddOrUpdate<JournalCronJobs>(
+    "flag-ghosting-students",
+    job => job.FlagGhostingStudents(),
+    "0 21 * * *",
     new RecurringJobOptions { TimeZone = JournalCronJobs.JakartaTimeZone });
 
 host.Run();

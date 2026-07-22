@@ -30,3 +30,21 @@ public enum RubricAspectKind { Teknis, Softskill, Kehadiran }
 public enum ScoredBy { Mentor, Teacher }
 
 public enum InvoiceStatus { Issued, ProofUploaded, Paid }
+
+/// <summary>
+/// VOK-H4-E1 — tipe notifikasi in-app (Notification.Type disimpan sbg ToString() nilai ini, string
+/// biasa di DB - konsisten dgn nilai string yang SUDAH dipakai H3-E1/cron sebelum enum ini ada:
+/// "TeacherComment", "JournalReminder" - nama member di bawah SENGAJA sama persis suapya baris lama
+/// tetap valid/cocok tanpa migrasi data).
+/// </summary>
+public enum NotificationType
+{
+    JournalApproved,
+    JournalRejected,
+    GhostingAlert,
+    TeacherComment,
+    JournalReminder,
+    PhotoProcessingFailed,
+    MentorWelcome,
+    PlacementWelcome,
+}
