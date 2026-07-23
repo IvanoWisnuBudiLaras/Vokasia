@@ -120,15 +120,40 @@ public class VokasiaIntegrationFactory : WebApplicationFactory<ApiAssembly::Prog
 
     private async Task StartWorkerHostAsync()
     {
+        // [BUG NYATA ditemukan+ditambal, lihat DECISIONS.md D36] QuestPDF mewajibkan deklarasi
+        // lisensi SEKALI per proses SEBELUM Document.Create dipanggil manapun (Vokasia.Worker/
+        // Program.cs baris paling atas melakukan ini utk proses Worker sungguhan) - proses xUnit
+        // test TIDAK PERNAH menjalankan Program.cs Worker itu, jadi CertificateGeneratorConsumer
+        // (memanggil CertificatePdfDocument.GeneratePdf() via QuestPDF) throw
+        // "Please configure the QuestPDF license" tanpa baris ini. Ketahuan lewat kegagalan nyata
+        // MassTransit S-FAULT, bukan diasumsikan dari baca kode semata.
+        QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
         var config = new ConfigurationBuilder().AddInMemoryCollection(BuildConnectionConfig()).Build();
 
         var services = new ServiceCollection();
-        services.AddLogging(b => b.AddDebug());
+        services.AddLogging(b => b.AddDebug().AddConsole());
+        // [BUG NYATA ditemukan+ditambal via suite CertificateFlowTests, lihat DECISIONS.md D36]
+        // `Host.CreateApplicationBuilder`/`WebApplicationBuilder` PRODUKSI otomatis mendaftarkan
+        // IConfiguration miliknya sendiri ke DI container - ServiceCollection MENTAH di sini TIDAK
+        // (kita hanya memakai `config` sbg parameter biasa ke AddVokasiaInfrastructure/
+        // AddVokasiaMassTransit, BUKAN meregistrasikannya sbg service) - consumer manapun yang
+        // constructor-inject IConfiguration langsung (CertificateGeneratorConsumer: baca
+        // "Minio:Bucket"/"Frontend:PublicUrl") gagal resolve tanpa baris ini. Ketahuan lewat
+        // kegagalan nyata MassTransit ("Unable to resolve service for type IConfiguration"), bukan
+        // diasumsikan dari baca kode semata.
+        services.AddSingleton<IConfiguration>(config);
         // AddVokasiaInfrastructure = SATU titik yang sama dipakai Worker/Program.cs sungguhan:
         // DbContext(Npgsql)+Redis+MinIO+IdempotencyGuard+INotifier+IEmailSender. `env` Development
         // palsu (bukan null) supaya rantai IEmailSender jatuh ke DevLogEmailSender (log murni, TIDAK
         // pernah benar2 kirim SMTP keluar dari lingkungan test).
         services.AddVokasiaInfrastructure(config, new FakeDevelopmentEnvironment());
+
+        // AssessmentCronJobs/JournalCronJobs: TANPA Hangfire di sini (cron "dipicu manual" via
+        // TriggerOpenAssessmentPhaseAsync/TriggerEnqueueCertificateBatchAsync, AC ticket - lihat
+        // doc-comment kelas) - cukup daftarkan kelasnya sbg scoped biasa, tak perlu scheduler.
+        services.AddScoped<Vokasia.Worker.Jobs.AssessmentCronJobs>();
+        services.AddScoped<Vokasia.Worker.Jobs.JournalCronJobs>();
 
         services.AddVokasiaMassTransit(config, x =>
         {
