@@ -274,3 +274,139 @@ export interface VerifyCertificateDto {
   issuedAt: string;
   valid: boolean;
 }
+
+/**
+ * VOK-H6-E1/E2 — /sa (tenants, DUDI, plans, ops), billing, portofolio. Sama konvensi enum-sbg-angka
+ * (lihat komentar besar puncak file) — `InvoiceStatus`/`FeatureFlagKey` datang sbg ANGKA dari API.
+ */
+export const InvoiceStatus = { Issued: 0, ProofUploaded: 1, Paid: 2 } as const;
+export const FeatureFlagKey = { GeotagAllowed: 0, ParentDigest: 1 } as const;
+
+export interface TenantDto {
+  id: string;
+  schoolName: string;
+  npsn: string | null;
+  city: string | null;
+  address: string | null;
+  planId: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface TenantStatsDto {
+  studentCount: number;
+  activePlacementCount: number;
+  staffCount: number;
+}
+
+export interface TenantDetailDto {
+  tenant: TenantDto;
+  stats: TenantStatsDto;
+}
+
+export interface PlanDto {
+  id: string;
+  name: string;
+  priceMonthly: number;
+  maxStudents: number;
+  maxPlacements: number;
+}
+
+/** VOK-H6-E1 §2 — registry DUDI global. `mergedIntoId` non-null = company ini sudah digabung ke company lain. */
+export interface CompanyDto {
+  id: string;
+  name: string;
+  sector: string | null;
+  city: string | null;
+  address: string | null;
+  contactPerson: string | null;
+  isVerified: boolean;
+  mergedIntoId: string | null;
+}
+
+export interface CompanySearchDto {
+  id: string;
+  name: string;
+  city: string | null;
+}
+
+export interface MergeResultDto {
+  sourceId: string;
+  targetId: string;
+  movedTenantCompanies: number;
+  movedPlacements: number;
+}
+
+export interface InvoiceDto {
+  id: string;
+  tenantId: string;
+  periodMonth: string;
+  amount: number;
+  status: number; // InvoiceStatus
+  proofKey: string | null;
+}
+
+export interface KpiDto {
+  activeTenants: number;
+  activeStudents: number;
+  journalsToday: number;
+  journalFillRate: number;
+  mrr: number;
+}
+
+export interface HealthDto {
+  queueDepth: number | null;
+  dlqCount: number | null;
+  failedJobs: number | null;
+  outboxUnpublished: number;
+  apiP95Ms: number | null;
+  diskPct: number | null;
+}
+
+export interface AuditDto {
+  id: string;
+  tenantId: string | null;
+  actorUserId: string;
+  action: string;
+  entity: string;
+  entityId: string;
+  metaJson: string;
+  createdAt: string;
+}
+
+export interface PortfolioJournalSampleDto {
+  journalEntryId: string;
+  text: string;
+  submittedAt: string;
+}
+
+export interface PortfolioCertificateDto {
+  certCode: string;
+  issuedAt: string;
+}
+
+export interface PortfolioDto {
+  headline: string | null;
+  verifiedCompetencies: string[];
+  sampleJournals: PortfolioJournalSampleDto[];
+  certificate: PortfolioCertificateDto | null;
+  isPublished: boolean;
+  slug: string | null;
+}
+
+export interface PublishPortfolioResult {
+  slug: string;
+}
+
+/** VOK-H6-E1 §6 GetPublicPortfolio — TANPA NISN/kontak (server-side guaranteed, lihat backend PortfolioEndpoints.AssertPublicDtoHasNoSensitiveFields). */
+export interface PublicPortfolioDto {
+  studentName: string;
+  schoolName: string;
+  majorName: string;
+  year: number;
+  companyName: string;
+  durationLabel: string;
+  verifiedCompetencies: string[];
+  sampleThumbnailUrls: string[];
+  hasCertificate: boolean;
+}
