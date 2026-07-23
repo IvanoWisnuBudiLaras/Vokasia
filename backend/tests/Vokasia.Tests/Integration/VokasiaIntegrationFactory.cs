@@ -154,6 +154,7 @@ public class VokasiaIntegrationFactory : WebApplicationFactory<ApiAssembly::Prog
         // doc-comment kelas) - cukup daftarkan kelasnya sbg scoped biasa, tak perlu scheduler.
         services.AddScoped<Vokasia.Worker.Jobs.AssessmentCronJobs>();
         services.AddScoped<Vokasia.Worker.Jobs.JournalCronJobs>();
+        services.AddScoped<Vokasia.Worker.Jobs.BillingCronJobs>(); // VOK-H6-E1 §5
 
         services.AddVokasiaMassTransit(config, x =>
         {
@@ -168,6 +169,8 @@ public class VokasiaIntegrationFactory : WebApplicationFactory<ApiAssembly::Prog
             x.AddConsumer<GhostingAlertEmailConsumer>();
             x.AddConsumer<ExportRequestedConsumer>();
             x.AddConsumer<CertificateGeneratorConsumer>();
+            x.AddConsumer<TenantAdminInvitedConsumer>(); // VOK-H6-E1 §1
+            x.AddConsumer<InvoiceIssuedConsumer>(); // VOK-H6-E1 §5
         });
 
         _workerServices = services.BuildServiceProvider(validateScopes: true);
@@ -227,6 +230,14 @@ public class VokasiaIntegrationFactory : WebApplicationFactory<ApiAssembly::Prog
         using var scope = _workerServices!.CreateScope();
         var job = scope.ServiceProvider.GetRequiredService<Vokasia.Worker.Jobs.AssessmentCronJobs>();
         await job.EnqueueCertificateBatch(runDate);
+    }
+
+    /// <summary>VOK-H6-E1 §5 — "cron dipicu manual" (AC ticket, DoD: "jalankan cron invoice manual (time-mock)").</summary>
+    public async Task TriggerGenerateMonthlyInvoicesAsync(DateOnly runDate)
+    {
+        using var scope = _workerServices!.CreateScope();
+        var job = scope.ServiceProvider.GetRequiredService<Vokasia.Worker.Jobs.BillingCronJobs>();
+        await job.GenerateMonthlyInvoices(runDate);
     }
 
     /// <summary>Scope DbContext langsung ke Postgres Testcontainers — dipakai suite utk seed fixture/assert baris DB (pola sama SeedFixtureAsync di unit test lama, DbContext BUKAN InMemory di sini).</summary>

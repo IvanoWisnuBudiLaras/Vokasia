@@ -29,6 +29,7 @@ builder.Services.AddScoped<MagicLinkService>(); // VOK-H2-E3 §3
 // bawaan framework utk exception lain yang tak sengaja lolos (tetap format JSON konsisten, bukan
 // halaman HTML dev-exception-page di Production).
 builder.Services.AddExceptionHandler<DomainImmutableExceptionHandler>();
+builder.Services.AddExceptionHandler<QuotaExceededExceptionHandler>(); // VOK-H6-E1 §5 (FR-BIL-03)
 builder.Services.AddProblemDetails();
 
 // VOK-H3-E3 §2: FluentValidation — semua Validator di assembly ini (Vokasia.Api) otomatis terdaftar
@@ -88,6 +89,12 @@ app.MapRubricEndpoints(); // VOK-H5-E1 §2: template rubrik penilaian
 app.MapAssessmentEndpoints(); // VOK-H5-E1 §3: skor dua sisi + finalisasi
 app.MapGradeRecapEndpoints(); // VOK-H5-E1 §4: rekap nilai + export async
 app.MapCertificateEndpoints(); // VOK-H5-E1 §5: unduh sertifikat + verifikasi publik
+app.MapSaTenantsEndpoints(); // VOK-H6-E1 §1: /sa/tenants — wizard provisioning + CRUD
+app.MapSaPlansEndpoints(); // VOK-H6-E1 §3: /sa/plans — paket langganan (minimal, flags menyusul)
+app.MapPortfolioEndpoints(); // VOK-H6-E1 §6: portofolio siswa + /p/{slug} publik
+app.MapBillingEndpoints(); // VOK-H6-E1 §5: invoice (SA semua + confirm, TenantAdmin miliknya + proof)
+app.MapSaCompaniesEndpoints(); // VOK-H6-E1 §2: /sa/companies — registry DUDI global + merge
+app.MapSaOpsEndpoints(); // VOK-H6-E1 §4: KPI platform + kesehatan sistem + audit log (SA)
 
 // Smoke endpoint H1 — dibuktikan compose+migration hidup end-to-end (gate M0).
 app.MapGet("/health/ping", () => Results.Ok(new { status = "ok", service = "Vokasia.Api" }));

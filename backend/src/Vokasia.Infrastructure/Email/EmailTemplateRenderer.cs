@@ -80,6 +80,26 @@ public static class EmailTemplateRenderer
         return (subject, Layout(subject, bodyHtml), LayoutText(subject, bodyText));
     }
 
+    /// <summary>
+    /// VOK-H6-E1 §1 — CreateTenant wizard: akun TenantAdmin baru + password sementara. [GAP dicatat
+    /// eksplisit, bukan diam-diam]: password sementara dikirim APA ADANYA di badan email (bukan
+    /// tautan "set password") krn repo ini belum punya endpoint reset-password sungguhan sampai
+    /// ticket ini (AccountEndpoints hanya form login) — konsisten dgn pola SchoolUsersEndpoints.
+    /// InviteSchoolUser yang SUDAH generate tempPassword acak sejak H2-E1, kini akhirnya benar2
+    /// terkirim (bukan lagi TODO tanpa jalur kirim).
+    /// </summary>
+    public static (string Subject, string Html, string Text) TenantAdminInvite(string schoolName, string adminName, string tempPassword)
+    {
+        var subject = $"Akun TenantAdmin Vokasia untuk {schoolName} sudah dibuat";
+        var bodyHtml = $"""
+            <p>Halo {E(adminName)}, akun TenantAdmin untuk <strong>{E(schoolName)}</strong> di Vokasia sudah dibuat.</p>
+            <p>Password sementara Anda: <strong>{E(tempPassword)}</strong></p>
+            <p>Segera masuk dan ganti password Anda demi keamanan akun.</p>
+            """;
+        var bodyText = $"Halo {adminName}, akun TenantAdmin untuk {schoolName} di Vokasia sudah dibuat. Password sementara: {tempPassword}. Segera masuk dan ganti password Anda.";
+        return (subject, Layout(subject, bodyHtml), LayoutText(subject, bodyText));
+    }
+
     private static string E(string s) => WebUtility.HtmlEncode(s);
 
     private static string Layout(string title, string bodyHtml) => $"""

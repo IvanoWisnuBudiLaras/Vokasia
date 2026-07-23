@@ -39,6 +39,7 @@ builder.Services.AddHangfireServer();
 
 builder.Services.AddScoped<JournalCronJobs>();
 builder.Services.AddScoped<AssessmentCronJobs>(); // VOK-H5-E1 §3: OpenAssessmentPhase
+builder.Services.AddScoped<BillingCronJobs>(); // VOK-H6-E1 §5: GenerateMonthlyInvoices
 
 // VOK-H4-E1 §1/§2: MassTransit+RabbitMQ HANYA di Worker (bukan Api - lihat doc-comment
 // VokasiaMassTransit.cs). Consumer didaftar di sini (Worker) via callback - Infrastructure tak bisa
@@ -60,6 +61,10 @@ builder.Services.AddVokasiaMassTransit(builder.Configuration, x =>
     x.AddConsumer<ExportRequestedConsumer>();
     // VOK-H5-E1 §5: generate sertifikat PDF.
     x.AddConsumer<CertificateGeneratorConsumer>();
+    // VOK-H6-E1 §1: email TenantAdminInvite (wizard CreateTenant).
+    x.AddConsumer<TenantAdminInvitedConsumer>();
+    // VOK-H6-E1 §5: email InvoiceIssued (GenerateMonthlyInvoices).
+    x.AddConsumer<InvoiceIssuedConsumer>();
 });
 
 // VOK-H4-E1 §1: OutboxDispatcher (poll 2 dtk, publish OutboxMessage unpublished ke RabbitMQ) - satu2nya
@@ -114,6 +119,13 @@ recurringJobs.AddOrUpdate<AssessmentCronJobs>(
     "enqueue-certificate-batch",
     job => job.EnqueueCertificateBatch(null),
     "30 6 * * *",
+    new RecurringJobOptions { TimeZone = JournalCronJobs.JakartaTimeZone });
+
+// VOK-H6-E1 §5: cron tgl 1 tiap bulan, 02:00 WIB (jam sepi, sebelum jam kerja).
+recurringJobs.AddOrUpdate<BillingCronJobs>(
+    "generate-monthly-invoices",
+    job => job.GenerateMonthlyInvoices(null),
+    "0 2 1 * *",
     new RecurringJobOptions { TimeZone = JournalCronJobs.JakartaTimeZone });
 
 host.Run();

@@ -21,8 +21,14 @@ public record ImportResultDto(int Imported, List<ImportRowError> Errors);
 /// <summary>VOK-H3-E3 §2: bentuk satu baris CSV import siswa, DIVALIDASI via ImportStudentRowValidator per baris (bukan lewat ValidationFilter global — baris ini dikonstruksi manual di dalam handler, bukan argumen endpoint terikat framework).</summary>
 public record ImportStudentRow(string FullName, string? Nisn, string MajorName, string Classroom);
 
-public record CompanyDto(Guid Id, string Name, string? Sector, string? City, string? Address, string? ContactPerson, bool IsVerified);
+public record CompanyDto(Guid Id, string Name, string? Sector, string? City, string? Address, string? ContactPerson, bool IsVerified, Guid? MergedIntoId);
 public record ProposeCompanyRequest(string Name, string? Sector, string? City, string? Address, string? ContactPerson);
+
+// VOK-H6-E1 §2: /sa/companies — registry DUDI global (FR-SA-02).
+public record CreateCompanyRequest(string Name, string? Sector, string? City, string? Address, string? ContactPerson);
+public record MergeCompaniesRequest(Guid SourceId, Guid TargetId);
+public record MergeResultDto(Guid SourceId, Guid TargetId, int MovedTenantCompanies, int MovedPlacements);
+public record CompanySearchDto(Guid Id, string Name, string? City);
 
 public record CreatePlacementRequest(Guid StudentId, Guid CompanyId, Guid PeriodId, Guid TeacherId, string? MentorEmail);
 public record PlacementDto(Guid Id, Guid StudentId, Guid CompanyId, Guid PeriodId, Guid TeacherId, Guid? MentorUserId, PlacementStatus Status);
@@ -123,3 +129,37 @@ public record MentorAssessmentPlacementDto(Guid PlacementId, string StudentName,
 
 public record CertificateDownloadDto(string DownloadUrl);
 public record VerifyCertificateDto(string StudentName, string SchoolName, string CompanyName, string PeriodLabel, DateTimeOffset IssuedAt, bool Valid);
+
+// VOK-H6-E1 §1: /sa/tenants — wizard provisioning + CRUD.
+public record CreateTenantRequest(string SchoolName, string? Npsn, string City, string AdminEmail, string AdminName, Guid PlanId);
+public record UpdateTenantRequest(string SchoolName, string? Npsn, string? Address, string City, Guid? PlanId);
+public record TenantDto(Guid Id, string SchoolName, string? Npsn, string? City, string? Address, Guid? PlanId, bool IsActive, DateTimeOffset CreatedAt);
+public record TenantStatsDto(int StudentCount, int ActivePlacementCount, int StaffCount);
+public record TenantDetailDto(TenantDto Tenant, TenantStatsDto Stats);
+public record DeactivateTenantRequest(string Reason);
+
+// VOK-H6-E1 §3: Plans (minimal CRUD sekarang — feature flags menyusul di slice terpisah).
+public record PlanRequest(string Name, decimal PriceMonthly, int MaxStudents, int MaxPlacements);
+public record PlanDto(Guid Id, string Name, decimal PriceMonthly, int MaxStudents, int MaxPlacements);
+
+// VOK-H6-E1 §6: Portfolio publik siswa (FR-CRT-03).
+public record PortfolioJournalSampleDto(Guid JournalEntryId, string Text, DateTimeOffset SubmittedAt);
+public record PortfolioCertificateDto(string CertCode, DateTimeOffset IssuedAt);
+public record PortfolioDto(string? Headline, List<string> VerifiedCompetencies, List<PortfolioJournalSampleDto> SampleJournals, PortfolioCertificateDto? Certificate, bool IsPublished, string? Slug);
+public record UpdatePortfolioRequest(string? Headline, List<Guid> SampleJournalIds);
+public record PublishPortfolioResult(string Slug);
+
+/// <summary>NFR-SEC-05: TANPA NISN/kontak — ditegakkan STRUKTURAL (tak ada properti utk itu di sini) + assert reflection runtime di PublishPortfolio (lihat PortfolioEndpoints.AssertPublicDtoHasNoSensitiveFields).</summary>
+public record PublicPortfolioDto(string StudentName, string SchoolName, string MajorName, int Year, string CompanyName, string DurationLabel, List<string> VerifiedCompetencies, List<string> SampleThumbnailUrls, bool HasCertificate);
+
+// VOK-H6-E1 §5: Billing (FR-BIL-01..03).
+public record InvoiceDto(Guid Id, Guid TenantId, DateOnly PeriodMonth, decimal Amount, InvoiceStatus Status, string? ProofKey);
+public record UploadPaymentProofRequest(string ObjectKey);
+
+// VOK-H6-E1 §3: Feature flags (FR-SA-03).
+public record SetFeatureFlagRequest(FeatureFlagKey Key, bool Enabled);
+
+// VOK-H6-E1 §4: Ops — KPI/health/audit (FR-SA-05..07).
+public record KpiDto(int ActiveTenants, int ActiveStudents, int JournalsToday, double JournalFillRate, decimal Mrr);
+public record HealthDto(int? QueueDepth, int? DlqCount, int? FailedJobs, int OutboxUnpublished, double? ApiP95Ms, double? DiskPct);
+public record AuditDto(Guid Id, Guid? TenantId, Guid ActorUserId, string Action, string Entity, string EntityId, string MetaJson, DateTimeOffset CreatedAt);

@@ -57,6 +57,9 @@ public class OutboxDispatcher(IServiceScopeFactory scopeFactory, ILogger<OutboxD
         ["AssessmentFinalized"] = typeof(AssessmentFinalizedEvent),
         ["ExportRequested"] = typeof(ExportRequestedEvent),
         ["CertificateRequested"] = typeof(CertificateRequestedEvent),
+        // VOK-H6-E1 §1: didaftarkan SEJAK AWAL (bukan ditambal belakangan) — lihat doc-comment TenantAdminInvitedEvent.
+        ["TenantAdminInvited"] = typeof(TenantAdminInvitedEvent),
+        ["InvoiceIssued"] = typeof(InvoiceIssuedEvent),
     };
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

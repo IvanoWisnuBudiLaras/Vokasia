@@ -101,8 +101,32 @@ public static class CompaniesAndPlacementsEndpoints
         return Results.NoContent();
     }
 
-    /// <summary>Stub kuota BILLING (plan.MaxPlacements) — TODO-H6-E1. Kuota SLOT per-DUDI (CompanySlot) tetap ditegakkan sekarang.</summary>
-    private static bool CheckQuotaOnPlacement_TODO_H6(Guid tenantId) => true;
+    /// <summary>
+    /// VOK-H6-E1 §5 (FR-BIL-03) — AKTIF (ganti stub H2-E1): hitung placement AKTIF tenant vs
+    /// Plan.MaxPlacements. Tenant tanpa PlanId (belum pernah diberi paket) = TANPA BATAS (ASSUMPTION
+    /// MVP, pola sama TryReserveSlot "belum ada kuota diset = tanpa batas") — bukan diam-diam
+    /// menolak semua placement tenant yang PlanId-nya null.
+    /// </summary>
+    private static async Task CheckQuotaOnPlacementAsync(VokasiaDbContext db, Guid tenantId, CancellationToken ct)
+    {
+        var planId = await db.Tenants.AsNoTracking().Where(t => t.Id == tenantId).Select(t => t.PlanId).FirstOrDefaultAsync(ct);
+        if (!planId.HasValue)
+        {
+            return;
+        }
+
+        var maxPlacements = await db.Plans.AsNoTracking().Where(p => p.Id == planId.Value).Select(p => (int?)p.MaxPlacements).FirstOrDefaultAsync(ct);
+        if (!maxPlacements.HasValue)
+        {
+            return;
+        }
+
+        var activeCount = await db.Placements.AsNoTracking().CountAsync(p => p.TenantId == tenantId && p.Status == PlacementStatus.Active, ct);
+        if (activeCount >= maxPlacements.Value)
+        {
+            throw new QuotaExceededException($"Kuota placement aktif ({maxPlacements.Value}) sudah tercapai sesuai plan tenant — upgrade plan atau nonaktifkan placement lama.");
+        }
+    }
 
     private static async Task<(bool Ok, string? Error)> TryReserveSlot(VokasiaDbContext db, Guid companyId, Guid periodId, CancellationToken ct)
     {
@@ -116,11 +140,20 @@ public static class CompaniesAndPlacementsEndpoints
         return used >= slot.Slots ? (false, "Slot DUDI untuk periode ini sudah penuh.") : (true, null);
     }
 
+    /// <summary>VOK-H6-E1 §1 AC (DeactivateTenant): "placement baru terblokir" — tenant nonaktif tak boleh bikin placement baru (data lama tetap terbaca, hanya create yang ditolak).</summary>
+    private static async Task<bool> TenantIsActiveAsync(VokasiaDbContext db, Guid tenantId, CancellationToken ct) =>
+        await db.Tenants.AsNoTracking().Where(t => t.Id == tenantId).Select(t => t.IsActive).FirstOrDefaultAsync(ct);
+
     private static async Task<IResult> CreatePlacement(CreatePlacementRequest req, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
     {
         if (!tenant.TenantId.HasValue)
         {
             return Results.Forbid();
+        }
+
+        if (!await TenantIsActiveAsync(db, tenant.TenantId.Value, ct))
+        {
+            return Results.Conflict(new { message = "Tenant nonaktif — tidak bisa membuat placement baru." });
         }
 
         var (ok, error) = await TryReserveSlot(db, req.CompanyId, req.PeriodId, ct);
@@ -129,7 +162,7 @@ public static class CompaniesAndPlacementsEndpoints
             return Results.Conflict(new { message = error });
         }
 
-        CheckQuotaOnPlacement_TODO_H6(tenant.TenantId.Value);
+        await CheckQuotaOnPlacementAsync(db, tenant.TenantId.Value, ct);
 
         var placement = new Placement
         {
@@ -162,6 +195,11 @@ public static class CompaniesAndPlacementsEndpoints
         if (!tenant.TenantId.HasValue)
         {
             return Results.Forbid();
+        }
+
+        if (!await TenantIsActiveAsync(db, tenant.TenantId.Value, ct))
+        {
+            return Results.Conflict(new { message = "Tenant nonaktif — tidak bisa membuat placement baru." });
         }
 
         var successIds = new List<Guid>();
@@ -268,6 +306,6 @@ public static class CompaniesAndPlacementsEndpoints
         return placement is null ? Results.NotFound() : Results.Ok(ToDto(placement));
     }
 
-    private static CompanyDto ToDto(Company c) => new(c.Id, c.Name, c.Sector, c.City, c.Address, c.ContactPerson, c.IsVerified);
+    private static CompanyDto ToDto(Company c) => new(c.Id, c.Name, c.Sector, c.City, c.Address, c.ContactPerson, c.IsVerified, c.MergedIntoId);
     private static PlacementDto ToDto(Placement p) => new(p.Id, p.StudentId, p.CompanyId, p.PeriodId, p.TeacherId, p.MentorUserId, p.Status);
 }
