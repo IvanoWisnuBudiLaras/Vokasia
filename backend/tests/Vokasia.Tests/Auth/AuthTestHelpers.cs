@@ -1,9 +1,12 @@
+extern alias ApiAssembly;
+
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Vokasia.Api.Auth;
@@ -21,6 +24,13 @@ namespace Vokasia.Tests.Auth;
 /// RbacPolicyTests/RefreshRotationTests/RevocationTests (VOK-H2-E3 §4, slice yang ditulis
 /// menyusul) butuh persis logika yang sama — drpd disalin ulang ke-3/4 kalinya (DRY, mencegah
 /// drift antar salinan kalau flow OAuth berubah), diekstrak jadi satu titik.
+///
+/// VOK-H5-E3: parameter diperlebar dari <c>VokasiaApiFactory</c> konkret (InMemory) ke
+/// <c>WebApplicationFactory&lt;ApiAssembly::Program&gt;</c> (basis bersama) — agar
+/// <c>Vokasia.Tests.Integration.VokasiaIntegrationFactory</c> (Postgres+RabbitMQ Testcontainers
+/// SUNGGUHAN, bukan InMemory) bisa memakai dance PKCE yang SAMA PERSIS tanpa duplikasi. Widening
+/// parameter tipe murni (derived -> base) — TIDAK ADA perubahan perilaku utk caller lama (Auth/,
+/// Assessment/ dst. tetap mengoper VokasiaApiFactory spt biasa).
 /// </summary>
 public static class AuthTestHelpers
 {
@@ -38,7 +48,7 @@ public static class AuthTestHelpers
     }
 
     public static async Task<AppUser> SeedUserAsync(
-        VokasiaApiFactory factory, string emailLocalPart, UserRole role, Guid? tenantId, bool isActive = true)
+        WebApplicationFactory<ApiAssembly::Program> factory, string emailLocalPart, UserRole role, Guid? tenantId, bool isActive = true)
     {
         using var scope = factory.Services.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
