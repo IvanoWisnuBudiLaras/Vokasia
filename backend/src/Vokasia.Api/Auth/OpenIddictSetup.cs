@@ -1,4 +1,5 @@
 using OpenIddict.Abstractions;
+using System.Security.Cryptography.X509Certificates;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Vokasia.Api.Auth;
@@ -24,6 +25,20 @@ public static class OpenIddictSetup
     /// </summary>
     public const string MagicLinkGrantType = "urn:vokasia:params:oauth:grant-type:magic-link";
 
+    /// <summary>
+    /// Grant kustom VOK-H6-E3 §1 (StartImpersonation, FR-AUTH-07) — SuperAdmin MENUKAR access
+    /// token miliknya SENDIRI (dikirim sbg Authorization: Bearer di request /connect/token ini,
+    /// dibaca dari HttpContext.User yang SUDAH diisi UseAuthentication() sebelum controller ini
+    /// jalan — TIDAK butuh [Authorize] di controller: middleware auth berjalan utk SEMUA request,
+    /// terlepas ada/tidaknya atribut itu, lihat Program.cs urutan middleware) dengan access token
+    /// BARU ber-identitas user TARGET penuh (role/tenant_id/sub semua milik target), PLUS 1 claim
+    /// tambahan "impersonator_id" = sub SA asli. Ditangani
+    /// AuthorizationController.Exchange() sbg cabang baru, identity dari VokasiaClaimsFactory yang
+    /// SAMA (satu jalur penerbitan token, bukan sesi ad-hoc paralel — pelajaran D17 yang sama
+    /// dgn MagicLinkGrantType di atas).
+    /// </summary>
+    public const string ImpersonationGrantType = "urn:vokasia:params:oauth:grant-type:impersonation";
+
     public static IServiceCollection AddVokasiaOpenIddict(this IServiceCollection services, IConfiguration config, IHostEnvironment env)
     {
         services.AddOpenIddict()
@@ -42,7 +57,8 @@ public static class OpenIddictSetup
                 options.AllowAuthorizationCodeFlow()
                        .RequireProofKeyForCodeExchange()
                        .AllowRefreshTokenFlow()
-                       .AllowCustomFlow(MagicLinkGrantType);
+                       .AllowCustomFlow(MagicLinkGrantType)
+                       .AllowCustomFlow(ImpersonationGrantType);
 
                 options.SetAccessTokenLifetime(TimeSpan.FromMinutes(15));
                 options.SetRefreshTokenLifetime(TimeSpan.FromDays(14));
@@ -92,8 +108,28 @@ public static class OpenIddictSetup
 
                 // Dev: kunci ephemeral (regenerasi tiap restart — TIDAK untuk produksi).
                 // Prod: ganti dengan sertifikat X.509 dari env/secret store (NFR-SEC-07).
-                options.AddDevelopmentEncryptionCertificate()
-                       .AddDevelopmentSigningCertificate();
+                if (env.IsEnvironment("Testing"))
+                {
+                    // Test hosts must not depend on the developer certificate store (which is
+                    // unavailable in CI/sandboxed Windows runners).
+                    options.AddEphemeralEncryptionKey()
+                           .AddEphemeralSigningKey();
+                }
+                else if (env.IsDevelopment())
+                {
+                    // Development certificates are intentionally ephemeral and must never be
+                    // used by a production process.
+                    options.AddDevelopmentEncryptionCertificate()
+                           .AddDevelopmentSigningCertificate();
+                }
+                else
+                {
+                    // Production keys come from a mounted secret/certificate store and survive
+                    // restarts. Falling back to development certificates would invalidate every
+                    // outstanding token after a restart.
+                    options.AddEncryptionCertificate(LoadCertificate(config, "OpenIddict:EncryptionCertificatePath"))
+                           .AddSigningCertificate(LoadCertificate(config, "OpenIddict:SigningCertificatePath"));
+                }
 
                 options.UseAspNetCore()
                        .EnableAuthorizationEndpointPassthrough()
@@ -103,7 +139,7 @@ public static class OpenIddictSetup
                        // logika kustom yang dibutuhkan (beda dgn authorize/token/logout di atas yang
                        // butuh AuthorizationController) — OpenIddict menangani RFC 7009 secara native.
 
-                if (env.IsDevelopment())
+                if (env.IsDevelopment() || env.IsEnvironment("Testing"))
                 {
                     // GAP ditemukan+ditambal sesi VOK-H2-E3 (DECISIONS.md D17): OpenIddict menolak
                     // SEMUA request /connect/* lewat HTTP polos dgn 400 "This server only accepts
@@ -131,6 +167,8 @@ public static class OpenIddictSetup
     public static async Task SeedOAuthClientsAsync(IServiceProvider sp)
     {
         using var scope = sp.CreateScope();
+        var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
 
         // GAP ditemukan+ditambal sesi VOK-H2-E3 (DECISIONS.md D17): client BFF sudah dikasih
         // permission `scp:api` sejak H1-E3, tapi scope "api" itu SENDIRI tidak pernah didaftarkan
@@ -151,13 +189,36 @@ public static class OpenIddictSetup
 
         var manager = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
 
+        var developmentLike = environment.IsDevelopment() || environment.IsEnvironment("Testing");
+        var frontendUrl = configuration["Frontend:PublicUrl"] ??
+            (developmentLike ? "http://localhost:3000" : null);
+        if (!Uri.TryCreate(frontendUrl, UriKind.Absolute, out var frontendUri) ||
+            (!developmentLike && frontendUri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new InvalidOperationException(
+                "Frontend:PublicUrl harus berupa URL HTTPS absolut di Production.");
+        }
+
+        var clientSecret = configuration["OpenIddict:BffClientSecret"] ??
+            Environment.GetEnvironmentVariable("OIDC_BFF_CLIENT_SECRET");
+        if (string.IsNullOrWhiteSpace(clientSecret))
+        {
+            if (!developmentLike)
+            {
+                throw new InvalidOperationException(
+                    "OpenIddict:BffClientSecret/OIDC_BFF_CLIENT_SECRET wajib di Production.");
+            }
+
+            clientSecret = "dev-only-secret-change-me";
+        }
+
         var descriptor = new OpenIddictApplicationDescriptor
         {
             ClientId = OpenIddictSetup.BffClientId,
             ClientType = ClientTypes.Confidential,
-            ClientSecret = Environment.GetEnvironmentVariable("OIDC_BFF_CLIENT_SECRET") ?? "dev-only-secret-change-me",
+            ClientSecret = clientSecret,
             ConsentType = ConsentTypes.Implicit,
-            RedirectUris = { new Uri("http://localhost:3000/api/auth/callback") },
+            RedirectUris = { new Uri(frontendUri, "/api/auth/callback") },
             Permissions =
             {
                 Permissions.Endpoints.Authorization,
@@ -167,6 +228,7 @@ public static class OpenIddictSetup
                 Permissions.GrantTypes.AuthorizationCode,
                 Permissions.GrantTypes.RefreshToken,
                 Permissions.Prefixes.GrantType + MagicLinkGrantType, // VOK-H2-E3 §3
+                Permissions.Prefixes.GrantType + ImpersonationGrantType, // VOK-H6-E3 §1
                 Permissions.ResponseTypes.Code,
                 Permissions.Scopes.Profile,
                 Permissions.Prefixes.Scope + "api",
@@ -188,5 +250,25 @@ public static class OpenIddictSetup
         // DB tiap ticket auth berikutnya nambah scope/permission). UpdateAsync menyamakan ke
         // descriptor terbaru tiap startup — aman krn idempoten (deskriptor sama -> tanpa efek).
         await manager.UpdateAsync(existing, descriptor);
+    }
+
+    private static X509Certificate2 LoadCertificate(IConfiguration config, string pathKey)
+    {
+        var path = config[pathKey];
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new InvalidOperationException($"{pathKey} wajib diisi di Production.");
+        }
+
+        if (!File.Exists(path))
+        {
+            throw new InvalidOperationException($"Sertifikat OpenIddict tidak ditemukan: {path}");
+        }
+
+        var passwordKey = pathKey.Replace("Path", "Password", StringComparison.Ordinal);
+        return X509CertificateLoader.LoadPkcs12FromFile(
+            path,
+            config[passwordKey],
+            X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.MachineKeySet);
     }
 }

@@ -46,18 +46,18 @@ public static class VokasiaMassTransit
                     h.Password(password);
                 });
 
-                // Retry cepat (in-memory, tanpa requeue) SEBELUM redelivery (requeue via delay
-                // exchange, utk kegagalan yg butuh waktu lebih - broker restart, dependency
-                // downstream hiccup dst.). Kalau KEDUANYA habis, MassTransit otomatis pindah pesan
-                // ke "{queue}_error" (DLQ per queue, AC ticket) - bawaan transport RabbitMQ, tanpa
-                // config tambahan. VOK-H4-E3 §3: angka dipindah ke MessagingDefaults (satu sumber,
-                // TIDAK diubah nilainya dari H4-E1 - lihat doc-comment kelas itu).
+                // Retry eksponensial cepat berlangsung in-memory, tanpa requeue. Setelah semua
+                // percobaan habis, MassTransit memindahkan pesan ke "{queue}_error" secara otomatis.
                 cfg.UseMessageRetry(r => r.Exponential(
                     retryLimit: MessagingDefaults.RetryLimit,
                     minInterval: MessagingDefaults.RetryMinInterval,
                     maxInterval: MessagingDefaults.RetryMaxInterval,
                     intervalDelta: MessagingDefaults.RetryIntervalDelta));
-                cfg.UseDelayedRedelivery(r => r.Intervals(MessagingDefaults.RedeliveryIntervals));
+
+                // Do not add UseDelayedRedelivery while compose uses the stock RabbitMQ image:
+                // it has no rabbitmq_delayed_message_exchange plugin, so receive endpoints fail
+                // with 406 instead of consuming messages. Retry exhaustion still goes to _error.
+                // A custom plugin-enabled image needs explicit Developer approval.
 
                 // Prefetch wajar (AC ticket) - app skala ratusan siswa/tenant, bukan jutaan pesan/dtk;
                 // MessagingDefaults.PrefetchCount cukup utk paralelisme berguna tanpa consumer

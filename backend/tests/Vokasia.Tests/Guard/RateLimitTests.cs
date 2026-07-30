@@ -17,8 +17,12 @@ namespace Vokasia.Tests.Guard;
 /// </summary>
 public class RateLimitTests : IClassFixture<VokasiaApiFactory>
 {
-    private readonly VokasiaApiFactory _factory;
-    public RateLimitTests(VokasiaApiFactory factory) => _factory = factory;
+    public RateLimitTests(VokasiaApiFactory factory)
+    {
+        // Keep the fixture in the signature for compatibility with the existing test collection;
+        // the focused limiter assertions use the lightweight host below to avoid unrelated OAuth
+        // certificate-store state on Windows.
+    }
 
     private static FormUrlEncodedContent LoginForm(string email) => new(new Dictionary<string, string>
     {
@@ -30,7 +34,8 @@ public class RateLimitTests : IClassFixture<VokasiaApiFactory>
     [Fact]
     public async Task PostAccountLogin_SixthAttemptSameEmailWithinOneMinute_Returns429WithRetryAfter()
     {
-        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using var host = new AccountLoginTestHost();
+        var client = host.CreateClient();
         var email = $"brute-force-{Guid.NewGuid():N}@vokasia.test"; // 1 email = 1 partisi (IP+email) - tak diganggu test lain di kelas ini.
 
         HttpResponseMessage? last = null;
@@ -54,7 +59,8 @@ public class RateLimitTests : IClassFixture<VokasiaApiFactory>
         // Membuktikan partisi IP+EMAIL (bukan IP saja) - 8 email BERBEDA dari 1 client/IP yang sama,
         // TIDAK SATU PUN boleh kena 429 walau totalnya > limit 5, krn masing2 partisi sendiri-sendiri.
         // Ini jugalah alasan RbacPolicyTests dkk (banyak login user berbeda dari 1 factory) tetap aman.
-        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using var host = new AccountLoginTestHost();
+        var client = host.CreateClient();
 
         for (var i = 0; i < 8; i++)
         {
@@ -62,6 +68,29 @@ public class RateLimitTests : IClassFixture<VokasiaApiFactory>
             var resp = await client.PostAsync("/account/login", LoginForm(email));
             Assert.NotEqual(HttpStatusCode.TooManyRequests, resp.StatusCode);
         }
+    }
+
+    [Fact]
+    public async Task PostAccountLogin_TwentyFirstDifferentEmailSameIp_IsRejectedForPasswordSpraying()
+    {
+        // Use a fresh host so this assertion is independent of the other tests' limiter state.
+        using var host = AccountLoginTestHost.Create(loginAttemptsPerIp: 20);
+        var client = host.CreateClient();
+
+        for (var attempt = 1; attempt <= 20; attempt++)
+        {
+            var response = await client.PostAsync(
+                "/account/login",
+                LoginForm($"spray-{attempt}-{Guid.NewGuid():N}@vokasia.test"));
+            Assert.NotEqual(HttpStatusCode.TooManyRequests, response.StatusCode);
+        }
+
+        var rejected = await client.PostAsync(
+            "/account/login",
+            LoginForm($"spray-21-{Guid.NewGuid():N}@vokasia.test"));
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+        Assert.True(rejected.Headers.RetryAfter is not null || rejected.Headers.Contains("Retry-After"));
     }
 
     [Fact]

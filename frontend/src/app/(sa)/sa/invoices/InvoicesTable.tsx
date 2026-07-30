@@ -70,7 +70,7 @@ export function InvoicesTable({ initialInvoices }: InvoicesTableProps) {
                 <td className="p-3">{statusBadge(inv.status)}</td>
                 <td className="p-3">
                   {inv.status === InvoiceStatus.ProofUploaded && (
-                    <Button variant="primary" size="md" loading={confirmingId === inv.id} onClick={() => handleConfirm(inv.id)} className="h-8 px-3 text-xs">
+                    <Button variant="primary" size="md" loading={confirmingId === inv.id} onClick={() => handleConfirm(inv.id)} className="px-3 text-xs">
                       Konfirmasi Lunas
                     </Button>
                   )}

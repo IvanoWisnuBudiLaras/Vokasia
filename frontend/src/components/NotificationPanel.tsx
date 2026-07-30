@@ -1,22 +1,24 @@
 import type { NotificationDto } from "@/lib/apiTypes";
+import { Icon, type IconName } from "@/components/ui";
 
 export interface NotificationPanelProps {
   items: NotificationDto[];
   onMarkRead: (id: string) => void;
   onMarkAllRead: () => void;
+  align?: "left" | "right";
 }
 
-const ICON_BY_TYPE: Record<string, string> = {
-  JournalApproved: "✅",
-  JournalRejected: "✖",
-  GhostingAlert: "🔴",
-  TeacherComment: "💬",
-  JournalReminder: "⏰",
-  PhotoProcessingFailed: "⚠️",
-  MentorWelcome: "🤝",
-  PlacementWelcome: "🎉",
-  AssessmentPhaseOpened: "📝",
-  ExportReady: "📦",
+const ICON_BY_TYPE: Record<string, IconName> = {
+  JournalApproved: "check",
+  JournalRejected: "x",
+  GhostingAlert: "warning",
+  TeacherComment: "message-square-text",
+  JournalReminder: "calendar-days",
+  PhotoProcessingFailed: "warning",
+  MentorWelcome: "briefcase-business",
+  PlacementWelcome: "briefcase-business",
+  AssessmentPhaseOpened: "file-pen-line",
+  ExportReady: "package",
 };
 
 const LABEL_BY_TYPE: Record<string, string> = {
@@ -55,18 +57,18 @@ function extractDownloadUrl(payloadJson: string): string | null {
  * penuh — kebanyakan tipe belum py halaman detail per-entri yang bisa dituju di shell manapun saat
  * ini; ditandai sbg gap jujur drpd link ke tempat yang tak ada, lihat DECISIONS.md).
  */
-export function NotificationPanel({ items, onMarkRead, onMarkAllRead }: NotificationPanelProps) {
+export function NotificationPanel({ items, onMarkRead, onMarkAllRead, align = "right" }: NotificationPanelProps) {
   const hasUnread = items.some((n) => !n.isRead);
 
   return (
-    <div className="absolute right-0 top-full z-40 mt-2 w-80 rounded-[var(--radius-lg)] border border-border bg-surface shadow-lg">
+    <div className={`absolute ${align === "left" ? "left-0" : "right-0"} top-full z-40 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-[var(--radius-lg)] border border-border bg-surface shadow-lg`}>
       <div className="flex items-center justify-between border-b border-border p-3">
         <span className="text-sm font-semibold text-ink">Notifikasi</span>
         {hasUnread && (
           <button
             type="button"
             onClick={onMarkAllRead}
-            className="text-xs font-medium text-primary outline-none hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+            className="min-h-[var(--tap-min)] rounded-[var(--radius-sm)] px-2 text-xs font-medium text-primary outline-none transition-[color,background-color,border-color] hover:bg-primary-muted focus-visible:outline-2 focus-visible:outline-focus active:bg-primary-muted active:underline"
           >
             Tandai semua dibaca
           </button>
@@ -87,11 +89,11 @@ export function NotificationPanel({ items, onMarkRead, onMarkAllRead }: Notifica
                     onClick={() => !n.isRead && onMarkRead(n.id)}
                     className={
                       "flex w-full items-start gap-2 border-b border-border p-3 text-left text-sm outline-none last:border-b-0 " +
-                      "hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2 " +
+                      "transition-[color,background-color,border-color] hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2 active:bg-primary-muted " +
                       (n.isRead ? "text-ink-muted" : "bg-primary-muted/40 font-medium text-ink")
                     }
                   >
-                    <span aria-hidden="true">{ICON_BY_TYPE[n.type] ?? "🔔"}</span>
+                    <Icon name={ICON_BY_TYPE[n.type] ?? "bell"} size={20} className="shrink-0" />
                     <span className="flex flex-col gap-0.5">
                       <span>{LABEL_BY_TYPE[n.type] ?? n.type}</span>
                       <span className="text-xs text-ink-muted">
@@ -103,9 +105,9 @@ export function NotificationPanel({ items, onMarkRead, onMarkAllRead }: Notifica
                     <a
                       href={downloadUrl}
                       onClick={(e) => e.stopPropagation()}
-                      className="ml-9 mb-2 mt-[-6px] inline-block text-xs font-medium text-primary hover:underline"
+                      className="mb-1 ml-9 inline-flex min-h-[var(--tap-min)] items-center gap-1.5 rounded-[var(--radius-sm)] px-2 text-xs font-medium text-primary outline-none transition-[color,background-color,border-color] hover:bg-primary-muted focus-visible:outline-2 focus-visible:outline-focus active:bg-primary-muted active:underline"
                     >
-                      ⬇ Unduh file export
+                      <Icon name="download" size={16} /> Unduh file export
                     </a>
                   )}
                 </li>

@@ -1,41 +1,55 @@
 import type { ReactNode } from "react";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { LogoutButton } from "@/components/LogoutButton";
 import { NotificationBell } from "@/components/NotificationBell";
+import { RoleMobileNav } from "@/components/RoleMobileNav";
+import { WorkspaceSidebar, type WorkspaceNavItem } from "@/components/WorkspaceSidebar";
 
-const NAV = [
-  { href: "/sa", label: "KPI" },
-  { href: "/sa/tenants", label: "Tenants" },
-  { href: "/sa/dudi", label: "DUDI Registry" },
-  { href: "/sa/plans", label: "Plans" },
-  { href: "/sa/invoices", label: "Invoices" },
-  { href: "/sa/audit", label: "Audit" },
+const NAV: WorkspaceNavItem[] = [
+  { href: "/sa", label: "Ringkasan", icon: "layout-dashboard" },
+  { href: "/sa/tenants", label: "Tenant", icon: "building-2" },
+  { href: "/sa/dudi", label: "DUDI", icon: "briefcase-business" },
+  { href: "/sa/plans", label: "Paket", icon: "package" },
+  { href: "/sa/invoices", label: "Invoice", icon: "receipt" },
+  { href: "/sa/audit", label: "Audit", icon: "list-checks" },
 ];
 
-/** Shell desktop-first Superadmin (PRD W5) — sidebar tetap, konten scrollable. */
+/** Workspace SuperAdmin mempertahankan data density, dengan nav mobile yang tetap dapat diakses. */
 export default function SuperAdminLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-screen">
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-surface-muted p-4 md:flex">
-        <div className="mb-6 flex items-center justify-between">
-          <span className="text-lg font-semibold text-ink">Vokasia · SA</span>
-          <NotificationBell />
+    <>
+      <ImpersonationBanner />
+      <div className="min-h-screen bg-surface-muted">
+        <div className="mx-auto flex min-h-screen max-w-[1600px] bg-surface">
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border bg-surface-muted p-4 lg:flex">
+          <div className="mb-8 flex items-start justify-between gap-3 px-2">
+            <div>
+              <span className="block text-lg font-bold tracking-tight text-ink">Vokasia</span>
+              <span className="block text-xs text-ink-muted">Operasi platform</span>
+            </div>
+            <NotificationBell panelAlign="left" />
+          </div>
+          <WorkspaceSidebar ariaLabel="Navigasi SuperAdmin" items={NAV} />
+          <div className="mt-auto border-t border-border pt-4">
+            <LogoutButton />
+          </div>
+        </aside>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 lg:hidden">
+            <div>
+              <span className="block text-base font-bold text-ink">Vokasia</span>
+              <span className="block text-xs text-ink-muted">Operasi platform</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <NotificationBell />
+              <LogoutButton />
+            </div>
+          </header>
+          <main className="min-w-0 flex-1 px-4 py-5 pb-24 sm:px-6 lg:p-8 lg:pb-8">{children}</main>
         </div>
-        <nav className="flex flex-col gap-1">
-          {NAV.map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className="rounded-[var(--radius-sm)] px-3 py-2 text-sm text-ink-muted hover:bg-surface hover:text-ink"
-            >
-              {item.label}
-            </a>
-          ))}
-        </nav>
-        <div className="mt-auto pt-4">
-          <LogoutButton />
+        <RoleMobileNav items={NAV} hideAtDesktop />
         </div>
-      </aside>
-      <main className="flex-1 p-6">{children}</main>
-    </div>
+      </div>
+    </>
   );
 }

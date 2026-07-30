@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Vokasia.Domain.Common;
 
 namespace Vokasia.Domain.Entities;
@@ -34,6 +35,7 @@ public class Assessment : ITenantScoped
     public Guid PlacementId { get; set; }
     public Guid RubricTemplateId { get; set; }
     public decimal? FinalScore { get; set; }
+    [ConcurrencyCheck]
     public bool IsFinal { get; set; }
     public DateTimeOffset? FinalizedAt { get; set; }
 }

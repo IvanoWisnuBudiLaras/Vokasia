@@ -1,4 +1,4 @@
-import { EmptyState, ErrorState } from "@/components/ui";
+import { EmptyState, ErrorState, Icon } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
 import { getSession } from "@/lib/session";
 import { PeriodStatusNum, type AssessmentDto, type Paged, type PeriodSummary, type PlacementDto, type StudentDto } from "@/lib/apiTypes";
@@ -69,24 +69,27 @@ export default async function PenilaianPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col items-start gap-2 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-ink">Penilaian</h1>
           <p className="text-sm text-ink-muted">Isi nilai aspek softskill siswa bimbinganmu.</p>
         </div>
-        <a href="/app/penilaian/rekap" className="text-sm font-medium text-primary hover:underline">
-          Lihat Rekap →
+        <a
+          href="/app/penilaian/rekap"
+          className="inline-flex min-h-[var(--tap-min)] items-center gap-1 whitespace-nowrap rounded-[var(--radius-md)] px-2 text-sm font-medium text-primary outline-none transition-[color,background-color,border-color] hover:bg-primary-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:bg-primary-muted"
+        >
+          Lihat Rekap <Icon name="arrow-right" size={16} />
         </a>
       </div>
 
       {loadError && <ErrorState message="Daftar penilaian belum bisa dimuat." />}
 
       {!loadError && noAssessmentPeriod && (
-        <EmptyState icon="📝" title="Belum ada periode fase penilaian" description="Penilaian akan aktif saat periode PKL masuk fase Assessment." />
+        <EmptyState icon={<Icon name="file-pen-line" size={32} />} title="Belum ada periode fase penilaian" description="Penilaian akan aktif saat periode PKL masuk fase penilaian." />
       )}
 
       {!loadError && !noAssessmentPeriod && roster.length === 0 && (
-        <EmptyState icon="🎓" title="Belum ada siswa bimbingan" description="Kamu belum di-assign sebagai guru pembimbing di periode fase penilaian ini." />
+        <EmptyState icon={<Icon name="graduation-cap" size={32} />} title="Belum ada siswa bimbingan" description="Kamu belum ditetapkan sebagai guru pembimbing di periode penilaian ini." />
       )}
 
       {roster.length > 0 && (
@@ -97,7 +100,7 @@ export default async function PenilaianPage({
                 <a
                   href={`/app/penilaian?placementId=${item.placementId}`}
                   className={
-                    "flex items-center justify-between gap-2 rounded-[var(--radius-md)] border p-3 text-sm outline-none transition-colors " +
+                    "flex items-center justify-between gap-2 rounded-[var(--radius-md)] border p-3 text-sm outline-none transition-[color,background-color,border-color] " +
                     "focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 " +
                     (item.placementId === selectedId
                       ? "border-primary bg-primary-muted"
@@ -106,8 +109,12 @@ export default async function PenilaianPage({
                 >
                   <span className="font-medium text-ink">{item.studentName}</span>
                   <span className="flex gap-1 text-xs" title="Mentor / Guru">
-                    <span className={item.mentorDone ? "text-status-green" : "text-ink-muted"}>M{item.mentorDone ? "✓" : "✗"}</span>
-                    <span className={item.teacherDone ? "text-status-green" : "text-ink-muted"}>G{item.teacherDone ? "✓" : "✗"}</span>
+                    <span className={`inline-flex items-center gap-0.5 ${item.mentorDone ? "text-status-green" : "text-ink-muted"}`}>
+                      M <Icon name={item.mentorDone ? "check" : "x"} size={16} />
+                    </span>
+                    <span className={`inline-flex items-center gap-0.5 ${item.teacherDone ? "text-status-green" : "text-ink-muted"}`}>
+                      G <Icon name={item.teacherDone ? "check" : "x"} size={16} />
+                    </span>
                     {item.isFinal && <span className="text-primary">Final</span>}
                   </span>
                 </a>
@@ -122,7 +129,18 @@ export default async function PenilaianPage({
                 <TeacherScoreEditor placementId={selected.placementId} />
               </>
             ) : (
-              <EmptyState title="Pilih siswa" description="Pilih salah satu siswa di daftar untuk mengisi nilai." />
+              <EmptyState
+                title="Pilih siswa"
+                description="Pilih salah satu siswa di daftar untuk mengisi nilai."
+                action={
+                  <a
+                    href={`/app/penilaian?placementId=${roster[0].placementId}`}
+                    className="inline-flex min-h-[var(--tap-min)] items-center rounded-[var(--radius-md)] border border-border px-3 text-sm font-medium text-primary outline-none hover:bg-primary-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:bg-primary-muted"
+                  >
+                    Pilih {roster[0].studentName}
+                  </a>
+                }
+              />
             )}
           </div>
         </div>

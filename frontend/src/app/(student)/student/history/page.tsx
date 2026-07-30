@@ -1,5 +1,6 @@
 import { cn } from "@/lib/cn";
-import { EmptyState, ErrorState, StatusBadge } from "@/components/ui";
+import { PageHeading } from "@/components/PageHeading";
+import { EmptyState, ErrorState, Icon, StatusBadge } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
 import type { JournalDto, Paged } from "@/lib/apiTypes";
 import { JournalEntryStatus } from "@/lib/apiTypes";
@@ -36,7 +37,11 @@ function JournalHistoryItem({ journal }: { journal: JournalDto }) {
       {journal.status === JournalEntryStatus.Rejected && journal.mentorNote && (
         <p className="text-xs text-status-red">Alasan: {journal.mentorNote}</p>
       )}
-      {journal.photos.length > 0 && <p className="text-xs text-ink-muted">📎 {journal.photos.length} foto</p>}
+      {journal.photos.length > 0 && (
+        <p className="inline-flex items-center gap-1 text-xs text-ink-muted">
+          <Icon name="image" size={16} /> {journal.photos.length} foto
+        </p>
+      )}
     </li>
   );
 }
@@ -63,8 +68,12 @@ export default async function StudentHistoryPage({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold text-ink">Riwayat Jurnal</h1>
+    <div className="flex flex-col gap-5">
+      <PageHeading
+        eyebrow="PROGRES BELAJAR"
+        title="Riwayat jurnal"
+        description="Lihat kegiatan yang sudah dikirim dan tanggapan dari mentor."
+      />
 
       <div className="flex gap-1 overflow-x-auto rounded-[var(--radius-md)] bg-surface-muted p-1">
         {TABS.map((tab) => (
@@ -72,7 +81,7 @@ export default async function StudentHistoryPage({
             key={tab.key}
             href={tab.key === "all" ? "/student/history" : `/student/history?status=${tab.key}`}
             className={cn(
-              "flex h-9 flex-1 items-center justify-center whitespace-nowrap rounded-[var(--radius-sm)] px-3 text-sm font-medium",
+              "flex min-h-[var(--tap-min)] flex-1 items-center justify-center whitespace-nowrap rounded-[var(--radius-sm)] px-3 text-sm font-medium outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2",
               tab.key === activeTab.key ? "bg-surface text-ink shadow-sm" : "text-ink-muted"
             )}
           >
@@ -85,7 +94,7 @@ export default async function StudentHistoryPage({
 
       {!loadError && items.length === 0 && (
         <EmptyState
-          icon="🗓️"
+          icon={<Icon name="calendar-days" size={32} />}
           title="Belum ada riwayat jurnal"
           description="Jurnal yang sudah kamu kirim akan muncul di sini, lengkap dengan status persetujuan mentor."
         />

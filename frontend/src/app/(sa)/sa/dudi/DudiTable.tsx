@@ -46,16 +46,17 @@ export function DudiTable({ initialCompanies }: DudiTableProps) {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold text-ink">DUDI Registry</h1>
-        <p className="text-sm text-ink-muted">Registry perusahaan global lintas tenant.</p>
+        <h1 className="text-xl font-semibold text-ink">Daftar DUDI</h1>
+        <p className="text-sm text-ink-muted">Daftar perusahaan global lintas sekolah.</p>
       </div>
 
       <input
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        aria-label="Cari DUDI berdasarkan nama atau kota"
         placeholder="Cari nama / kota…"
-        className="h-9 w-64 rounded-[var(--radius-md)] border border-border bg-surface px-3 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+        className="h-[var(--tap-min)] w-64 rounded-[var(--radius-md)] border border-border bg-surface px-3 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
       />
 
       {error && <p className="text-sm text-status-red">{error}</p>}
@@ -100,11 +101,11 @@ export function DudiTable({ initialCompanies }: DudiTableProps) {
                   {!c.mergedIntoId && (
                     <div className="flex gap-2">
                       {!c.isVerified && (
-                        <Button variant="secondary" size="md" loading={verifyingId === c.id} onClick={() => handleVerify(c.id)} className="h-8 px-3 text-xs">
+                        <Button variant="secondary" size="md" loading={verifyingId === c.id} onClick={() => handleVerify(c.id)} className="px-3 text-xs">
                           Verifikasi
                         </Button>
                       )}
-                      <Button variant="secondary" size="md" onClick={() => setMergingId(c.id)} className="h-8 px-3 text-xs">
+                      <Button variant="secondary" size="md" onClick={() => setMergingId(c.id)} className="px-3 text-xs">
                         Gabungkan…
                       </Button>
                     </div>

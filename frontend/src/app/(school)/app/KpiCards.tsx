@@ -19,7 +19,7 @@ export interface KpiCardsProps {
  */
 export function KpiCards({ journalTodayPct, pendingApprovals, lateVisits, flaggedCount }: KpiCardsProps) {
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Card className={flaggedCount > 0 ? "border-status-red/30 bg-status-red-bg md:col-span-4 lg:col-span-1" : "md:col-span-4 lg:col-span-1"}>
         <div className="flex flex-col gap-1">
           <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Siswa Bermasalah</p>

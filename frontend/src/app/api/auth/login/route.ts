@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { savePkce } from "@/lib/bffSession";
+import { getSafeLocalReturnUrl } from "@/lib/localReturnUrl";
 import { generatePkce, generateState } from "@/lib/pkce";
+import { getRuntimeUrl } from "@/lib/runtimeUrls";
 
 const BFF_CLIENT_ID = "vokasia-bff";
 // [RUNNER NOTE] "profile" SENGAJA di-drop dari scope yg diminta (beda dari draf awal) — client
@@ -26,14 +28,14 @@ const SCOPE = "api offline_access";
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const next = url.searchParams.get("next") ?? "";
+  const next = getSafeLocalReturnUrl(url.searchParams.get("next")) ?? "";
 
   const { verifier, challenge } = generatePkce();
   const state = generateState();
   await savePkce(state, JSON.stringify({ verifier, next }));
 
-  const apiPublicBase = process.env.API_PUBLIC_URL ?? "http://localhost:5000";
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const apiPublicBase = getRuntimeUrl("API_PUBLIC_URL", "http://localhost:5000");
+  const appUrl = getRuntimeUrl("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
 
   const authorizeUrl = new URL("/connect/authorize", apiPublicBase);
   authorizeUrl.searchParams.set("client_id", BFF_CLIENT_ID);

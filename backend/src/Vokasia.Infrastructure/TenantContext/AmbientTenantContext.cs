@@ -12,5 +12,5 @@ public class AmbientTenantContext : ITenantContext
     public Guid? TenantId { get; set; }
     public Guid? UserId { get; set; }
     public string? Role { get; set; }
-    public bool IsSuperAdminActingAsTenant { get; set; }
+    public Guid? ImpersonatorUserId { get; set; }
 }

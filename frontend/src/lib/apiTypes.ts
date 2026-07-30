@@ -367,6 +367,8 @@ export interface AuditDto {
   id: string;
   tenantId: string | null;
   actorUserId: string;
+  /** VOK-H6-E3: non-null = actorUserId beraksi SEBAGAI user ini (impersonasi SuperAdmin). */
+  actingAsUserId: string | null;
   action: string;
   entity: string;
   entityId: string;
@@ -396,6 +398,25 @@ export interface PortfolioDto {
 
 export interface PublishPortfolioResult {
   slug: string;
+}
+
+// VOK-H6-E3 §2 — target picker StartImpersonation (GET /sa/tenants/{id}/staff, reuse SchoolUserDto).
+export const UserRole = {
+  SuperAdmin: 0,
+  TenantAdmin: 1,
+  DeptHead: 2,
+  Teacher: 3,
+  IndustryMentor: 4,
+  Student: 5,
+  ParentViewer: 6,
+} as const;
+
+export interface SchoolUserDto {
+  id: string;
+  email: string;
+  fullName: string;
+  role: number; // UserRole
+  isActive: boolean;
 }
 
 /** VOK-H6-E1 §6 GetPublicPortfolio — TANPA NISN/kontak (server-side guaranteed, lihat backend PortfolioEndpoints.AssertPublicDtoHasNoSensitiveFields). */

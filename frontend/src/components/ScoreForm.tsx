@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Icon } from "@/components/ui";
 import { ApiError } from "@/lib/apiClient";
 
 export interface ScoreAspectInput {
@@ -48,8 +49,9 @@ export function ScoreForm({ aspects, values, onSave, readOnly = false }: ScoreFo
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
+    const pendingTimers = timers.current;
     return () => {
-      Object.values(timers.current).forEach(clearTimeout);
+      Object.values(pendingTimers).forEach(clearTimeout);
     };
   }, []);
 
@@ -93,8 +95,9 @@ export function ScoreForm({ aspects, values, onSave, readOnly = false }: ScoreFo
                 value={local[aspect.id] ?? 0}
                 disabled={readOnly}
                 onChange={(e) => handleChange(aspect.id, e.target.value)}
-                className="h-2 flex-1 accent-primary disabled:opacity-50"
+                className="h-[var(--tap-min)] flex-1 cursor-pointer accent-primary outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-[0.55]"
                 aria-label={`Skor ${aspect.name}`}
+                aria-describedby={`${aspect.id}-save-status`}
               />
               <input
                 type="number"
@@ -103,12 +106,23 @@ export function ScoreForm({ aspects, values, onSave, readOnly = false }: ScoreFo
                 value={local[aspect.id] ?? 0}
                 disabled={readOnly}
                 onChange={(e) => handleChange(aspect.id, e.target.value)}
-                className="h-[var(--tap-min)] w-20 rounded-[var(--radius-md)] border border-border px-2 text-center text-base outline-none focus:outline-2 focus:outline-primary focus:outline-offset-1 disabled:opacity-50"
+                aria-label={`Nilai angka ${aspect.name}`}
+                aria-describedby={`${aspect.id}-save-status`}
+                className="h-[var(--tap-min)] w-20 rounded-[var(--radius-md)] border border-border px-2 text-center text-base outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:opacity-[0.55]"
               />
             </div>
-            <div className="mt-1 min-h-[1rem] text-xs">
+            <div
+              id={`${aspect.id}-save-status`}
+              role={rowStatus === "error" ? "alert" : "status"}
+              aria-live="polite"
+              className="mt-1 min-h-[1rem] text-xs"
+            >
               {rowStatus === "saving" && <span className="text-ink-muted">Menyimpan…</span>}
-              {rowStatus === "saved" && <span className="text-status-green">Tersimpan ✓</span>}
+              {rowStatus === "saved" && (
+                <span className="inline-flex items-center gap-1 text-status-green">
+                  Tersimpan <Icon name="check" size={16} />
+                </span>
+              )}
               {rowStatus === "error" && <span className="text-status-red">{errorMsg[aspect.id] || "Gagal menyimpan."}</span>}
             </div>
           </div>

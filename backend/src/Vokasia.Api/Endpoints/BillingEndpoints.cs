@@ -101,6 +101,11 @@ public static class BillingEndpoints
             return Results.NotFound();
         }
 
+        if (!ObjectStorageKeyPolicy.IsOwnedKey(req.ObjectKey, tenant.TenantId.Value, "invoices"))
+        {
+            return Results.BadRequest(new { message = "ObjectKey bukti pembayaran harus berada di ruang penyimpanan tenant ini." });
+        }
+
         invoice.ProofKey = req.ObjectKey;
         invoice.Status = InvoiceStatus.ProofUploaded;
         await db.SaveChangesAsync(ct);

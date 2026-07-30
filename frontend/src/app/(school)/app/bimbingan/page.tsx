@@ -1,5 +1,5 @@
 import { cn } from "@/lib/cn";
-import { EmptyState, ErrorState, StatusBadge } from "@/components/ui";
+import { EmptyState, ErrorState, Icon, StatusBadge } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
 import { getSession } from "@/lib/session";
 import {
@@ -92,9 +92,9 @@ export default async function BimbinganPage({
 
       {!loadError && caseload.length === 0 && (
         <EmptyState
-          icon="🎓"
+          icon={<Icon name="graduation-cap" size={32} />}
           title="Belum ada siswa bimbingan"
-          description="Kamu belum di-assign sebagai guru pembimbing di periode aktif."
+          description="Kamu belum ditetapkan sebagai guru pembimbing di periode aktif."
         />
       )}
 
@@ -106,7 +106,7 @@ export default async function BimbinganPage({
                 <a
                   href={`/app/bimbingan?placementId=${item.placementId}`}
                   className={cn(
-                    "flex items-center justify-between gap-2 rounded-[var(--radius-md)] border p-3 text-sm outline-none transition-colors",
+                    "flex items-center justify-between gap-2 rounded-[var(--radius-md)] border p-3 text-sm outline-none transition-[color,background-color,border-color]",
                     "focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2",
                     item.placementId === selectedId
                       ? "border-primary bg-primary-muted"
@@ -130,15 +130,26 @@ export default async function BimbinganPage({
                   <h2 className="text-sm font-semibold text-ink">Jurnal — {selected.studentName}</h2>
                   <a
                     href={`/app/bimbingan/${selected.placementId}/kunjungan`}
-                    className="rounded-[var(--radius-md)] border border-border bg-surface-muted px-3 py-1.5 text-xs font-medium text-ink outline-none transition-colors hover:bg-border/40 focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+                    className="inline-flex min-h-[var(--tap-min)] items-center gap-1.5 rounded-[var(--radius-md)] border border-border bg-surface-muted px-3 text-xs font-medium text-ink outline-none transition-[color,background-color,border-color] hover:bg-border/40 focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
                   >
-                    📍 Catat Kunjungan
+                    <Icon name="map-pin" size={16} /> Catat Kunjungan
                   </a>
                 </div>
                 <JournalReviewList placementId={selected.placementId} />
               </>
             ) : (
-              <EmptyState title="Pilih siswa" description="Pilih salah satu siswa di daftar untuk melihat jurnalnya." />
+              <EmptyState
+                title="Pilih siswa"
+                description="Pilih salah satu siswa di daftar untuk melihat jurnalnya."
+                action={
+                  <a
+                    href={`/app/bimbingan?placementId=${caseload[0].placementId}`}
+                    className="inline-flex min-h-[var(--tap-min)] items-center rounded-[var(--radius-md)] border border-border px-3 text-sm font-medium text-primary outline-none hover:bg-primary-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:bg-primary-muted"
+                  >
+                    Pilih {caseload[0].studentName}
+                  </a>
+                }
+              />
             )}
           </div>
         </div>

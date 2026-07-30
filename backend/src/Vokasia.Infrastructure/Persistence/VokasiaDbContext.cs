@@ -56,6 +56,36 @@ public class VokasiaDbContext : IdentityDbContext<AppUser, AppRole, Guid>
     public DbSet<MentorInvite> MentorInvites => Set<MentorInvite>();
     public DbSet<SentEmail> SentEmails => Set<SentEmail>();
 
+    /// <summary>
+    /// VOK-H6-E3 §1 (FR-AUTH-07): "satu pintu" penegakan AC "audit log mencatat actor=SA, as=user"
+    /// SELAMA impersonasi — TANPA menyentuh satu pun dari puluhan situs `db.AuditLogs.Add(...)` yang
+    /// sudah tersebar di seluruh Endpoints/*.cs (semuanya menulis ActorUserId = ITenantContext.UserId
+    /// milik pemanggil saat ini, yang SELAMA impersonasi = user TARGET, krn identity token sudah
+    /// ditukar penuh — lihat TenantResolutionMiddleware). Di sinilah SATU-SATUNYA titik yang tahu
+    /// ITenantContext.ImpersonatorUserId: sebelum SaveChanges betulan jalan, setiap AuditLog yang BARU
+    /// ditambahkan (State==Added) di ChangeTracker dikoreksi — ActorUserId (target) dipindah ke
+    /// ActingAsUserId, lalu ActorUserId diganti UserId SuperAdmin asli. Endpoint yang SUDAH secara
+    /// eksplisit mengisi ActingAsUserId sendiri (mis. StartImpersonation menulis "ImpersonationStarted"
+    /// langsung dgn actor SA + as=target, SEBELUM klaim impersonator_id ada utk request itu) tidak
+    /// disentuh (guard ActingAsUserId is null) — mencegah dobel-koreksi.
+    /// </summary>
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        if (_tenantContext.ImpersonatorUserId.HasValue)
+        {
+            foreach (var entry in ChangeTracker.Entries<AuditLog>())
+            {
+                if (entry.State == EntityState.Added && entry.Entity.ActingAsUserId is null)
+                {
+                    entry.Entity.ActingAsUserId = entry.Entity.ActorUserId;
+                    entry.Entity.ActorUserId = _tenantContext.ImpersonatorUserId.Value;
+                }
+            }
+        }
+
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -151,6 +181,8 @@ public class VokasiaDbContext : IdentityDbContext<AppUser, AppRole, Guid>
         b.Entity<Major>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
         b.Entity<Competency>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
         b.Entity<Student>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<TenantCompany>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<CompanySlot>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
         b.Entity<Placement>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
         b.Entity<JournalSlot>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
         b.Entity<JournalEntry>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
@@ -163,6 +195,8 @@ public class VokasiaDbContext : IdentityDbContext<AppUser, AppRole, Guid>
         b.Entity<Certificate>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
         b.Entity<Portfolio>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
         b.Entity<ExportRequest>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
-        // Company, Plan, FeatureFlag(plan-level) TIDAK difilter — entitas global by design.
+        b.Entity<Invoice>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        // Company dan Plan global. FeatureFlag campuran plan-level/tenant override dan difilter
+        // secara eksplisit oleh resolver karena TenantId-nya nullable.
     }
 }

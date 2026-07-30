@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { StatusBadge } from "@/components/ui";
+import { Icon, StatusBadge } from "@/components/ui";
 import { apiClient } from "@/lib/apiClient";
 import type { RecapRowDto } from "@/lib/apiTypes";
 import { FinalizeButton } from "./FinalizeButton";
@@ -92,8 +92,9 @@ export function RecapTable({ periodId, initialRows }: RecapTableProps) {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          aria-label="Cari rekap berdasarkan nama siswa atau DUDI"
           placeholder="Cari nama siswa atau DUDI…"
-          className="h-9 w-64 rounded-[var(--radius-md)] border border-border bg-surface px-3 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+          className="h-[var(--tap-min)] w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 sm:w-64"
         />
         <div className="flex items-center gap-3">
           <ExportButton periodId={periodId} />
@@ -112,10 +113,10 @@ export function RecapTable({ periodId, initialRows }: RecapTableProps) {
                   <button
                     type="button"
                     onClick={() => toggleSort(col.key)}
-                    className="flex items-center gap-1 font-medium text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+                    className="flex min-h-[var(--tap-min)] items-center gap-1 font-medium text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
                   >
                     {col.label}
-                    {sortKey === col.key && <span aria-hidden="true">{sortDir === "asc" ? "▲" : "▼"}</span>}
+                    {sortKey === col.key && <Icon name={sortDir === "asc" ? "chevron-up" : "chevron-down"} size={16} />}
                   </button>
                 </th>
               ))}

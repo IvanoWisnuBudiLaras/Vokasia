@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui";
+import { Button, Icon } from "@/components/ui";
 import { apiClient, ApiError } from "@/lib/apiClient";
 import type { JournalDto, PortfolioDto, PublishPortfolioResult } from "@/lib/apiTypes";
+import { reconcileAppliedPortfolioMutation } from "./portfolioMutation";
 import { SamplePicker } from "./SamplePicker";
 
 interface PortfolioEditorProps {
@@ -31,18 +32,52 @@ export function PortfolioEditor({ initialPortfolio, approvedJournals }: Portfoli
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [savedOnce, setSavedOnce] = useState(false);
 
   const selectedJournals = approvedJournals.filter((j) => selectedIds.includes(j.id));
 
+  function clearFeedback() {
+    setError(null);
+    setNotice(null);
+  }
+
+  async function reconcileIfApplied(
+    requestError: unknown,
+    optimisticPortfolio: PortfolioDto,
+    noticeMessage: string
+  ): Promise<boolean> {
+    const result = await reconcileAppliedPortfolioMutation(
+      requestError,
+      optimisticPortfolio,
+      () => apiClient.get<PortfolioDto>("/portfolio"),
+      noticeMessage
+    );
+
+    if (!result) return false;
+
+    setPortfolio(result.portfolio);
+    setNotice(result.notice);
+    return true;
+  }
+
   async function handleSave() {
     setSaving(true);
-    setError(null);
+    clearFeedback();
     try {
       await apiClient.put("/portfolio", { headline: headline.trim() || null, sampleJournalIds: selectedIds });
       setSavedOnce(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Gagal menyimpan portofolio.");
+      const handled = await reconcileIfApplied(
+        err,
+        portfolio,
+        "Draf sudah tersimpan, tetapi status terbaru belum bisa dipastikan. Muat ulang sebelum melanjutkan."
+      );
+      if (handled) {
+        setSavedOnce(true);
+      } else {
+        setError(err instanceof ApiError ? err.message : "Gagal menyimpan portofolio.");
+      }
     } finally {
       setSaving(false);
     }
@@ -50,12 +85,33 @@ export function PortfolioEditor({ initialPortfolio, approvedJournals }: Portfoli
 
   async function handlePublish() {
     setPublishing(true);
-    setError(null);
+    clearFeedback();
     try {
       // AC: publikasi harus menyimpan draf terbaru dulu (headline/sampel bisa saja belum di-PUT).
-      await apiClient.put("/portfolio", { headline: headline.trim() || null, sampleJournalIds: selectedIds });
-      const result = await apiClient.post<PublishPortfolioResult>("/portfolio/publish");
-      setPortfolio((prev) => ({ ...prev, isPublished: true, slug: result.slug }));
+      try {
+        await apiClient.put("/portfolio", { headline: headline.trim() || null, sampleJournalIds: selectedIds });
+      } catch (err) {
+        const handled = await reconcileIfApplied(
+          err,
+          portfolio,
+          "Draf sudah tersimpan, tetapi publikasi belum dijalankan. Muat ulang lalu periksa kembali."
+        );
+        if (handled) return;
+        throw err;
+      }
+
+      try {
+        const result = await apiClient.post<PublishPortfolioResult>("/portfolio/publish");
+        setPortfolio((prev) => ({ ...prev, isPublished: true, slug: result.slug }));
+      } catch (err) {
+        const handled = await reconcileIfApplied(
+          err,
+          { ...portfolio, isPublished: true },
+          "Portofolio sudah dipublikasikan, tetapi tautan belum bisa dipastikan. Muat ulang sebelum membagikannya."
+        );
+        if (handled) return;
+        throw err;
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Gagal publikasikan portofolio.");
     } finally {
@@ -65,10 +121,20 @@ export function PortfolioEditor({ initialPortfolio, approvedJournals }: Portfoli
 
   async function handleUnpublish() {
     setPublishing(true);
-    setError(null);
+    clearFeedback();
     try {
-      await apiClient.post("/portfolio/unpublish");
-      setPortfolio((prev) => ({ ...prev, isPublished: false }));
+      try {
+        await apiClient.post("/portfolio/unpublish");
+        setPortfolio((prev) => ({ ...prev, isPublished: false }));
+      } catch (err) {
+        const handled = await reconcileIfApplied(
+          err,
+          { ...portfolio, isPublished: false },
+          "Publikasi sudah dinonaktifkan, tetapi tautan lama mungkin masih terlihat sementara. Muat ulang sebelum membagikannya."
+        );
+        if (handled) return;
+        throw err;
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Gagal menonaktifkan portofolio.");
     } finally {
@@ -95,13 +161,30 @@ export function PortfolioEditor({ initialPortfolio, approvedJournals }: Portfoli
 
         <SamplePicker approvedJournals={approvedJournals} selected={selectedIds} max={MAX_SAMPLES} onChange={setSelectedIds} />
 
-        {error && <p className="text-sm text-status-red">{error}</p>}
+        {error && (
+          <p className="text-sm text-status-red" role="alert">
+            {error}
+          </p>
+        )}
+        {notice && (
+          <p
+            className="flex items-start gap-2 rounded-[var(--radius-md)] border border-status-amber bg-status-amber-bg p-3 text-sm text-status-amber"
+            role="status"
+          >
+            <Icon name="warning" size={20} className="mt-0.5 shrink-0" />
+            <span>{notice}</span>
+          </p>
+        )}
 
         <div className="flex gap-2">
           <Button variant="primary" size="md" loading={saving} onClick={handleSave}>
             Simpan Draf
           </Button>
-          {savedOnce && !saving && <span className="self-center text-xs text-status-green">✓ Tersimpan</span>}
+          {savedOnce && !saving && (
+            <span className="inline-flex items-center gap-1 self-center text-xs text-status-green">
+              <Icon name="check" size={16} /> Tersimpan
+            </span>
+          )}
         </div>
       </section>
 
@@ -127,7 +210,9 @@ export function PortfolioEditor({ initialPortfolio, approvedJournals }: Portfoli
           </ul>
         )}
         {portfolio.certificate && (
-          <p className="text-xs font-medium text-status-green">🏆 Sertifikat: {portfolio.certificate.certCode}</p>
+          <p className="inline-flex items-center gap-1 text-xs font-medium text-status-green">
+            <Icon name="award" size={16} /> Sertifikat: {portfolio.certificate.certCode}
+          </p>
         )}
       </section>
 
@@ -135,13 +220,18 @@ export function PortfolioEditor({ initialPortfolio, approvedJournals }: Portfoli
         <h2 className="text-sm font-semibold text-ink">Publikasi</h2>
         <p className="text-xs text-ink-muted">
           Portofolio yang dipublikasikan <strong>dapat dilihat siapa pun</strong> lewat tautan publik — <strong>tanpa</strong>{" "}
-          kontak atau NISN kamu. Kamu bisa menonaktifkan (Unpublish) kapan pun.
+          kontak atau NISN kamu. Kamu bisa membatalkan publikasi kapan pun.
         </p>
 
         {portfolio.isPublished && publicUrl && (
           <p className="text-sm text-ink">
             Tautan aktif:{" "}
-            <a href={publicUrl} target="_blank" rel="noreferrer" className="font-medium text-primary underline">
+            <a
+              href={publicUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-[var(--tap-min)] items-center rounded-[var(--radius-md)] px-2 font-medium text-primary underline outline-none transition-[color,background-color,border-color] hover:bg-primary-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:bg-primary-muted"
+            >
               vokasia.app{publicUrl}
             </a>
           </p>
@@ -150,7 +240,7 @@ export function PortfolioEditor({ initialPortfolio, approvedJournals }: Portfoli
         <div className="flex gap-2">
           {portfolio.isPublished ? (
             <Button variant="secondary" size="md" loading={publishing} onClick={handleUnpublish}>
-              Unpublish
+              Batalkan publikasi
             </Button>
           ) : (
             <Button variant="primary" size="md" loading={publishing} onClick={handlePublish}>

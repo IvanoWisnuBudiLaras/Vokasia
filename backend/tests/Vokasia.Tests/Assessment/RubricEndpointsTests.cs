@@ -85,6 +85,25 @@ public class RubricEndpointsTests : IClassFixture<VokasiaApiFactory>
     }
 
     [Fact]
+    public async Task CreateRubricTemplate_NegativeWeight_Returns422()
+    {
+        var tenantId = Guid.NewGuid();
+        var client = await AuthenticatedAdminClientAsync(tenantId, "rubric-negative-weight");
+
+        var resp = await client.PostAsJsonAsync("/api/rubrics", new
+        {
+            Name = "Rubrik Bobot Negatif",
+            Aspects = new object[]
+            {
+                new { Name = "Teknis", Kind = Teknis, Weight = 200 },
+                new { Name = "Softskill", Kind = Softskill, Weight = -100 },
+            },
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, resp.StatusCode);
+    }
+
+    [Fact]
     public async Task CreateRubricTemplate_SecondRubricForSameTenant_IsNotDefault()
     {
         var tenantId = Guid.NewGuid();

@@ -1,14 +1,12 @@
-using Vokasia.Domain.Common;
 using Vokasia.Infrastructure.TenantContext;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Vokasia.Api.Auth;
 
 /// <summary>
-/// AC VOK-H2-E3: mengisi ITenantContext dari claims JWT per-request — inilah yang mengaktifkan
+/// AC VOK-H2-E3: mengisi ITenantContext hanya dari claims JWT per-request — inilah yang mengaktifkan
 /// PENUH global query filter yang di-stub H1-E1 (VokasiaDbContext.ApplyTenantQueryFilters).
-/// SuperAdmin boleh override lewat header X-Acting-Tenant (audit ditulis penuh di H6-E3 —
-/// IAuditWriter belum ada di H2, [ASSUMPTION]: TODO ditandai eksplisit, bukan dilewatkan diam-diam).
+/// SuperAdmin yang perlu bertindak sebagai pengguna lain wajib memakai alur impersonation teraudit.
 /// </summary>
 public class TenantResolutionMiddleware
 {
@@ -36,14 +34,14 @@ public class TenantResolutionMiddleware
                 tenantContext.TenantId = tenantId;
             }
 
-            var isSuperAdmin = tenantContext.Role == nameof(UserRole.SuperAdmin);
-            if (isSuperAdmin && context.Request.Headers.TryGetValue("X-Acting-Tenant", out var actingTenantHeader)
-                && Guid.TryParse(actingTenantHeader, out var actingTenantId))
+            // VOK-H6-E3 §1: token hasil StartImpersonation (AuthorizationController.Exchange(),
+            // custom grant ImpersonationGrantType) membawa claim "impersonator_id" = UserId SuperAdmin
+            // ASLI, SEMENTARA sub/role/tenant_id di atas sudah 100% milik user TARGET (identity tertukar
+            // penuh, bukan cuma filter). VokasiaDbContext.SaveChangesAsync membaca field ini utk menegakkan
+            // AC "audit log mencatat actor=SA, as=user" secara otomatis di SETIAP AuditLog.Add manapun.
+            if (Guid.TryParse(user.FindFirst("impersonator_id")?.Value, out var impersonatorId))
             {
-                tenantContext.TenantId = actingTenantId;
-                tenantContext.IsSuperAdminActingAsTenant = true;
-                // TODO-H6E3: tulis AuditLog{Action="ImpersonateTenantFilter", ActorUserId, ActingAsUserId=null, MetaJson=tenant}
-                // begitu IAuditWriter tersedia. Belum ada di H2 — dicatat eksplisit, bukan diam-diam (SOUL.md hierarki).
+                tenantContext.ImpersonatorUserId = impersonatorId;
             }
         }
 

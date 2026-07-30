@@ -1,7 +1,33 @@
-import { ErrorState } from "@/components/ui";
+import Link from "next/link";
+import { Icon } from "@/components/ui";
+
+export const metadata = {
+  title: "Undangan Mentor — Vokasia",
+};
 
 interface ValidateResponse {
   valid: boolean;
+}
+
+function InviteError({ message }: { message: string }) {
+  return (
+    <main data-theme="sekolah" className="flex flex-1 items-center justify-center bg-surface px-5 py-10">
+      <section className="w-full max-w-md rounded-[var(--radius-lg)] border border-status-red/30 bg-status-red-bg p-6 text-center">
+        <Icon name="warning" size={32} className="mx-auto text-status-red" />
+        <h1 className="mt-4 min-w-0 [overflow-wrap:anywhere] text-xl font-semibold text-status-red">
+          Undangan belum bisa digunakan
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-ink-muted">{message}</p>
+        <Link
+          href="/"
+          className="mt-6 inline-flex h-[var(--tap-min)] items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-md)] bg-surface px-5 text-sm font-medium text-ink outline-none ring-1 ring-border hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:translate-y-px"
+        >
+          <Icon name="home" size={16} />
+          Kembali ke beranda
+        </Link>
+      </section>
+    </main>
+  );
 }
 
 /**
@@ -25,11 +51,7 @@ export default async function MentorInvitePage({
   const { token } = await searchParams;
 
   if (!token) {
-    return (
-      <main data-theme="sekolah" className="mx-auto max-w-md bg-surface p-6">
-        <ErrorState message="Tautan tidak lengkap — token tidak ditemukan di URL." />
-      </main>
-    );
+    return <InviteError message="Tautan tidak lengkap. Minta sekolah mengirim ulang undangan mentor." />;
   }
 
   const apiBase = process.env.API_INTERNAL_URL ?? "http://localhost:5000";
@@ -48,17 +70,13 @@ export default async function MentorInvitePage({
   }
 
   if (!valid) {
-    return (
-      <main data-theme="sekolah" className="mx-auto max-w-md bg-surface p-6">
-        <ErrorState message="Tautan tidak valid atau sudah kedaluwarsa. Minta undangan baru ke sekolah." />
-      </main>
-    );
+    return <InviteError message="Tautan tidak valid atau sudah kedaluwarsa. Minta undangan baru ke sekolah." />;
   }
 
   return (
-    <main className="mx-auto max-w-md p-6">
-      <div className="rounded-[var(--radius-lg)] border border-border bg-surface p-6 text-center">
-        <h1 className="text-lg font-semibold text-ink">Undangan mentor pendamping PKL</h1>
+    <main data-theme="sekolah" className="flex flex-1 items-center justify-center bg-surface px-5 py-10">
+      <div className="w-full max-w-md rounded-[var(--radius-lg)] border border-border bg-surface p-6 text-center">
+        <h1 className="min-w-0 [overflow-wrap:anywhere] text-lg font-semibold text-ink">Undangan mentor pendamping PKL</h1>
         <p className="mt-2 text-sm text-ink-muted">
           Anda diundang menjadi mentor pendamping siswa PKL. Klik tombol di bawah untuk masuk —
           tanpa perlu membuat password.
@@ -72,7 +90,7 @@ export default async function MentorInvitePage({
         */}
         <a
           href={`/api/auth/magic-link?token=${encodeURIComponent(token)}`}
-          className="mt-4 inline-flex h-[var(--tap-min)] items-center justify-center gap-2 rounded-[var(--radius-md)] bg-primary px-6 text-base font-medium text-primary-ink outline-none transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+          className="mt-4 inline-flex h-[var(--tap-min)] items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-md)] bg-primary px-6 text-base font-medium text-primary-ink outline-none transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:translate-y-px"
         >
           Masuk sebagai mentor
         </a>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { EmptyState, ErrorState } from "@/components/ui";
+import { EmptyState, ErrorState, Icon } from "@/components/ui";
 import { apiClient } from "@/lib/apiClient";
 import { RubricAspectKind, type AssessmentDto } from "@/lib/apiTypes";
 import { ScoreForm, type ScoreAspectInput } from "@/components/ScoreForm";
@@ -42,7 +42,8 @@ export function TeacherScoreEditor({ placementId }: TeacherScoreEditorProps) {
   }
 
   useEffect(() => {
-    load();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placementId]);
 
@@ -57,7 +58,7 @@ export function TeacherScoreEditor({ placementId }: TeacherScoreEditorProps) {
   const teacherAspects = assessment.aspects.filter((a) => !isMentorSide(a.kind));
 
   if (teacherAspects.length === 0) {
-    return <EmptyState icon="📋" title="Belum ada rubrik" description="Admin sekolah belum membuat rubrik penilaian utk tenant ini." />;
+    return <EmptyState icon={<Icon name="clipboard-check" size={32} />} title="Belum ada rubrik" description="Admin sekolah belum membuat rubrik penilaian untuk sekolah ini." />;
   }
 
   const aspects: ScoreAspectInput[] = teacherAspects.map((a) => ({ id: a.aspectId, name: a.aspectName, kind: a.kind, weight: a.weight }));

@@ -1,4 +1,4 @@
-import { ErrorState } from "@/components/ui";
+import { ErrorState, Icon } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
 import type { Paged, PlacementDto, StudentDto } from "@/lib/apiTypes";
 import { VisitSection } from "./VisitSection";
@@ -36,8 +36,11 @@ export default async function KunjunganPage({
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4">
       <div>
-        <a href={`/app/bimbingan?placementId=${placementId}`} className="text-sm text-primary hover:underline">
-          ← Kembali ke Bimbingan
+        <a
+          href={`/app/bimbingan?placementId=${placementId}`}
+          className="inline-flex min-h-[var(--tap-min)] items-center gap-1 rounded-[var(--radius-md)] px-2 text-sm font-medium text-primary outline-none transition-[color,background-color,border-color] hover:bg-primary-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:bg-primary-muted"
+        >
+          <Icon name="arrow-left" size={16} /> Kembali ke Bimbingan
         </a>
         <h1 className="mt-1 text-xl font-semibold text-ink">Kunjungan DUDI — {studentName}</h1>
         <p className="text-sm text-ink-muted">Catat kunjungan monitoring ke tempat PKL siswa.</p>

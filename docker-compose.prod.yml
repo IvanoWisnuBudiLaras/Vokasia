@@ -1,0 +1,91 @@
+name: vokasia
+
+# Production override for a TLS reverse-proxy in front of the frontend/API. The base compose
+# file remains intentionally convenient for local development; this file closes the accidental
+# Development-mode/OAuth-localhost gap identified by Audit v3.
+services:
+  postgres:
+    ports: !reset []
+    restart: unless-stopped
+
+  redis:
+    ports: !reset []
+    restart: unless-stopped
+
+  rabbitmq:
+    ports: !reset []
+    restart: unless-stopped
+
+  minio:
+    ports: !reset []
+    restart: unless-stopped
+
+  api:
+    # Bind only to the host loopback so a host-level reverse proxy can reach the API;
+    # never publish it on all interfaces.
+    ports: !override
+      - "127.0.0.1:5000:8080"
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Frontend__PublicUrl: ${FRONTEND_PUBLIC_URL}
+      # Keep the confidential BFF secret inside the API container; the base env_file may
+      # contain a local-only value and must not be relied on for the production override.
+      OpenIddict__BffClientSecret: ${OIDC_BFF_CLIENT_SECRET}
+      # The issuer is a browser-visible HTTPS origin in production. Do not inherit the
+      # development .env value (http://localhost:5000).
+      OpenIddict__Issuer: ${API_PUBLIC_URL}
+      DataProtection__KeysPath: /var/lib/vokasia/keys
+      DataProtection__CertificatePath: /run/secrets/openiddict/dataprotection.pfx
+      DataProtection__CertificatePassword: ${DATAPROTECTION_CERTIFICATE_PASSWORD}
+      OpenIddict__EncryptionCertificatePath: /run/secrets/openiddict/encryption.pfx
+      OpenIddict__EncryptionCertificatePassword: ${OPENIDDICT_ENCRYPTION_CERTIFICATE_PASSWORD}
+      OpenIddict__SigningCertificatePath: /run/secrets/openiddict/signing.pfx
+      OpenIddict__SigningCertificatePassword: ${OPENIDDICT_SIGNING_CERTIFICATE_PASSWORD}
+      ForwardedHeaders__KnownIPNetworks: ${FORWARDED_HEADERS_KNOWN_IP_NETWORKS:-172.16.0.0/12}
+      ForwardedHeaders__AllowedHosts: ${FORWARDED_HEADERS_ALLOWED_HOSTS}
+    volumes:
+      - data_protection_keys:/var/lib/vokasia/keys
+      - ${OPENIDDICT_CERTS_DIR:-./secrets/openiddict}:/run/secrets/openiddict:ro
+
+  worker:
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+
+  frontend:
+    # Keep the frontend private to the host; TLS termination belongs to the reverse proxy.
+    ports: !override
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+    environment:
+      API_PUBLIC_URL: ${API_PUBLIC_URL}
+      NEXT_PUBLIC_APP_URL: ${FRONTEND_PUBLIC_URL}
+
+  # OPTIONAL self-contained TLS edge (enable with `--profile edge`). Terminates HTTPS and
+  # reverse-proxies frontend + OpenIddict under ONE origin, so the browser login round-trip
+  # can be verified end-to-end locally without a separate host proxy. For a real deployment
+  # you may instead keep this disabled and run your own host-level Nginx/Caddy — the loopback
+  # port bindings above support both models. See deploy/edge/Caddyfile.
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["edge"]
+    restart: unless-stopped
+    depends_on:
+      - api
+      - frontend
+    environment:
+      # Ganti ke domainmu untuk ACME nyata; default localhost memakai cert internal.
+      EDGE_PUBLIC_HOST: ${EDGE_PUBLIC_HOST:-localhost}
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./deploy/edge/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  data_protection_keys:
+  caddy_data:
+  caddy_config:

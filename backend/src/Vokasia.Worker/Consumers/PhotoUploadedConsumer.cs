@@ -20,7 +20,7 @@ namespace Vokasia.Worker.Consumers;
 /// siswa (BUKAN crash - konsumsi pesan dianggap SELESAI, tak dilempar ke retry/DLQ MassTransit,
 /// krn gambar korup tak akan pernah bisa di-decode betapa pun sering dicoba ulang). Kegagalan
 /// KONEKSI MinIO (unduh/unggah) SEBALIKNYA dibiarkan throw tanpa ditangkap - itu transient, retry
-/// MassTransit (5x exponential + delayed redelivery, VokasiaMassTransit.cs) memang utk kasus ini.
+/// MassTransit (5x exponential retry, VokasiaMassTransit.cs) memang utk kasus ini.
 ///
 /// Bucket "Minio:Bucket" (fallback "vokasia-journal") - nilai SAMA PERSIS dgn JournalEndpoints.cs
 /// (Vokasia.Api) tapi TIDAK bisa dibagi lewat konstanta bersama (JournalEndpoints.AllowedContentTypes
@@ -55,6 +55,18 @@ public class PhotoUploadedConsumer(
         {
             logger.LogWarning("{Consumer}: JournalPhoto {PhotoId} tak ditemukan - dilewati.", Name, msg.PhotoId);
             await db.SaveChangesAsync(ct);
+            return;
+        }
+
+        var photoTenantId = await db.JournalEntries.AsNoTracking()
+            .Where(e => e.Id == msg.JournalEntryId)
+            .Join(db.Placements.AsNoTracking(), e => e.PlacementId, p => p.Id, (e, p) => p.TenantId)
+            .FirstOrDefaultAsync(ct);
+        if (photoTenantId == Guid.Empty || !ObjectStorageKeyPolicy.IsOwnedKey(photo.ObjectKey, photoTenantId, "journal"))
+        {
+            photo.Status = PhotoStatus.Failed;
+            await db.SaveChangesAsync(ct);
+            logger.LogWarning("{Consumer}: object key foto {PhotoId} tidak berada pada prefix tenant yang sah.", Name, msg.PhotoId);
             return;
         }
 

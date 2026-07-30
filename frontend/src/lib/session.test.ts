@@ -9,42 +9,45 @@ const sample: Session = {
 };
 
 describe("session cookie encode/decode — kontrak lite tanpa-DB (VOK-H2-E2)", () => {
-  test("round-trip encode -> decode menghasilkan objek identik", () => {
-    expect(decodeSessionCookie(encodeSessionCookie(sample))).toEqual(sample);
+  test("round-trip encode -> decode menghasilkan objek identik", async () => {
+    expect(await decodeSessionCookie(await encodeSessionCookie(sample))).toEqual(sample);
   });
 
-  test("cookie kosong/undefined -> null (bukan crash)", () => {
-    expect(decodeSessionCookie(undefined)).toBeNull();
-    expect(decodeSessionCookie(null)).toBeNull();
-    expect(decodeSessionCookie("")).toBeNull();
+  test("cookie kosong/undefined -> null (bukan crash)", async () => {
+    expect(await decodeSessionCookie(undefined)).toBeNull();
+    expect(await decodeSessionCookie(null)).toBeNull();
+    expect(await decodeSessionCookie("")).toBeNull();
   });
 
-  test("cookie rusak/dipalsu asal -> null, tidak melempar exception", () => {
-    expect(decodeSessionCookie("bukan-base64-json-valid!!!")).toBeNull();
-    expect(decodeSessionCookie(Buffer.from("{not valid json", "utf-8").toString("base64url"))).toBeNull();
+  test("cookie rusak/dipalsu asal -> null, tidak melempar exception", async () => {
+    expect(await decodeSessionCookie("bukan-base64-json-valid!!!")).toBeNull();
+    expect(await decodeSessionCookie(Buffer.from("{not valid json", "utf-8").toString("base64url"))).toBeNull();
   });
 
-  test("cookie tanpa field wajib (id/role) -> null", () => {
+  test("cookie tanpa field wajib (id/role) -> null", async () => {
     const bad = Buffer.from(JSON.stringify({ name: "Tanpa Id Atau Role" }), "utf-8").toString("base64url");
-    expect(decodeSessionCookie(bad)).toBeNull();
+    expect(await decodeSessionCookie(`${bad}.invalid`)).toBeNull();
   });
 
-  test("tenantId null (mis. IndustryMentor lintas-tenant) dipertahankan, bukan hilang", () => {
+  test("tenantId null (mis. IndustryMentor lintas-tenant) dipertahankan, bukan hilang", async () => {
     const mentor: Session = { id: "u-2", name: "Mentor DUDI", role: "IndustryMentor", tenantId: null };
-    expect(decodeSessionCookie(encodeSessionCookie(mentor))?.tenantId).toBeNull();
+    expect((await decodeSessionCookie(await encodeSessionCookie(mentor)))?.tenantId).toBeNull();
   });
 
-  test("getSessionEdge baca dari objek mirip-NextRequest (mock cookie) tanpa panggilan DB", () => {
+  test("getSessionEdge baca dari objek mirip-NextRequest (mock cookie) tanpa panggilan DB", async () => {
     const fakeReq = {
       cookies: {
-        get: (name: string) => (name === SESSION_COOKIE ? { value: encodeSessionCookie(sample) } : undefined),
+        get: (name: string) => (name === SESSION_COOKIE ? { value: "" } : undefined),
       },
     };
-    expect(getSessionEdge(fakeReq)).toEqual(sample);
+    fakeReq.cookies.get = (name: string) => (name === SESSION_COOKIE ? { value: "pending" } : undefined);
+    const cookie = await encodeSessionCookie(sample);
+    fakeReq.cookies.get = (name: string) => (name === SESSION_COOKIE ? { value: cookie } : undefined);
+    expect(await getSessionEdge(fakeReq)).toEqual(sample);
   });
 
-  test("getSessionEdge tanpa cookie sama sekali -> null", () => {
+  test("getSessionEdge tanpa cookie sama sekali -> null", async () => {
     const fakeReq = { cookies: { get: () => undefined } };
-    expect(getSessionEdge(fakeReq)).toBeNull();
+    expect(await getSessionEdge(fakeReq)).toBeNull();
   });
 });

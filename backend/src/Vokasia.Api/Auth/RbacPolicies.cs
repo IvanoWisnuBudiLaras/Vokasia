@@ -22,12 +22,21 @@ public static class RbacPolicies
     {
         services.AddAuthorizationBuilder()
             .AddPolicy(SaOnly, p => p.RequireClaim("role", nameof(UserRole.SuperAdmin)))
-            .AddPolicy(TenantAdminOnly, p => p.RequireClaim("role", nameof(UserRole.TenantAdmin)))
-            .AddPolicy(DeptHeadPlus, p => p.RequireClaim("role", nameof(UserRole.TenantAdmin), nameof(UserRole.DeptHead)))
-            .AddPolicy(TeacherPlus, p => p.RequireClaim("role", nameof(UserRole.TenantAdmin), nameof(UserRole.DeptHead), nameof(UserRole.Teacher)))
-            .AddPolicy(StudentSelf, p => p.RequireClaim("role", nameof(UserRole.Student)))
-            // TenantMember: siapa saja dgn klaim tenant_id (staff sekolah) — Mentor/SuperAdmin/anon TIDAK punya tenant_id.
-            .AddPolicy(TenantMember, p => p.RequireClaim("tenant_id"))
+            .AddPolicy(TenantAdminOnly, p => p
+                .RequireClaim("role", nameof(UserRole.TenantAdmin))
+                .RequireAssertion(HasValidTenantId))
+            .AddPolicy(DeptHeadPlus, p => p
+                .RequireClaim("role", nameof(UserRole.TenantAdmin), nameof(UserRole.DeptHead))
+                .RequireAssertion(HasValidTenantId))
+            .AddPolicy(TeacherPlus, p => p
+                .RequireClaim("role", nameof(UserRole.TenantAdmin), nameof(UserRole.DeptHead), nameof(UserRole.Teacher))
+                .RequireAssertion(HasValidTenantId))
+            .AddPolicy(StudentSelf, p => p
+                .RequireClaim("role", nameof(UserRole.Student))
+                .RequireAssertion(HasValidTenantId))
+            // TenantMember: staff sekolah dengan tenant_id GUID valid. Presence saja tidak cukup:
+            // claim malformed membuat ambient null dan menonaktifkan filter tenant.
+            .AddPolicy(TenantMember, p => p.RequireAssertion(HasValidTenantId))
             .AddPolicy(MentorOwnPlacement, p => p
                 .RequireClaim("role", nameof(UserRole.IndustryMentor))
                 .AddRequirements(new PlacementScopeRequirement()));
@@ -36,6 +45,10 @@ public static class RbacPolicies
 
         return services;
     }
+
+    private static bool HasValidTenantId(
+        Microsoft.AspNetCore.Authorization.AuthorizationHandlerContext context) =>
+        Guid.TryParse(context.User.FindFirst("tenant_id")?.Value, out _);
 }
 
 /// <summary>Requirement kosong (marker) — logika nyata di PlacementScopeHandler (resource-based).</summary>

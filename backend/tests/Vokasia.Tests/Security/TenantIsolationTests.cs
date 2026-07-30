@@ -82,14 +82,101 @@ public class TenantIsolationTests
     }
 
     [Fact]
-    public async Task SuperAdmin_WithoutActingTenant_SeesNothingTenantScoped()
+    public async Task TenantBoundLinkSlotAndInvoice_ExcludeRowsFromOtherTenant()
     {
-        // AC VOK-H2-E3: "Given SuperAdmin tanpa X-Acting-Tenant, When akses data tenant, Then hasil kosong."
-        // TenantId=null TANPA IsSuperAdminActingAsTenant seharusnya tetap TIDAK melihat data tenant manapun
-        // di endpoint yang secara eksplisit query per-tenant (di sini kita uji query yang tetap menyaring
-        // eksplisit; catatan: HasQueryFilter H1 sendiri BYPASS bila TenantId null — pembatasan "tanpa
-        // X-Acting-Tenant tidak lihat apa-apa" ditegakkan di lapisan ENDPOINT [DeptHeadPlus dst mensyaratkan
-        // tenant_id claim ada], bukan di query filter. Test ini mendokumentasikan itu secara eksplisit.
+        var dbName = Guid.NewGuid().ToString();
+        var (tenantA, tenantB) = (Guid.NewGuid(), Guid.NewGuid());
+
+        await using (var seedCtx = CreateContext(new AmbientTenantContext(), dbName))
+        {
+            seedCtx.TenantCompanies.AddRange(
+                new TenantCompany
+                {
+                    TenantId = tenantA,
+                    CompanyId = Guid.NewGuid(),
+                },
+                new TenantCompany
+                {
+                    TenantId = tenantB,
+                    CompanyId = Guid.NewGuid(),
+                });
+            seedCtx.CompanySlots.AddRange(
+                new CompanySlot
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantA,
+                    CompanyId = Guid.NewGuid(),
+                    PeriodId = Guid.NewGuid(),
+                    Slots = 2,
+                },
+                new CompanySlot
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantB,
+                    CompanyId = Guid.NewGuid(),
+                    PeriodId = Guid.NewGuid(),
+                    Slots = 3,
+                });
+            seedCtx.Invoices.AddRange(
+                new Invoice
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantA,
+                    PeriodMonth = new DateOnly(2026, 7, 1),
+                    Amount = 100_000,
+                },
+                new Invoice
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantB,
+                    PeriodMonth = new DateOnly(2026, 7, 1),
+                    Amount = 200_000,
+                });
+            await seedCtx.SaveChangesAsync();
+        }
+
+        await using var asTenantA = CreateContext(
+            new AmbientTenantContext { TenantId = tenantA },
+            dbName);
+
+        Assert.All(
+            await asTenantA.TenantCompanies.ToListAsync(),
+            row => Assert.Equal(tenantA, row.TenantId));
+        Assert.All(
+            await asTenantA.CompanySlots.ToListAsync(),
+            row => Assert.Equal(tenantA, row.TenantId));
+        Assert.All(
+            await asTenantA.Invoices.ToListAsync(),
+            row => Assert.Equal(tenantA, row.TenantId));
+        Assert.Single(await asTenantA.TenantCompanies.ToListAsync());
+        Assert.Single(await asTenantA.CompanySlots.ToListAsync());
+        Assert.Single(await asTenantA.Invoices.ToListAsync());
+    }
+
+    [Fact]
+    public void EveryMappedEntityWithRequiredTenantId_HasGlobalQueryFilter()
+    {
+        using var context = CreateContext(
+            new AmbientTenantContext { TenantId = Guid.NewGuid() },
+            Guid.NewGuid().ToString());
+
+        var missingFilters = context.Model.GetEntityTypes()
+            .Where(entity =>
+                entity.FindProperty(nameof(Vokasia.Domain.Common.ITenantScoped.TenantId))
+                    is { IsNullable: false })
+            .Where(entity => !entity.GetDeclaredQueryFilters().Any())
+            .Select(entity => entity.ClrType.Name)
+            .OrderBy(name => name)
+            .ToArray();
+
+        Assert.Empty(missingFilters);
+    }
+
+    [Fact]
+    public async Task NullAmbientTenant_AllowsGlobalWorkerAndSuperAdminQueries()
+    {
+        // Null ambient tenant sengaja dipakai worker dan query global SuperAdmin. Endpoint tenant
+        // tetap dilindungi RBAC yang mensyaratkan tenant_id claim.
         var dbName = Guid.NewGuid().ToString();
         var tenantA = Guid.NewGuid();
 
@@ -99,13 +186,9 @@ public class TenantIsolationTests
             await seedCtx.SaveChangesAsync();
         }
 
-        await using var asSuperAdminNoActing = CreateContext(new AmbientTenantContext { TenantId = null }, dbName);
-        var all = await asSuperAdminNoActing.Periods.ToListAsync();
+        await using var globalContext = CreateContext(new AmbientTenantContext { TenantId = null }, dbName);
+        var all = await globalContext.Periods.ToListAsync();
 
-        // Query filter H1 sengaja BYPASS saat TenantId null (didesain utk SuperAdmin baca lintas tenant, PRD 2.3
-        // "Periods/Placements: SuperAdmin R"). Isolasi TULIS tetap dijamin lewat RBAC endpoint (DeptHeadPlus/
-        // TenantAdminOnly mensyaratkan tenant_id claim). Assert ini membuktikan perilaku BYPASS itu SADAR dipilih,
-        // bukan lubang tak sengaja — didokumentasikan eksplisit sesuai SOUL.md (dilarang diam-diam).
         Assert.Single(all);
     }
 }

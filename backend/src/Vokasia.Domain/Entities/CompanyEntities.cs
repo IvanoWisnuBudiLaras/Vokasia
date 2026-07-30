@@ -1,3 +1,5 @@
+using Vokasia.Domain.Common;
+
 namespace Vokasia.Domain.Entities;
 
 /// <summary>
@@ -29,7 +31,7 @@ public class CompanyMergeHistory
 }
 
 /// <summary>Link tenant ke DUDI global + kuota slot per periode (FR-TEN-04).</summary>
-public class TenantCompany
+public class TenantCompany : ITenantScoped
 {
     public Guid TenantId { get; set; }
     public Guid CompanyId { get; set; }
@@ -39,7 +41,7 @@ public class TenantCompany
 }
 
 /// <summary>Kuota slot siswa per DUDI per periode (FR-TEN-04).</summary>
-public class CompanySlot
+public class CompanySlot : ITenantScoped
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }

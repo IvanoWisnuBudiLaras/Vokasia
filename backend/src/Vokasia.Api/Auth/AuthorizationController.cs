@@ -8,7 +8,10 @@ using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
 using System.Security.Claims;
 using Vokasia.Api.Auth.MagicLink;
+using Vokasia.Domain.Common;
+using Vokasia.Domain.Entities;
 using Vokasia.Infrastructure.Identity;
+using Vokasia.Infrastructure.Persistence;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Vokasia.Api.Auth;
@@ -26,17 +29,20 @@ public class AuthorizationController : ControllerBase
     private readonly SignInManager<AppUser> _signInManager;
     private readonly VokasiaClaimsFactory _claimsFactory;
     private readonly MagicLinkService _magicLinkService;
+    private readonly VokasiaDbContext _db;
 
     public AuthorizationController(
         UserManager<AppUser> userManager,
         SignInManager<AppUser> signInManager,
         VokasiaClaimsFactory claimsFactory,
-        MagicLinkService magicLinkService)
+        MagicLinkService magicLinkService,
+        VokasiaDbContext db)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _claimsFactory = claimsFactory;
         _magicLinkService = magicLinkService;
+        _db = db;
     }
 
     [HttpGet("~/connect/authorize")]
@@ -152,7 +158,80 @@ public class AuthorizationController : ControllerBase
             return SignIn(new ClaimsPrincipal(mentorIdentity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
+        if (request.GrantType == OpenIddictSetup.ImpersonationGrantType)
+        {
+            return await ExchangeImpersonationAsync(request);
+        }
+
         throw new NotImplementedException("Grant type belum didukung.");
+    }
+
+    /// <summary>
+    /// VOK-H6-E3 §1 StartImpersonation. Pemanggil harus SUDAH terautentikasi sbg SuperAdmin lewat
+    /// Bearer access token MILIKNYA SENDIRI (HttpContext.User diisi UseAuthentication() global —
+    /// lihat doc-comment ImpersonationGrantType) — BUKAN dari body request (mencegah siapa pun
+    /// mengaku SuperAdmin lewat parameter, pola sama AuditEndpoints.WriteAudit). AC ticket literal:
+    /// tak boleh impersonasi SuperAdmin lain (hindari rantai impersonasi tanpa akhir yang membingungkan
+    /// audit trail) & user target harus aktif.
+    /// </summary>
+    private async Task<IActionResult> ExchangeImpersonationAsync(OpenIddictRequest request)
+    {
+        static IActionResult Invalid(string description) => new ForbidResult(
+            OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+            new AuthenticationProperties(new Dictionary<string, string?>
+            {
+                [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = description,
+            }));
+
+        if (HttpContext.User.Identity?.IsAuthenticated != true || HttpContext.User.FindFirst("role")?.Value != nameof(UserRole.SuperAdmin))
+        {
+            return Invalid("Hanya SuperAdmin (dgn access token valid miliknya sendiri) yang boleh memulai impersonasi.");
+        }
+
+        var actorSub = HttpContext.User.FindFirst(Claims.Subject)?.Value;
+        if (!Guid.TryParse(actorSub, out var actorId))
+        {
+            return Invalid("Access token SuperAdmin tidak valid.");
+        }
+
+        var targetIdRaw = request.GetParameter("target_user_id")?.ToString();
+        if (!Guid.TryParse(targetIdRaw, out var targetId))
+        {
+            return Invalid("Parameter target_user_id wajib diisi (GUID valid).");
+        }
+
+        var targetUser = await _userManager.FindByIdAsync(targetId.ToString());
+        if (targetUser is null || !targetUser.IsActive)
+        {
+            return Invalid("User target tidak ditemukan atau tidak aktif.");
+        }
+
+        if (targetUser.Role == UserRole.SuperAdmin)
+        {
+            return Invalid("Tidak boleh mengimpersonasi sesama SuperAdmin.");
+        }
+
+        _db.AuditLogs.Add(new AuditLog
+        {
+            Id = Guid.NewGuid(),
+            TenantId = targetUser.TenantId,
+            ActorUserId = actorId,
+            ActingAsUserId = targetId, // diisi LANGSUNG di sini (bukan lewat auto-koreksi SaveChanges) —
+            // request INI belum membawa claim impersonator_id sama sekali (token barunya BELUM dipakai),
+            // jadi ITenantContext.ImpersonatorUserId masih null utk request ini; guard "is null" di
+            // VokasiaDbContext.SaveChangesAsync memastikan baris ini TIDAK ikut dikoreksi ulang.
+            Action = "ImpersonationStarted",
+            Entity = nameof(AppUser),
+            EntityId = targetId.ToString(),
+            MetaJson = System.Text.Json.JsonSerializer.Serialize(new { TargetName = targetUser.FullName, TargetRole = targetUser.Role.ToString() }),
+        });
+        await _db.SaveChangesAsync();
+
+        var identity = await _claimsFactory.GenerateClaimsAsync(targetUser);
+        identity.AddClaim(new Claim("impersonator_id", actorId.ToString()));
+        identity.SetDestinations(GetDestinations);
+        return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
     [HttpGet("~/connect/logout")]

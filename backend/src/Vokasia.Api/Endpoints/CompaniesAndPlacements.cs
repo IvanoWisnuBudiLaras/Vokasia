@@ -1,6 +1,9 @@
+using System.Data;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Npgsql;
 using Vokasia.Api.Auth;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
@@ -107,7 +110,7 @@ public static class CompaniesAndPlacementsEndpoints
     /// MVP, pola sama TryReserveSlot "belum ada kuota diset = tanpa batas") — bukan diam-diam
     /// menolak semua placement tenant yang PlanId-nya null.
     /// </summary>
-    private static async Task CheckQuotaOnPlacementAsync(VokasiaDbContext db, Guid tenantId, CancellationToken ct)
+    private static async Task CheckQuotaOnPlacementAsync(VokasiaDbContext db, Guid tenantId, CancellationToken ct, int pendingReservations = 0)
     {
         var planId = await db.Tenants.AsNoTracking().Where(t => t.Id == tenantId).Select(t => t.PlanId).FirstOrDefaultAsync(ct);
         if (!planId.HasValue)
@@ -122,7 +125,7 @@ public static class CompaniesAndPlacementsEndpoints
         }
 
         var activeCount = await db.Placements.AsNoTracking().CountAsync(p => p.TenantId == tenantId && p.Status == PlacementStatus.Active, ct);
-        if (activeCount >= maxPlacements.Value)
+        if (activeCount + pendingReservations >= maxPlacements.Value)
         {
             throw new QuotaExceededException($"Kuota placement aktif ({maxPlacements.Value}) sudah tercapai sesuai plan tenant — upgrade plan atau nonaktifkan placement lama.");
         }
@@ -151,69 +154,21 @@ public static class CompaniesAndPlacementsEndpoints
             return Results.Forbid();
         }
 
-        if (!await TenantIsActiveAsync(db, tenant.TenantId.Value, ct))
+        await using var transaction = await BeginSerializableQuotaTransactionAsync(db, ct);
+        try
         {
-            return Results.Conflict(new { message = "Tenant nonaktif — tidak bisa membuat placement baru." });
-        }
+            if (!await TenantIsActiveAsync(db, tenant.TenantId.Value, ct))
+            {
+                return Results.Conflict(new { message = "Tenant nonaktif — tidak bisa membuat placement baru." });
+            }
 
-        var (ok, error) = await TryReserveSlot(db, req.CompanyId, req.PeriodId, ct);
-        if (!ok)
-        {
-            return Results.Conflict(new { message = error });
-        }
-
-        await CheckQuotaOnPlacementAsync(db, tenant.TenantId.Value, ct);
-
-        var placement = new Placement
-        {
-            Id = Guid.NewGuid(),
-            TenantId = tenant.TenantId.Value,
-            StudentId = req.StudentId,
-            CompanyId = req.CompanyId,
-            PeriodId = req.PeriodId,
-            TeacherId = req.TeacherId,
-            MentorEmail = req.MentorEmail,
-            Status = PlacementStatus.Active,
-        };
-        db.Placements.Add(placement);
-
-        // AC: OutboxMessage{PlacementCreated} tercatat 1 transaksi dgn placement (dispatcher nyata H4-E1).
-        db.OutboxMessages.Add(new OutboxMessage
-        {
-            Id = Guid.NewGuid(),
-            Type = "PlacementCreated",
-            PayloadJson = JsonSerializer.Serialize(new { placement.Id, placement.StudentId, placement.CompanyId, placement.PeriodId, placement.MentorEmail }),
-        });
-
-        await db.SaveChangesAsync(ct);
-
-        return Results.Created($"/api/placements/{placement.Id}", ToDto(placement));
-    }
-
-    private static async Task<IResult> BulkCreatePlacements(List<CreatePlacementRequest> reqs, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
-    {
-        if (!tenant.TenantId.HasValue)
-        {
-            return Results.Forbid();
-        }
-
-        if (!await TenantIsActiveAsync(db, tenant.TenantId.Value, ct))
-        {
-            return Results.Conflict(new { message = "Tenant nonaktif — tidak bisa membuat placement baru." });
-        }
-
-        var successIds = new List<Guid>();
-        var errors = new List<ImportRowError>();
-
-        for (var i = 0; i < reqs.Count; i++)
-        {
-            var req = reqs[i];
             var (ok, error) = await TryReserveSlot(db, req.CompanyId, req.PeriodId, ct);
             if (!ok)
             {
-                errors.Add(new ImportRowError(i, "CompanyId", error!));
-                continue;
+                return Results.Conflict(new { message = error });
             }
+
+            await CheckQuotaOnPlacementAsync(db, tenant.TenantId.Value, ct);
 
             var placement = new Placement
             {
@@ -227,17 +182,161 @@ public static class CompaniesAndPlacementsEndpoints
                 Status = PlacementStatus.Active,
             };
             db.Placements.Add(placement);
+
+            // AC: OutboxMessage{PlacementCreated} tercatat 1 transaksi dgn placement (dispatcher nyata H4-E1).
             db.OutboxMessages.Add(new OutboxMessage
             {
                 Id = Guid.NewGuid(),
                 Type = "PlacementCreated",
-                PayloadJson = JsonSerializer.Serialize(new { placement.Id, placement.StudentId, placement.CompanyId, placement.PeriodId }),
+                PayloadJson = JsonSerializer.Serialize(new { placement.Id, placement.StudentId, placement.CompanyId, placement.PeriodId, placement.MentorEmail }),
             });
-            successIds.Add(placement.Id);
+
+            await db.SaveChangesAsync(ct);
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(ct);
+            }
+
+            return Results.Created($"/api/placements/{placement.Id}", ToDto(placement));
+        }
+        catch (Exception ex) when (IsQuotaConcurrencyConflict(ex))
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(ct);
+            }
+
+            db.ChangeTracker.Clear();
+            return Results.Conflict(new { message = "Kuota placement berubah bersamaan. Muat ulang lalu coba lagi." });
+        }
+        catch
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(ct);
+            }
+
+            throw;
+        }
+    }
+
+    private static async Task<IResult> BulkCreatePlacements(List<CreatePlacementRequest> reqs, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
+    {
+        if (!tenant.TenantId.HasValue)
+        {
+            return Results.Forbid();
         }
 
-        await db.SaveChangesAsync(ct);
-        return Results.Ok(new BulkResult(successIds, errors));
+        await using var transaction = await BeginSerializableQuotaTransactionAsync(db, ct);
+        try
+        {
+            if (!await TenantIsActiveAsync(db, tenant.TenantId.Value, ct))
+            {
+                return Results.Conflict(new { message = "Tenant nonaktif — tidak bisa membuat placement baru." });
+            }
+
+            var successIds = new List<Guid>();
+            var errors = new List<ImportRowError>();
+            var pendingReservations = 0;
+
+            for (var i = 0; i < reqs.Count; i++)
+            {
+                var req = reqs[i];
+                try
+                {
+                    await CheckQuotaOnPlacementAsync(db, tenant.TenantId.Value, ct, pendingReservations);
+                }
+                catch (QuotaExceededException ex)
+                {
+                    errors.Add(new ImportRowError(i, "TenantId", ex.Message));
+                    continue;
+                }
+
+                var (ok, error) = await TryReserveSlot(db, req.CompanyId, req.PeriodId, ct);
+                if (!ok)
+                {
+                    errors.Add(new ImportRowError(i, "CompanyId", error!));
+                    continue;
+                }
+
+                var placement = new Placement
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenant.TenantId.Value,
+                    StudentId = req.StudentId,
+                    CompanyId = req.CompanyId,
+                    PeriodId = req.PeriodId,
+                    TeacherId = req.TeacherId,
+                    MentorEmail = req.MentorEmail,
+                    Status = PlacementStatus.Active,
+                };
+                db.Placements.Add(placement);
+                db.OutboxMessages.Add(new OutboxMessage
+                {
+                    Id = Guid.NewGuid(),
+                    Type = "PlacementCreated",
+                    PayloadJson = JsonSerializer.Serialize(new { placement.Id, placement.StudentId, placement.CompanyId, placement.PeriodId }),
+                });
+                successIds.Add(placement.Id);
+                pendingReservations++;
+            }
+
+            await db.SaveChangesAsync(ct);
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(ct);
+            }
+
+            return Results.Ok(new BulkResult(successIds, errors));
+        }
+        catch (Exception ex) when (IsQuotaConcurrencyConflict(ex))
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(ct);
+            }
+
+            db.ChangeTracker.Clear();
+            return Results.Conflict(new { message = "Kuota placement berubah bersamaan. Muat ulang lalu coba lagi." });
+        }
+        catch
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(ct);
+            }
+
+            throw;
+        }
+    }
+
+    private static async Task<IDbContextTransaction?> BeginSerializableQuotaTransactionAsync(VokasiaDbContext db, CancellationToken ct)
+    {
+        if (!db.Database.IsRelational())
+        {
+            return null;
+        }
+
+        return await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+    }
+
+    private static bool IsQuotaConcurrencyConflict(Exception exception)
+    {
+        if (exception is DbUpdateConcurrencyException)
+        {
+            return true;
+        }
+
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is PostgresException postgres &&
+                postgres.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static async Task<IResult> AssignTeacher(Guid id, Guid teacherId, VokasiaDbContext db, CancellationToken ct)

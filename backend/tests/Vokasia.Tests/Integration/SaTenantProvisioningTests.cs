@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
 using Vokasia.Infrastructure.Persistence;
+using Vokasia.Tests.Auth;
 
 namespace Vokasia.Tests.Integration;
 
@@ -84,12 +85,12 @@ public class SaTenantProvisioningTests
         // cukup buktikan password sementara sungguhan valid): 303 SeeOther ke returnUrl (BUKAN
         // redirect balik ke /account/login?error= yang jadi perilaku pada password salah).
         var anon = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        var loginResp = await anon.PostAsync("/account/login", new FormUrlEncodedContent(new Dictionary<string, string>
+        var loginResp = await AuthTestHelpers.PostLoginFormAsync(anon, new Dictionary<string, string>
         {
             ["email"] = adminEmail,
             ["password"] = tempPassword,
             ["returnUrl"] = "/",
-        }));
+        });
         Assert.Equal(HttpStatusCode.SeeOther, loginResp.StatusCode);
         Assert.DoesNotContain("account/login", loginResp.Headers.Location!.ToString());
 

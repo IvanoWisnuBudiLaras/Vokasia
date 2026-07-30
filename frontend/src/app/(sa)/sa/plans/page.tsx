@@ -6,11 +6,13 @@ import { PlansPageClient } from "./PlansPageClient";
 export const dynamic = "force-dynamic";
 
 export default async function SaPlansPage() {
+  let plans: PlanDto[];
   try {
-    const plans = await fetcher<PlanDto[]>("/sa/plans");
-    return <PlansPageClient initialPlans={plans} />;
+    plans = await fetcher<PlanDto[]>("/sa/plans");
   } catch (err) {
     console.error("[sa/plans] gagal memuat:", err);
     return <ErrorState message="Daftar plan belum bisa dimuat." />;
   }
+
+  return <PlansPageClient initialPlans={plans} />;
 }

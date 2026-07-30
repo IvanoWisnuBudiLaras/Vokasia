@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { EmptyState, ErrorState } from "@/components/ui";
+import { EmptyState, ErrorState, Icon } from "@/components/ui";
 import { apiClient } from "@/lib/apiClient";
 import type { VisitDto } from "@/lib/apiTypes";
 
@@ -39,7 +39,8 @@ export function VisitHistoryList({ placementId, refreshKey }: VisitHistoryListPr
   }
 
   useEffect(() => {
-    load();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placementId, refreshKey]);
 
@@ -52,7 +53,7 @@ export function VisitHistoryList({ placementId, refreshKey }: VisitHistoryListPr
   }
 
   if (visits.length === 0) {
-    return <EmptyState icon="🚩" title="Belum ada kunjungan" description="Catat kunjungan pertama ke DUDI di atas." />;
+    return <EmptyState icon={<Icon name="flag" size={32} />} title="Belum ada kunjungan" description="Catat kunjungan pertama ke DUDI di atas." />;
   }
 
   return (
@@ -64,8 +65,18 @@ export function VisitHistoryList({ placementId, refreshKey }: VisitHistoryListPr
               {new Date(v.date).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
             </span>
             <div className="flex gap-1 text-xs">
-              {v.photoKey && <span title="Ada foto lokasi">📷</span>}
-              {v.signatureKey && <span title="Sudah ditandatangani">✍️✓</span>}
+              {v.photoKey && (
+                <span title="Ada foto lokasi" className="inline-flex items-center text-ink-muted">
+                  <Icon name="camera" size={16} />
+                  <span className="sr-only">Ada foto lokasi</span>
+                </span>
+              )}
+              {v.signatureKey && (
+                <span title="Sudah ditandatangani" className="inline-flex items-center text-status-green">
+                  <Icon name="signature" size={16} />
+                  <span className="sr-only">Sudah ditandatangani</span>
+                </span>
+              )}
             </div>
           </div>
           <p className="mt-1 line-clamp-2 text-sm text-ink-muted">{v.notes}</p>

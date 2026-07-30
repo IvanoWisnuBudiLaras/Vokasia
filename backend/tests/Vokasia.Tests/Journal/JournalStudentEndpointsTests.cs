@@ -267,13 +267,32 @@ public class JournalStudentEndpointsTests : IClassFixture<VokasiaApiFactory>
 
         for (var i = 0; i < 3; i++)
         {
-            var r = await client.PostAsJsonAsync($"/api/journals/{entryId}/photos", new { ObjectKey = $"tenant/x/journal/foto-{i}.jpg" });
+            var r = await client.PostAsJsonAsync($"/api/journals/{entryId}/photos", new { ObjectKey = $"tenant/{tenantId}/journal/foto-{i}.jpg" });
             Assert.Equal(HttpStatusCode.Created, r.StatusCode);
         }
 
-        var fourth = await client.PostAsJsonAsync($"/api/journals/{entryId}/photos", new { ObjectKey = "tenant/x/journal/foto-4.jpg" });
+        var fourth = await client.PostAsJsonAsync($"/api/journals/{entryId}/photos", new { ObjectKey = $"tenant/{tenantId}/journal/foto-4.jpg" });
 
         Assert.Equal(HttpStatusCode.Conflict, fourth.StatusCode);
+    }
+
+    [Fact]
+    public async Task AttachPhoto_ForeignTenantObjectKey_Returns400()
+    {
+        var (client, _, placementId, _, _, tenantId) = await SeedStudentWithActivePlacementAsync();
+        var slotId = await SeedTodaySlotAsync(placementId, tenantId);
+        var submitResp = await client.PostAsJsonAsync($"/api/journals/{slotId}/submit", new
+        {
+            SlotId = slotId, Text = "Isi dengan foto.", CompetencyIds = Array.Empty<Guid>(), PhotoIds = (Guid[]?)null,
+        });
+        var entryId = (await submitResp.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        var response = await client.PostAsJsonAsync($"/api/journals/{entryId}/photos", new
+        {
+            ObjectKey = $"tenant/{Guid.NewGuid()}/journal/foreign.jpg",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

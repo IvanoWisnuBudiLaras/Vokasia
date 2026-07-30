@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiClient } from "@/lib/apiClient";
 import type { NotificationDto, Paged } from "@/lib/apiTypes";
+import { Icon } from "@/components/ui";
 import { NotificationPanel } from "./NotificationPanel";
 
 const POLL_INTERVAL_MS = 60_000;
@@ -18,7 +19,7 @@ const POLL_INTERVAL_MS = 60_000;
  * `unreadOnly=true` terpisah tiap 60 dtk cuma demi angka pasti dianggap kurang sepadan drpd 1
  * panggilan gabungan; dicatat sbg simplifikasi, bukan bug, di DECISIONS.md).
  */
-export function NotificationBell() {
+export function NotificationBell({ panelAlign = "right" }: { panelAlign?: "left" | "right" } = {}) {
   const [items, setItems] = useState<NotificationDto[]>([]);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -34,8 +35,11 @@ export function NotificationBell() {
   }, []);
 
   useEffect(() => {
-    load();
-    const id = setInterval(load, POLL_INTERVAL_MS);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+    const id = setInterval(() => {
+      void load();
+    }, POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, [load]);
 
@@ -78,19 +82,19 @@ export function NotificationBell() {
         aria-label={`Notifikasi${unreadCount > 0 ? ` (${unreadCount} belum dibaca)` : ""}`}
         aria-expanded={open}
         className={
-          "relative flex h-10 w-10 items-center justify-center rounded-full text-lg outline-none transition-colors " +
-          "hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+          "relative flex h-[var(--tap-min)] w-[var(--tap-min)] items-center justify-center rounded-full outline-none transition-[color,background-color,border-color] " +
+          "hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:translate-y-px active:bg-primary-muted"
         }
       >
-        <span aria-hidden="true">🔔</span>
+        <Icon name="bell" size={20} />
         {unreadCount > 0 && (
-          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-red px-1 text-[10px] font-semibold text-white">
+          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-red px-1 text-[10px] font-semibold text-primary-ink">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
       </button>
 
-      {open && <NotificationPanel items={items} onMarkRead={markRead} onMarkAllRead={markAllRead} />}
+      {open && <NotificationPanel align={panelAlign} items={items} onMarkRead={markRead} onMarkAllRead={markAllRead} />}
     </div>
   );
 }

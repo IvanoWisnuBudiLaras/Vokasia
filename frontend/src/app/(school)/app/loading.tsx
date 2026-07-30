@@ -1,7 +1,13 @@
 /** Next.js App Router: otomatis dirender saat page.tsx (Server Component) masih fetch periods+dashboard. */
 export default function SchoolDashboardLoading() {
   return (
-    <div className="flex animate-pulse flex-col gap-4" aria-busy="true" aria-label="Memuat dashboard">
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label="Memuat ringkasan sekolah"
+      className="flex animate-pulse flex-col gap-4"
+    >
       <div className="h-6 w-48 rounded bg-surface-muted" />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (

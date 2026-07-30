@@ -1,0 +1,40 @@
+# Vokasia — TLS edge (opsional, profile "edge" di docker-compose.prod.yml)
+#
+# Menyatukan frontend (Next.js) dan authorization-server (OpenIddict/API) di SATU origin HTTPS,
+# lalu me-reverse-proxy berdasarkan path. Ini menutup gap yang ditemukan audit: profil prod
+# meletakkan port di loopback dan mengandalkan reverse-proxy TLS di depannya — service inilah
+# proxy itu, sehingga `docker compose ... --profile edge up` langsung memberi HTTPS yang dapat
+# diuji end-to-end di mesin lokal tanpa proxy host terpisah.
+#
+# CATATAN: ini DITULIS tetapi BELUM diuji oleh auditor (sandbox tak punya Docker). Verifikasi
+# langkah-langkahnya ada di runbook (chat / AUDIT). Untuk domain nyata: ganti `{$EDGE_PUBLIC_HOST}`
+# dengan domainmu dan HAPUS `tls internal` agar Caddy memakai ACME (Let's Encrypt) otomatis.
+
+{
+	# Jangan paksa redirect otomatis http->https saat memakai cert internal untuk localhost.
+	auto_https disable_redirects
+}
+
+{$EDGE_PUBLIC_HOST:localhost} {
+	# TLS: CA internal Caddy (self-signed) untuk localhost/staging. Browser akan memperingatkan
+	# sertifikat kecuali root CA Caddy dipercaya (`docker exec vokasia-caddy-1 caddy trust`).
+	tls internal
+
+	# --- Endpoint authorization-server (OpenIddict) → API ---
+	# HANYA path yang benar-benar disentuh BROWSER selama login hidup di sini. Sinkronkan daftar
+	# ini dengan endpoint OIDC server bila menambah alur baru.
+	@oidc path /connect/* /account/* /.well-known/openid-configuration /.well-known/oauth-authorization-server
+	handle @oidc {
+		reverse_proxy api:8080
+	}
+
+	# --- Selebihnya (halaman Next.js, BFF /api/auth/*, /api/proxy/*, aset statis) → frontend ---
+	# Endpoint REST backend (/api/journals, /sa/*, dst.) TIDAK dipetakan ke sini secara sengaja:
+	# browser tak pernah menyentuhnya langsung — BFF Next.js yang memanggilnya server-side lewat
+	# jaringan internal (API_INTERNAL_URL=http://api:8080).
+	handle {
+		reverse_proxy frontend:3000
+	}
+
+	encode gzip zstd
+}

@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,7 @@ using Vokasia.Infrastructure;
 using Vokasia.Infrastructure.Identity;
 using Vokasia.Infrastructure.Messaging;
 using Vokasia.Infrastructure.Persistence;
+using Vokasia.Infrastructure.Security;
 using Vokasia.Infrastructure.TenantContext;
 using Vokasia.Tests.Auth;
 using Vokasia.Worker.Consumers;
@@ -59,10 +61,14 @@ namespace Vokasia.Tests.Integration;
 /// </summary>
 public class VokasiaIntegrationFactory : WebApplicationFactory<ApiAssembly::Program>, IAsyncLifetime
 {
-    private const string MinioEndpoint = "localhost:9000";
+    private static string MinioEndpoint =>
+        Environment.GetEnvironmentVariable("VOKASIA_TEST_MINIO_ENDPOINT") ??
+        "localhost:9000";
     private const string MinioAccessKey = "vokasia";
     private const string MinioSecretKey = "vokasia_dev";
-    private const string RedisConnection = "localhost:6379";
+    private static string RedisConnection =>
+        Environment.GetEnvironmentVariable("VOKASIA_TEST_REDIS_CONNECTION") ??
+        "localhost:6379";
 
     private PostgreSqlContainer? _postgres;
     private RabbitMqContainer? _rabbitMq;
@@ -98,9 +104,26 @@ public class VokasiaIntegrationFactory : WebApplicationFactory<ApiAssembly::Prog
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseEnvironment("Testing");
+        // The shared integration fixture performs many legitimate logins from loopback. Keep
+        // those tests independent while the dedicated rate-limit test covers the production 20/IP
+        // default.
+        builder.UseSetting("RateLimiting:LoginAttemptsPerIp", "1000");
         builder.ConfigureAppConfiguration((_, cfg) =>
         {
-            cfg.AddInMemoryCollection(BuildConnectionConfig());
+            var config = BuildConnectionConfig();
+            config["RateLimiting:LoginAttemptsPerIp"] = "1000";
+            cfg.AddInMemoryCollection(config);
+        });
+        // Application Control blocks RESPite.dll in the Windows test runner when the first
+        // StackExchange.Redis command is created. The production registration remains intact;
+        // this host-only seam keeps endpoint/integration coverage deterministic until CI runs on
+        // Linux (where the real Redis revoker is exercised). Key-contract coverage lives in
+        // BffSessionKeyPolicyTests.
+        builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<IBffSessionRevoker>();
+            services.AddSingleton<IBffSessionRevoker, TestBffSessionRevoker>();
         });
     }
 
@@ -249,6 +272,13 @@ public class VokasiaIntegrationFactory : WebApplicationFactory<ApiAssembly::Prog
         public string ApplicationName { get; set; } = "Vokasia.Tests.Integration";
         public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+
+    private sealed class TestBffSessionRevoker : IBffSessionRevoker
+    {
+        public Task RevokeUserSessionsAsync(Guid userId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task RevokeUserSessionsAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }
 

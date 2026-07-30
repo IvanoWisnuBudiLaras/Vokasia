@@ -15,9 +15,9 @@ const styleByStatus: Record<RagStatus, string> = {
 };
 
 const dotByStatus: Record<RagStatus, string> = {
-  green: "🟢",
-  amber: "🟡",
-  red: "🔴",
+  green: "bg-status-green",
+  amber: "bg-status-amber",
+  red: "bg-status-red",
 };
 
 /** RAG badge konsisten lintas surface (dashboard W3, daftar approval W2). */
@@ -30,7 +30,7 @@ export function StatusBadge({ status, label, className }: StatusBadgeProps) {
         className
       )}
     >
-      <span aria-hidden="true">{dotByStatus[status]}</span>
+      <span aria-hidden="true" className={cn("h-2 w-2 shrink-0 rounded-full", dotByStatus[status])} />
       {label}
     </span>
   );

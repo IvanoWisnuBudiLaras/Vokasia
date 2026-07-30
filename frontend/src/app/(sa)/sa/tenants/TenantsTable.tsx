@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Button, StatusBadge } from "@/components/ui";
 import { apiClient, ApiError } from "@/lib/apiClient";
 import type { Paged, PlanDto, TenantDto } from "@/lib/apiTypes";
+import { ImpersonatePanel } from "./ImpersonatePanel";
 import { TenantWizard } from "./TenantWizard";
 
 export interface TenantsTableProps {
@@ -41,15 +42,16 @@ function DeactivateAction({ tenant, onDone }: { tenant: TenantDto; onDone: () =>
         <input
           value={reason}
           onChange={(e) => setReason(e.target.value)}
+          aria-label={`Alasan menonaktifkan ${tenant.schoolName}`}
           placeholder="Alasan nonaktif…"
-          className="h-8 w-48 rounded-[var(--radius-md)] border border-border bg-surface px-2 text-xs text-ink outline-none"
+          className="h-[var(--tap-min)] w-48 rounded-[var(--radius-md)] border border-border bg-surface px-2 text-xs text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-1"
         />
         {error && <span className="text-xs text-status-red">{error}</span>}
         <div className="flex gap-1.5">
-          <Button variant="danger" size="md" loading={submitting} disabled={reason.trim().length === 0} onClick={handleConfirm} className="h-8 px-3 text-xs">
+          <Button variant="danger" size="md" loading={submitting} disabled={reason.trim().length === 0} onClick={handleConfirm} className="px-3 text-xs">
             Ya, Nonaktifkan
           </Button>
-          <Button variant="secondary" size="md" onClick={() => setConfirming(false)} disabled={submitting} className="h-8 px-3 text-xs">
+          <Button variant="secondary" size="md" onClick={() => setConfirming(false)} disabled={submitting} className="px-3 text-xs">
             Batal
           </Button>
         </div>
@@ -58,7 +60,7 @@ function DeactivateAction({ tenant, onDone }: { tenant: TenantDto; onDone: () =>
   }
 
   return (
-    <Button variant="secondary" size="md" onClick={() => setConfirming(true)} className="h-8 px-3 text-xs">
+    <Button variant="secondary" size="md" onClick={() => setConfirming(true)} className="px-3 text-xs">
       Nonaktifkan
     </Button>
   );
@@ -76,6 +78,7 @@ export function TenantsTable({ initialTenants, plans }: TenantsTableProps) {
   const [activeFilter, setActiveFilter] = useState<string>("");
   const [wizardOpen, setWizardOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [impersonatingTenantId, setImpersonatingTenantId] = useState<string | null>(null);
 
   const planNameById = useMemo(() => new Map(plans.map((p) => [p.id, p.name])), [plans]);
 
@@ -127,15 +130,17 @@ export function TenantsTable({ initialTenants, plans }: TenantsTableProps) {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          aria-label="Cari sekolah berdasarkan nama atau NPSN"
           placeholder="Cari nama sekolah / NPSN…"
-          className="h-9 w-64 rounded-[var(--radius-md)] border border-border bg-surface px-3 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+          className="h-[var(--tap-min)] w-64 rounded-[var(--radius-md)] border border-border bg-surface px-3 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
         />
         <select
           value={planFilter}
           onChange={(e) => setPlanFilter(e.target.value)}
-          className="h-9 rounded-[var(--radius-md)] border border-border bg-surface px-2 text-sm text-ink"
+          aria-label="Filter sekolah berdasarkan paket"
+          className="h-[var(--tap-min)] rounded-[var(--radius-md)] border border-border bg-surface px-2 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-1"
         >
-          <option value="">Semua Plan</option>
+          <option value="">Semua paket</option>
           {plans.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
@@ -143,9 +148,10 @@ export function TenantsTable({ initialTenants, plans }: TenantsTableProps) {
         <select
           value={activeFilter}
           onChange={(e) => setActiveFilter(e.target.value)}
-          className="h-9 rounded-[var(--radius-md)] border border-border bg-surface px-2 text-sm text-ink"
+          aria-label="Filter sekolah berdasarkan status"
+          className="h-[var(--tap-min)] rounded-[var(--radius-md)] border border-border bg-surface px-2 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-1"
         >
-          <option value="">Semua Status</option>
+          <option value="">Semua status</option>
           <option value="active">Aktif</option>
           <option value="inactive">Nonaktif</option>
         </select>
@@ -173,7 +179,21 @@ export function TenantsTable({ initialTenants, plans }: TenantsTableProps) {
                 <td className="p-3">
                   {t.isActive ? <StatusBadge status="green" label="Aktif" /> : <StatusBadge status="red" label="Nonaktif" />}
                 </td>
-                <td className="p-3"><DeactivateAction tenant={t} onDone={refresh} /></td>
+                <td className="p-3">
+                  <div className="flex flex-col items-end gap-1.5">
+                    <div className="flex gap-1.5">
+                      <DeactivateAction tenant={t} onDone={refresh} />
+                      {t.isActive && impersonatingTenantId !== t.id && (
+                        <Button variant="secondary" size="md" onClick={() => setImpersonatingTenantId(t.id)} className="px-3 text-xs">
+                          Impersonasi
+                        </Button>
+                      )}
+                    </div>
+                    {impersonatingTenantId === t.id && (
+                      <ImpersonatePanel tenantId={t.id} onClose={() => setImpersonatingTenantId(null)} />
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
             {visible.length === 0 && (

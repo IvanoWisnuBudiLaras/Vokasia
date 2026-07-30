@@ -1,0 +1,160 @@
+name: vokasia
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vokasia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vokasia_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-vokasia}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vokasia"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-vokasia}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-vokasia_dev}
+    ports:
+      - "5672:5672"
+      - "15672:15672"   # management UI
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER:-vokasia}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASS:-vokasia_dev}
+    ports:
+      - "9000:9000"
+      - "9001:9001"   # console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: src/Vokasia.Api/Dockerfile
+    ports:
+      - "5000:8080"
+    env_file: .env
+    environment:
+      ConnectionStrings__Default: Host=postgres;Port=5432;Database=${POSTGRES_DB:-vokasia};Username=${POSTGRES_USER:-vokasia};Password=${POSTGRES_PASSWORD:-vokasia_dev}
+      Redis__Connection: redis:6379
+      # GAP ditemukan+ditambal Gate M0 redeploy VOK-H3-E1 (DECISIONS.md D24): tanpa baris ini, api
+      # jatuh ke fallback DependencyInjection.cs ("localhost:9000") - DARI DALAM container api
+      # sendiri, "localhost" itu loopback container itu sendiri, BUKAN container minio terpisah ->
+      # BucketExistsAsync (dipanggil Program.cs startup, VOK-H3-E1) gagal connect -> container api
+      # crash saat startup (exit 139) - ketahuan lewat docker logs nyata, bukan diasumsikan.
+      Minio__Endpoint: minio:9000
+      # GAP ditemukan+ditambal VOK-H4-E2 live-verification (DECISIONS.md D28): ASPNETCORE_ENVIRONMENT
+      # TAK PERNAH di-set di mana pun utk container (launchSettings.json cuma dibaca `dotnet run`
+      # lokal/IDE, TIDAK dibaca image yg di-`dotnet publish` lalu dijalankan via ENTRYPOINT langsung
+      # spt Dockerfile ini) - default ASP.NET Core saat env var kosong = "Production". Akibatnya
+      # DUA branch `if (env.IsDevelopment())` diam2 TAK PERNAH aktif di container SEJAK ditulis:
+      # (1) OpenIddictSetup.cs DisableTransportSecurityRequirement() - browser nyata kena 400
+      # "This server only accepts HTTPS requests" (ID2083) begitu /connect/authorize diakses via
+      # HTTP polos (compose ini TAK punya TLS listener sama sekali - ASPNETCORE_URLS cuma
+      # http://+:8080, jadi UseHttpsRedirection() Program.cs:52 sendiri sudah no-op krn tak bisa
+      # tentukan https port, TIDAK ada risiko tambahan set Development di sini); (2) Program.cs:44
+      # MapOpenApi() - endpoint /openapi diam2 hilang di container (baru ketahuan skrg krn baris
+      # (1) baru nyata diuji lewat browser sungguhan, bukan TestServer in-process H1-E3 yg tak
+      # menegakkan aturan transport sama sekali). "Development" WAJAR di compose ini krn compose
+      # ini MEMANG stack dev-only (kredensial dev, sertifikat OpenIddict ephemeral, dsb) - bukan
+      # definisi deploy prod (lihat README/H7-E1 utk itu nanti).
+      ASPNETCORE_ENVIRONMENT: Development
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: src/Vokasia.Worker/Dockerfile
+    env_file: .env
+    environment:
+      ConnectionStrings__Default: Host=postgres;Port=5432;Database=${POSTGRES_DB:-vokasia};Username=${POSTGRES_USER:-vokasia};Password=${POSTGRES_PASSWORD:-vokasia_dev}
+      Redis__Connection: redis:6379
+      # GAP ditemukan+ditambal VOK-H4-E1 live-verification (DECISIONS.md D27), pola SAMA PERSIS dgn
+      # Minio__Endpoint di atas (D24): tanpa baris ini, worker jatuh ke fallback .env
+      # (RabbitMq__Host=localhost, dimaksudkan utk `dotnet run` di host, BUKAN container) - DARI
+      # DALAM container worker sendiri, "localhost" itu loopback container itu sendiri, BUKAN
+      # container rabbitmq terpisah -> MassTransit BrokerUnreachableException permanen (worker
+      # TAK PERNAH benar2 tersambung ke broker sejak kode H4-E1 ditulis, walau container tetap
+      # "healthy" krn healthcheck cuma `pgrep dotnet` - proses hidup, bukan koneksi broker sehat).
+      RabbitMq__Host: rabbitmq
+      # Konsistensi dgn api (DECISIONS.md D28, lihat komentar lengkap di service api di atas) - worker
+      # tak py branch IsDevelopment() sendiri saat ini, tp disamakan supaya dua service dev-compose
+      # yang sama tak diam2 berbeda mode hosting (mencegah kelas gap yg sama muncul lain waktu tanpa
+      # disadari kalau worker nanti nambah logika ber-environment).
+      ASPNETCORE_ENVIRONMENT: Development
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep dotnet || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    env_file: .env
+    environment:
+      API_INTERNAL_URL: http://api:8080
+      REDIS_URL: redis://redis:6379 # VOK-H2-E3: BFF session store (Next.js, bukan Redis__Connection milik .NET)
+    depends_on:
+      api: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    # GAP ditemukan+ditambal Gate M0 (DECISIONS.md D23): image final oven/bun:1-slim TIDAK
+    # menyertakan wget/curl (sama spt aspnet:10.0 di api) — healthcheck lama selalu gagal exec.
+    # Pakai `bun` sendiri (sudah ada di image ini) drpd nambah paket via apt-get (menjaga image
+    # tetap "slim" sesuai maksud tag-nya) utk memanggil endpoint via fetch bawaan bun/Node.
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  pg_data:
+  minio_data:

@@ -92,6 +92,24 @@ public class VisitEndpointsTests : IClassFixture<VokasiaApiFactory>
     }
 
     [Fact]
+    public async Task CreateVisit_ForeignPhotoKey_Returns400()
+    {
+        var tenantId = Guid.NewGuid();
+        var client = await AuthenticatedTeacherClientAsync(tenantId, "visit-foreign-photo");
+        var placementId = await SeedPlacementAsync(tenantId);
+
+        var resp = await client.PostAsJsonAsync($"/api/placements/{placementId}/visits", new
+        {
+            Date = new DateOnly(2026, 7, 15),
+            Notes = "Foto lintas tenant harus ditolak.",
+            PhotoKey = $"tenant/{Guid.NewGuid()}/visit-photo/foreign.jpg",
+            SignatureDataUrl = (string?)null,
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    [Fact]
     public async Task ListVisits_ReturnsNewestDateFirst()
     {
         var tenantId = Guid.NewGuid();

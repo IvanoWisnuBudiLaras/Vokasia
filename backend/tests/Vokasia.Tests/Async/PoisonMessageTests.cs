@@ -36,7 +36,7 @@ public class PoisonMessageTests(AsyncTestFixture fixture)
     }
 
     [Fact]
-    public async Task PermanentThrow_RetryAndRedeliveryExhausted_MessageLandsInDeadLetterQueue()
+    public async Task PermanentThrow_RetryExhausted_MessageLandsInDeadLetterQueue()
     {
         var poisonId = Guid.NewGuid();
         PoisonTestConsumer.ShouldThrowFor[poisonId] = true;
@@ -46,11 +46,11 @@ public class PoisonMessageTests(AsyncTestFixture fixture)
             await pubScope.ServiceProvider.GetRequiredService<IPublishEndpoint>().Publish(new PoisonTestEvent { Id = poisonId });
         }
 
-        // Retry (2x @100ms) + redelivery (1x @300ms) FastPoison - total exhaust jauh di bawah 5 dtk
-        // scr TEORI, tp round-trip jaringan Testcontainers nyata (bukan in-memory) perlu margin lebih.
+        // Retry FastPoison habis jauh di bawah 5 dtk secara teori, tetapi round-trip jaringan
+        // Testcontainers nyata (bukan in-memory) tetap diberi margin.
         var found = await WaitForMessageInQueueAsync(PoisonDlqName, poisonId, TimeSpan.FromSeconds(40));
 
-        Assert.True(found, $"Pesan {poisonId} diharapkan berakhir di DLQ '{PoisonDlqName}' setelah retry+redelivery habis, tapi tak ditemukan.");
+        Assert.True(found, $"Pesan {poisonId} diharapkan berakhir di DLQ '{PoisonDlqName}' setelah retry habis, tapi tak ditemukan.");
         Assert.DoesNotContain(poisonId, PoisonTestConsumer.Processed); // TAK PERNAH sukses diproses (poison permanen).
     }
 

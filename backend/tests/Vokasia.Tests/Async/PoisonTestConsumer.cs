@@ -6,8 +6,8 @@ namespace Vokasia.Tests.Async;
 /// <summary>
 /// VOK-H4-E3 §1 PoisonMessageTests/DlqReplayTests — consumer SINTETIK khusus test (bukan consumer
 /// produksi apa pun). "Poison message -> retry sesuai policy -> masuk DLQ" adalah properti TRANSPORT
-/// (MassTransit+RabbitMQ), SAMA untuk consumer produksi manapun (semua pakai UseMessageRetry +
-/// UseDelayedRedelivery yang SAMA, MessagingDefaults) - satu consumer yang throw TERKENDALI (via
+/// (MassTransit+RabbitMQ), SAMA untuk consumer produksi manapun (semua pakai UseMessageRetry
+/// dengan policy yang sama) - satu consumer yang throw TERKENDALI (via
 /// <see cref="ShouldThrowFor"/>, keyed per Guid pesan supaya aman antar test meski jalan sekuensial
 /// dlm 1 collection) sudah cukup MEMBUKTIKAN mekanismenya tanpa perlu 4 consumer produksi berbeda
 /// masing2 dipaksa gagal (yang hanya mengulang bukti yang SAMA 4x dgn ongkos setup domain jauh

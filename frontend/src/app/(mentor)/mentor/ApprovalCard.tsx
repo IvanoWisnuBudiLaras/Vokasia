@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui";
+import { Button, Icon } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { JournalDto } from "@/lib/apiTypes";
 
@@ -45,33 +45,60 @@ export function ApprovalCard({
   return (
     <div className={cn("flex flex-col gap-2 rounded-[var(--radius-md)] border border-border bg-surface p-3", selected && "border-primary bg-primary-muted/30")}>
       <div className="flex items-start gap-2">
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={onToggleSelect}
-          disabled={busy}
-          aria-label={`Pilih jurnal ${studentName}`}
-          className="mt-1 h-5 w-5 shrink-0 accent-[var(--color-primary)]"
-        />
-        <button type="button" onClick={onToggleExpand} className="flex-1 text-left">
+        <label
+          className={cn(
+            "flex min-h-[var(--tap-min)] min-w-[var(--tap-min)] shrink-0 items-start justify-center rounded-[var(--radius-sm)] pt-1",
+            busy ? "cursor-not-allowed opacity-50" : "cursor-pointer active:bg-primary-muted"
+          )}
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            disabled={busy}
+            aria-label={`Pilih jurnal ${studentName}`}
+            className="h-5 w-5 accent-[var(--color-primary)] disabled:cursor-not-allowed"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          aria-expanded={expanded}
+          aria-label={`${expanded ? "Tutup" : "Buka"} jurnal ${studentName}`}
+          className="min-h-[var(--tap-min)] flex-1 rounded-[var(--radius-sm)] px-1 text-left outline-none transition-[color,background-color,border-color] hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:bg-primary-muted"
+        >
           <p className="text-sm font-medium text-ink">{studentName}</p>
           <p className={cn("text-sm text-ink-muted", !expanded && "line-clamp-2")}>{journal.text}</p>
           {journal.photos.length > 0 && (
-            <span className="mt-1 inline-block text-xs text-ink-muted">📎 {journal.photos.length} foto</span>
+            <span className="mt-1 inline-flex items-center gap-1 text-xs text-ink-muted">
+              <Icon name="image" size={16} /> {journal.photos.length} foto
+            </span>
           )}
         </button>
-        <span className="mt-1 text-ink-muted" aria-hidden="true">
-          {expanded ? "▲" : "▼"}
+        <span className="mt-3 text-ink-muted" aria-hidden="true">
+          <Icon name={expanded ? "chevron-up" : "chevron-down"} size={16} />
         </span>
       </div>
 
       {expanded && (
-        <div className="flex gap-2 border-t border-border pt-2">
-          <Button variant="secondary" size="md" className="flex-1" onClick={onReject} disabled={busy}>
-            ✖ Tolak
+        <div className="flex flex-col gap-2 border-t border-border pt-2 min-[24rem]:flex-row">
+          <Button
+            variant="secondary"
+            size="md"
+            className="w-full whitespace-nowrap min-[24rem]:w-auto min-[24rem]:flex-1"
+            onClick={onReject}
+            disabled={busy}
+          >
+            <Icon name="x" size={16} /> Tolak Jurnal
           </Button>
-          <Button size="md" className="flex-1" onClick={onApprove} disabled={busy} loading={busy}>
-            ✔ Approve
+          <Button
+            size="md"
+            className="w-full whitespace-nowrap min-[24rem]:w-auto min-[24rem]:flex-1"
+            onClick={onApprove}
+            disabled={busy}
+            loading={busy}
+          >
+            <Icon name="check" size={16} /> Setujui Jurnal
           </Button>
         </div>
       )}

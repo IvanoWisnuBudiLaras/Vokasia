@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-labelledby="title">
+  <title id="title">Vokasia</title>
+  <rect width="192" height="192" rx="40" fill="#fffdf6"/>
+  <path d="M37 52c0-8 6-14 14-14h90c8 0 14 6 14 14v84c0 8-6 14-14 14H51c-8 0-14-6-14-14V52Z" fill="#197b9c"/>
+  <path d="M58 65h76v15H58zm0 26h49v15H58zm0 26h76v15H58z" fill="#a8f1ff"/>
+  <circle cx="132" cy="98" r="18" fill="#fffdf6"/>
+  <path d="m124 98 6 6 11-13" fill="none" stroke="#197b9c" stroke-linecap="round" stroke-linejoin="round" stroke-width="6"/>
+</svg>

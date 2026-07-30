@@ -7,3 +7,5 @@ export type { RagStatus } from "./StatusBadge";
 export { EmptyState } from "./EmptyState";
 export { ErrorState } from "./ErrorState";
 export { OfflineBanner } from "./OfflineBanner";
+export { Icon } from "./Icon";
+export type { IconName, IconProps, IconSize } from "./Icon";

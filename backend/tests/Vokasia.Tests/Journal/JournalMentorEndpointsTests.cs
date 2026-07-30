@@ -251,7 +251,7 @@ public class JournalMentorEndpointsTests : IClassFixture<VokasiaApiFactory>
         {
             var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
             var student = new Student { Id = Guid.NewGuid(), TenantId = teacherTenantId, UserId = studentUserId, FullName = "Siswa Dikomentari", MajorId = Guid.NewGuid(), Classroom = "XII RPL 1" };
-            var placement = new Placement { Id = Guid.NewGuid(), TenantId = teacherTenantId, StudentId = student.Id, CompanyId = Guid.NewGuid(), PeriodId = Guid.NewGuid(), TeacherId = Guid.NewGuid(), Status = PlacementStatus.Active };
+            var placement = new Placement { Id = Guid.NewGuid(), TenantId = teacherTenantId, StudentId = student.Id, CompanyId = Guid.NewGuid(), PeriodId = Guid.NewGuid(), TeacherId = teacherUser.Id, Status = PlacementStatus.Active };
             var slot = new JournalSlot { Id = Guid.NewGuid(), TenantId = teacherTenantId, PlacementId = placement.Id, Date = AppTimeZone.TodayJakarta(), Status = JournalSlotStatus.Filled };
             var entry = new JournalEntry { Id = Guid.NewGuid(), TenantId = teacherTenantId, SlotId = slot.Id, PlacementId = placement.Id, Text = "Jurnal utk dikomentari.", Status = JournalEntryStatus.Approved };
             db.Students.Add(student);
@@ -273,5 +273,35 @@ public class JournalMentorEndpointsTests : IClassFixture<VokasiaApiFactory>
         var verifyDb = verify.ServiceProvider.GetRequiredService<VokasiaDbContext>();
         Assert.Single(verifyDb.TeacherComments.Where(c => c.JournalEntryId == entryId));
         Assert.Single(verifyDb.Notifications.Where(n => n.UserId == studentUserId && n.Type == "TeacherComment"));
+    }
+
+    [Fact]
+    public async Task AddTeacherComment_UnassignedPlacement_Returns403()
+    {
+        var tenantId = Guid.NewGuid();
+        var teacherUser = await AuthTestHelpers.SeedUserAsync(_factory, "guru-unassigned", UserRole.Teacher, tenantId);
+        Guid entryId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
+            var student = new Student { Id = Guid.NewGuid(), TenantId = tenantId, UserId = Guid.NewGuid(), FullName = "Siswa Tidak Ditugaskan", MajorId = Guid.NewGuid(), Classroom = "XII" };
+            var placement = new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = student.Id, CompanyId = Guid.NewGuid(), PeriodId = Guid.NewGuid(), TeacherId = Guid.NewGuid(), Status = PlacementStatus.Active };
+            var slot = new JournalSlot { Id = Guid.NewGuid(), TenantId = tenantId, PlacementId = placement.Id, Date = AppTimeZone.TodayJakarta(), Status = JournalSlotStatus.Filled };
+            var entry = new JournalEntry { Id = Guid.NewGuid(), TenantId = tenantId, SlotId = slot.Id, PlacementId = placement.Id, Text = "Jurnal orang lain", Status = JournalEntryStatus.Submitted };
+            entryId = entry.Id;
+            db.Students.Add(student);
+            db.Placements.Add(placement);
+            db.JournalSlots.Add(slot);
+            db.JournalEntries.Add(entry);
+            await db.SaveChangesAsync();
+        }
+
+        var client = _factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var (accessToken, _) = await AuthTestHelpers.LoginAndExchangeAsync(client, teacherUser.Email!);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var response = await client.PostAsJsonAsync($"/api/journals/{entryId}/comments", new { Text = "Komentar tidak boleh masuk." });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 }

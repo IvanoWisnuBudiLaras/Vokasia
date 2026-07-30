@@ -1,4 +1,4 @@
-import { EmptyState, StatusBadge } from "@/components/ui";
+import { EmptyState, Icon, StatusBadge } from "@/components/ui";
 import { ragToBadgeStatus, RagStatus, type DashboardFlaggedStudentDto } from "@/lib/apiTypes";
 
 export interface ProblemStudentListProps {
@@ -15,7 +15,7 @@ export function ProblemStudentList({ items, onSelect }: ProblemStudentListProps)
   if (items.length === 0) {
     return (
       <EmptyState
-        icon="✅"
+        icon={<Icon name="check" size={32} />}
         title="Tidak ada siswa bermasalah"
         description="Semua siswa berstatus hijau hari ini — jurnal terisi sesuai jadwal."
       />
@@ -36,7 +36,7 @@ export function ProblemStudentList({ items, onSelect }: ProblemStudentListProps)
             onClick={() => onSelect(student)}
             className={
               "flex w-full items-center justify-between gap-3 rounded-[var(--radius-md)] border border-border bg-surface p-3 text-left outline-none " +
-              "transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+              "transition-[color,background-color,border-color] hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:translate-y-px active:bg-primary-muted"
             }
           >
             <div className="flex flex-col gap-0.5">

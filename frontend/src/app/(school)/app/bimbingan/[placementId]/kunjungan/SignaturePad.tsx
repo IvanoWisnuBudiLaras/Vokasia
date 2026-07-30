@@ -55,7 +55,9 @@ export function SignaturePad({ onChange, disabled }: SignaturePadProps) {
     const { x, y } = pointFromEvent(e);
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
-    ctx.strokeStyle = "#1a1a1a";
+    ctx.strokeStyle = getComputedStyle(canvasRef.current ?? document.documentElement)
+      .getPropertyValue("--color-ink")
+      .trim();
     ctx.lineTo(x, y);
     ctx.stroke();
     if (!hasStroke) setHasStroke(true);

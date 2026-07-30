@@ -1,4 +1,5 @@
-import { Card, ErrorState } from "@/components/ui";
+import { PageHeading } from "@/components/PageHeading";
+import { Card, ErrorState, Icon } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
 import type { HealthDto, KpiDto } from "@/lib/apiTypes";
 
@@ -10,8 +11,9 @@ function HealthRow({ label, value, warnBelow }: { label: string; value: number |
   return (
     <div className="flex items-center justify-between border-b border-border py-2 text-sm last:border-0">
       <span className="text-ink-muted">{label}</span>
-      <span className={warn ? "font-medium text-status-amber" : "font-medium text-ink"}>
-        {unknown ? "— (tak tersedia)" : value} {warn ? "⚠" : unknown ? "" : "✅"}
+      <span className={`inline-flex items-center gap-1.5 ${warn ? "font-medium text-status-amber" : "font-medium text-ink"}`}>
+        {unknown ? "— (tak tersedia)" : value}
+        {!unknown && <Icon name={warn ? "warning" : "check"} size={16} />}
       </span>
     </div>
   );
@@ -41,10 +43,11 @@ export default async function SuperAdminHomePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold text-ink">Dashboard Platform</h1>
-        <p className="text-sm text-ink-muted">Ringkasan lintas seluruh tenant Vokasia.</p>
-      </div>
+      <PageHeading
+        eyebrow="OPERASI PLATFORM"
+        title="Dashboard platform"
+        description="Pantau kesehatan layanan dan indikator lintas seluruh tenant Vokasia."
+      />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Card title="Tenant Aktif"><span className="text-2xl font-semibold text-ink">{kpi.activeTenants}</span></Card>

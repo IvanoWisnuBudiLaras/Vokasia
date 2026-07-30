@@ -58,7 +58,7 @@ export function BillingTable({ initialInvoices }: BillingTableProps) {
                     (uploadingId === inv.id ? (
                       <UploadProofPanel invoice={inv} onUploaded={handleUploaded} onCancel={() => setUploadingId(null)} />
                     ) : (
-                      <Button variant="primary" size="md" onClick={() => setUploadingId(inv.id)} className="h-8 px-3 text-xs">
+                      <Button variant="primary" size="md" onClick={() => setUploadingId(inv.id)} className="px-3 text-xs">
                         Unggah Bukti Transfer
                       </Button>
                     ))}

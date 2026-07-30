@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Minio;
 using Minio.DataModel.Args;
@@ -231,18 +232,24 @@ public static class PortfolioEndpoints
         var verifiedCompetencies = await GetVerifiedCompetenciesAsync(db, student.Id, ct);
 
         var sampleIds = ParseSampleIds(portfolio.SampleJournalIdsCsv);
-        var thumbKeys = sampleIds.Count == 0
+        var photoKeys = sampleIds.Count == 0
             ? []
             : await (
                 from ph in db.JournalPhotos.AsNoTracking()
                 where sampleIds.Contains(ph.JournalEntryId) && ph.Status == PhotoStatus.Processed
-                select ph.ThumbKey ?? ph.ObjectKey
+                select new { ph.ObjectKey, ph.ThumbKey }
                 ).ToListAsync(ct);
 
         var bucket = config[BucketConfigKey] ?? DefaultBucket;
         var thumbUrls = new List<string>();
-        foreach (var key in thumbKeys)
+        foreach (var photo in photoKeys)
         {
+            var key = photo.ThumbKey ?? photo.ObjectKey;
+            if (!ObjectStorageKeyPolicy.IsOwnedKey(key, tenant.Id, "journal"))
+            {
+                continue;
+            }
+
             thumbUrls.Add(await minio.PresignedGetObjectAsync(new PresignedGetObjectArgs().WithBucket(bucket).WithObject(key).WithExpiry(PresignedExpirySeconds)));
         }
 
@@ -266,15 +273,31 @@ public static class PortfolioEndpoints
     private static async Task<string> GenerateUniqueSlugAsync(VokasiaDbContext db, string fullName, string majorName, int year, CancellationToken ct)
     {
         var baseSlug = Slugify($"{fullName}-{majorName}-{year}");
-        var candidate = baseSlug;
+        // Keep the readable identity while avoiding predictable sequential enumeration and making
+        // simultaneous publishes for students with the same name/year extremely unlikely to
+        // collide. The database uniqueness check below remains authoritative.
+        var candidate = $"{baseSlug}-{CreateSlugSuffix()}";
         var suffix = 2;
         while (await db.Portfolios.AsNoTracking().AnyAsync(p => p.Slug == candidate, ct))
         {
-            candidate = $"{baseSlug}-{suffix}";
+            candidate = $"{baseSlug}-{CreateSlugSuffix()}-{suffix}";
             suffix++;
         }
 
         return candidate;
+    }
+
+    private static string CreateSlugSuffix()
+    {
+        const string alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
+        var bytes = RandomNumberGenerator.GetBytes(8);
+        var result = new char[8];
+        for (var index = 0; index < result.Length; index++)
+        {
+            result[index] = alphabet[bytes[index] % alphabet.Length];
+        }
+
+        return new string(result);
     }
 
     private static string Slugify(string input)

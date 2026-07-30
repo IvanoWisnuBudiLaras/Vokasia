@@ -1,9 +1,13 @@
 extern alias ApiAssembly;
 
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Vokasia.Infrastructure.Persistence;
 
 namespace Vokasia.Tests.Auth;
@@ -21,6 +25,20 @@ public class VokasiaApiFactory : WebApplicationFactory<ApiAssembly::Program>
 
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
     {
+        builder.UseEnvironment("Testing");
+        // Test suites intentionally exercise many independent login flows from one loopback IP.
+        // Keep the production default (20/IP) covered by the dedicated spray test, while avoiding
+        // cross-test coupling in this shared integration host.
+        builder.ConfigureAppConfiguration((_, configuration) =>
+            configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["RateLimiting:LoginAttemptsPerIp"] = "1000",
+            }));
+        builder.ConfigureLogging(logging =>
+        {
+            logging.ClearProviders();
+            logging.AddConsole();
+        });
         builder.ConfigureServices(services =>
         {
             // AddDbContext(Npgsql) di AddVokasiaInfrastructure mendaftarkan IDbContextOptionsConfiguration<T>
@@ -40,6 +58,7 @@ public class VokasiaApiFactory : WebApplicationFactory<ApiAssembly::Program>
             }
 
             services.AddDbContext<VokasiaDbContext>(opt => opt.UseInMemoryDatabase(DbName));
+            services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
         });
     }
 }

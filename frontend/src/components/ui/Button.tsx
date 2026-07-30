@@ -11,14 +11,14 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClass: Record<Variant, string> = {
-  primary: "bg-primary text-primary-ink hover:opacity-90",
-  secondary: "bg-surface-muted text-ink border border-border hover:bg-border/40",
-  danger: "bg-status-red text-white hover:opacity-90",
+  primary: "bg-primary text-primary-ink shadow-sm hover:bg-primary/90 active:bg-primary/80",
+  secondary: "border border-border bg-surface-muted text-ink hover:bg-surface hover:text-primary active:bg-primary-muted",
+  danger: "bg-status-red text-primary-ink shadow-sm hover:bg-status-red/90 active:bg-status-red/80",
 };
 
 // lg = target sentuh utama mobile (NFR-UX-02, tombol "KIRIM JURNAL" / "APPROVE").
 const sizeClass: Record<Size, string> = {
-  md: "h-10 px-4 text-sm",
+  md: "h-[var(--tap-min)] px-4 text-base",
   lg: "h-[var(--tap-min)] px-6 text-base",
 };
 
@@ -43,7 +43,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-medium outline-none transition-opacity disabled:opacity-50 disabled:cursor-not-allowed",
+        "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-md)] font-medium outline-none transition-transform duration-[var(--dur-fast)] disabled:cursor-not-allowed disabled:opacity-50 active:translate-y-px",
         "focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2",
         variantClass[variant],
         sizeClass[size],

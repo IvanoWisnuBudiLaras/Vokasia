@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Security;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
@@ -34,7 +35,7 @@ public static class RubricEndpoints
     }
 
     private static bool WeightsSumTo100(IReadOnlyCollection<RubricAspectInput> aspects) =>
-        aspects.Count > 0 && aspects.Sum(a => a.Weight) == 100;
+        RubricValidation.HasValidWeights(aspects.Select(a => a.Weight).ToArray());
 
     private static async Task<IResult> CreateRubricTemplate(CreateRubricRequest req, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
     {

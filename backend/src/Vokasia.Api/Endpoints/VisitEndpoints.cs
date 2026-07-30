@@ -59,6 +59,12 @@ public static class VisitEndpoints
             return Results.Forbid();
         }
 
+        if (!string.IsNullOrWhiteSpace(req.PhotoKey) &&
+            !ObjectStorageKeyPolicy.IsOwnedKey(req.PhotoKey, tenant.TenantId.Value, "visit-photo"))
+        {
+            return Results.BadRequest(new { message = "PhotoKey harus berada di ruang penyimpanan tenant ini." });
+        }
+
         var placementExists = await db.Placements.AnyAsync(p => p.Id == placementId, ct);
         if (!placementExists)
         {

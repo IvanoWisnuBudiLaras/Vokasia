@@ -6,6 +6,7 @@ using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Infrastructure.Identity;
 using Vokasia.Infrastructure.Persistence;
+using Vokasia.Infrastructure.Security;
 
 namespace Vokasia.Api.Endpoints;
 
@@ -99,7 +100,12 @@ public static class SchoolUsersEndpoints
         return Results.Ok(new Paged<SchoolUserDto>(items, page, pageSize, total));
     }
 
-    private static async Task<IResult> DeactivateUser(Guid userId, UserManager<AppUser> userManager, CancellationToken ct)
+    private static async Task<IResult> DeactivateUser(
+        Guid userId,
+        UserManager<AppUser> userManager,
+        IBffSessionRevoker sessionRevoker,
+        ITenantContext tenant,
+        CancellationToken ct)
     {
         var user = await userManager.FindByIdAsync(userId.ToString());
         if (user is null)
@@ -107,10 +113,24 @@ public static class SchoolUsersEndpoints
             return Results.NotFound();
         }
 
-        user.IsActive = false;
-        await userManager.UpdateAsync(user);
+        // UserManager.FindByIdAsync bypasses the tenant-scoped roster query. Keep this guard
+        // explicit so a TenantAdmin cannot deactivate another tenant's user or a SuperAdmin.
+        if (!tenant.TenantId.HasValue || user.TenantId != tenant.TenantId)
+        {
+            return Results.NotFound();
+        }
 
-        // TODO-H2E3: cabut session Redis user ini instan (revocation) — Redis session store belum ada di H2-E1.
+        user.IsActive = false;
+        var update = await userManager.UpdateAsync(user);
+        if (!update.Succeeded)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["User"] = update.Errors.Select(e => e.Description).ToArray(),
+            });
+        }
+
+        await sessionRevoker.RevokeUserSessionsAsync(user.Id, ct);
         return Results.NoContent();
     }
 

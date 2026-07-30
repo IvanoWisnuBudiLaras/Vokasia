@@ -1,4 +1,4 @@
-import { EmptyState, ErrorState } from "@/components/ui";
+import { EmptyState, ErrorState, Icon } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
 import type { MentorAssessmentPlacementDto } from "@/lib/apiTypes";
 
@@ -31,7 +31,7 @@ export default async function MentorNilaiPage() {
 
       {!loadError && placements.length === 0 && (
         <EmptyState
-          icon="📝"
+          icon={<Icon name="file-pen-line" size={32} />}
           title="Belum ada siswa fase penilaian"
           description="Siswa bimbinganmu akan muncul di sini saat periode PKL-nya masuk fase penilaian."
         />
@@ -43,13 +43,13 @@ export default async function MentorNilaiPage() {
             <li key={p.placementId}>
               <a
                 href={`/mentor/nilai/${p.placementId}`}
-                className="flex items-center justify-between gap-2 rounded-[var(--radius-md)] border border-border bg-surface p-3 text-sm outline-none transition-colors hover:bg-primary-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+                className="flex items-center justify-between gap-2 rounded-[var(--radius-md)] border border-border bg-surface p-3 text-sm outline-none transition-[color,background-color,border-color] hover:bg-primary-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
               >
                 <div>
                   <p className="font-medium text-ink">{p.studentName}</p>
                   <p className="text-xs text-ink-muted">{p.companyName} · {p.periodName}</p>
                 </div>
-                <span aria-hidden="true">→</span>
+                <Icon name="arrow-right" size={16} />
               </a>
             </li>
           ))}

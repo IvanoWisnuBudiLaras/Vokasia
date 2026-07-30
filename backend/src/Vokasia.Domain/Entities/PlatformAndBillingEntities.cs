@@ -1,3 +1,5 @@
+using Vokasia.Domain.Common;
+
 namespace Vokasia.Domain.Entities;
 
 /// <summary>Paket langganan GLOBAL (bukan tenant-scoped) — FR-SA-03.</summary>
@@ -24,7 +26,7 @@ public class FeatureFlag
 }
 
 /// <summary>Tagihan bulanan tenant (FR-BIL-01/02).</summary>
-public class Invoice
+public class Invoice : ITenantScoped
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }

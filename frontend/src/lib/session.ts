@@ -35,6 +35,8 @@ export interface Session {
   name: string;
   role: Role;
   tenantId: string | null;
+  /** VOK-H6-E3 §2: nama SuperAdmin ASLI bila sesi ini SEDANG impersonasi (undefined = normal). Dibaca ImpersonationBanner (Server Component, root layout) — TANPA panggil Redis/DB, konsisten alasan cookie "lite" ini ada sejak awal (getSessionEdge, proxy.ts). */
+  impersonatorName?: string;
 }
 
 /** "Lite" = cara baca (tanpa DB), bukan bentuk data — field sama persis dgn Session penuh. */
@@ -43,12 +45,65 @@ export type SessionLite = Session;
 export const SESSION_COOKIE = "vok_session";
 
 /** Inti murni encode/decode — dipakai getSession, getSessionEdge, dan test (mock cookie). */
-export function decodeSessionCookie(raw: string | undefined | null): Session | null {
+function sessionSecret(): string {
+  const secret = process.env.SESSION_SECRET;
+  if (secret && secret.length >= 16) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET wajib diset (minimal 16 karakter) di production.");
+  }
+  return "development-only-session-secret";
+}
+
+function base64UrlEncode(value: Uint8Array): string {
+  let binary = "";
+  for (const byte of value) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64UrlDecode(value: string): Uint8Array {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (value.length % 4)) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+async function sign(payload: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(sessionSecret()),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign", "verify"],
+  );
+  return base64UrlEncode(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload))));
+}
+
+async function verify(payload: string, signature: string): Promise<boolean> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(sessionSecret()),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+  return crypto.subtle.verify(
+    "HMAC",
+    key,
+    base64UrlDecode(signature) as BufferSource,
+    new TextEncoder().encode(payload),
+  );
+}
+
+export async function decodeSessionCookie(raw: string | undefined | null): Promise<Session | null> {
   if (!raw) return null;
 
   try {
-    const json = Buffer.from(raw, "base64url").toString("utf-8");
-    const parsed = JSON.parse(json) as Partial<Session>;
+    const separator = raw.lastIndexOf(".");
+    if (separator <= 0) return null;
+    const payload = raw.slice(0, separator);
+    const expected = raw.slice(separator + 1);
+    if (!await verify(payload, expected)) return null;
+
+    const parsed = JSON.parse(new TextDecoder().decode(base64UrlDecode(payload))) as Partial<Session>;
     if (!parsed.id || !parsed.role) return null;
 
     return {
@@ -56,15 +111,17 @@ export function decodeSessionCookie(raw: string | undefined | null): Session | n
       name: parsed.name ?? "",
       role: parsed.role,
       tenantId: parsed.tenantId ?? null,
+      impersonatorName: parsed.impersonatorName,
     };
   } catch {
-    return null; // cookie rusak/dipalsu asal-asalan -> perlakukan sbg belum login, jangan crash.
+    return null;
   }
 }
 
 /** Kebalikan decodeSessionCookie — dipakai H2-E3 (set cookie saat login sukses) & test (mock cookie). */
-export function encodeSessionCookie(session: Session): string {
-  return Buffer.from(JSON.stringify(session), "utf-8").toString("base64url");
+export async function encodeSessionCookie(session: Session): Promise<string> {
+  const payload = base64UrlEncode(new TextEncoder().encode(JSON.stringify(session)));
+  return `${payload}.${await sign(payload)}`;
 }
 
 interface EdgeCookieReader {
@@ -75,7 +132,7 @@ interface EdgeCookieReader {
  * Middleware/proxy.ts — TANPA panggil DB (persyaratan ticket). Menerima apa pun berbentuk
  * `.cookies.get(name)` — NextRequest asli ATAU objek tiruan di unit test (mock session cookie).
  */
-export function getSessionEdge(req: EdgeCookieReader): SessionLite | null {
+export async function getSessionEdge(req: EdgeCookieReader): Promise<SessionLite | null> {
   return decodeSessionCookie(req.cookies.get(SESSION_COOKIE)?.value);
 }
 

@@ -1,4 +1,5 @@
-import { ErrorState, EmptyState } from "@/components/ui";
+import { PageHeading } from "@/components/PageHeading";
+import { ErrorState, EmptyState, Icon } from "@/components/ui";
 import type { Paged, PeriodSummary, SchoolDashboardDto } from "@/lib/apiTypes";
 import { fetcher } from "@/lib/fetcher";
 import { getSession } from "@/lib/session";
@@ -48,19 +49,19 @@ export default async function SchoolDashboardPage({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-ink">
-          {session ? `Halo, ${session.name}` : "Dashboard Sekolah"}
-        </h1>
-        {!periodsError && <PeriodSelector periods={periods} value={selectedPeriodId ?? ""} />}
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeading
+        eyebrow="MONITORING PKL"
+        title={session ? `Halo, ${session.name}` : "Dashboard sekolah"}
+        description="Pantau jurnal, approval mentor, kunjungan, dan siswa yang butuh tindak lanjut."
+        action={!periodsError ? <PeriodSelector periods={periods} value={selectedPeriodId ?? ""} /> : undefined}
+      />
 
       {periodsError && <ErrorState message="Daftar periode belum bisa dimuat." />}
 
       {!periodsError && periods.length === 0 && (
         <EmptyState
-          icon="🗓️"
+          icon={<Icon name="calendar-days" size={32} />}
           title="Belum ada periode"
           description="Buat periode dulu di menu Periode agar dashboard punya data untuk ditampilkan."
         />

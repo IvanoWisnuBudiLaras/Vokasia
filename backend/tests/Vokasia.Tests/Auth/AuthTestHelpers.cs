@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.WebUtilities;
@@ -68,6 +69,43 @@ public static class AuthTestHelpers
         return user;
     }
 
+    /// <summary>
+    /// Ambil pasangan cookie+field antiforgery dari form login lalu kirim POST same-origin.
+    /// </summary>
+    public static async Task<HttpResponseMessage> PostLoginFormAsync(
+        HttpClient client,
+        IDictionary<string, string> form,
+        string loginPageUrl = "/account/login")
+    {
+        var pageResponse = await client.GetAsync(loginPageUrl);
+        Assert.Equal(HttpStatusCode.OK, pageResponse.StatusCode);
+        var html = await pageResponse.Content.ReadAsStringAsync();
+        var tokenMatch = Regex.Match(
+            html,
+            "name=\"(?<name>__RequestVerificationToken)\"\\s+" +
+            "value=\"(?<token>[^\"]+)\"");
+        Assert.True(tokenMatch.Success, "Login form must include an antiforgery request token.");
+
+        form[tokenMatch.Groups["name"].Value] =
+            WebUtility.HtmlDecode(tokenMatch.Groups["token"].Value);
+
+        Assert.True(
+            pageResponse.Headers.TryGetValues("Set-Cookie", out var setCookies),
+            "Login form must set an antiforgery cookie.");
+        var cookie = Assert.Single(
+            setCookies,
+            value => value.StartsWith(
+                "vok_antiforgery=",
+                StringComparison.Ordinal));
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/account/login")
+        {
+            Content = new FormUrlEncodedContent(form),
+        };
+        request.Headers.TryAddWithoutValidation("Cookie", cookie.Split(';', 2)[0]);
+        return await client.SendAsync(request);
+    }
+
     /// <summary>Jalankan seluruh dance code+PKCE (authorize -> login form -> authorize lagi -> token) dan kembalikan access_token + refresh_token.</summary>
     public static async Task<(string AccessToken, string? RefreshToken)> LoginAndExchangeAsync(
         HttpClient client, string email, string scope = "api offline_access")
@@ -92,7 +130,7 @@ public static class AuthTestHelpers
         var returnUrl = loginQuery["ReturnUrl"].ToString();
 
         var form = new Dictionary<string, string> { ["email"] = email, ["password"] = Password, ["returnUrl"] = returnUrl };
-        var resp2 = await client.PostAsync("/account/login", new FormUrlEncodedContent(form));
+        var resp2 = await PostLoginFormAsync(client, form, loginLoc);
         Assert.Equal(HttpStatusCode.SeeOther, resp2.StatusCode);
 
         var resp3 = await client.GetAsync(resp2.Headers.Location);
@@ -139,6 +177,6 @@ public static class AuthTestHelpers
         var returnUrl = loginQuery["ReturnUrl"].ToString();
 
         var form = new Dictionary<string, string> { ["email"] = email, ["password"] = password, ["returnUrl"] = returnUrl };
-        return await client.PostAsync("/account/login", new FormUrlEncodedContent(form));
+        return await PostLoginFormAsync(client, form, loginLoc);
     }
 }

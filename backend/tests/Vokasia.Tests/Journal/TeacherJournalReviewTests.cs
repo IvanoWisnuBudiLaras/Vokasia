@@ -35,6 +35,15 @@ public class TeacherJournalReviewTests : IClassFixture<VokasiaApiFactory>
         return (client);
     }
 
+    private async Task<(HttpClient Client, Guid TeacherId)> AuthenticatedTeacherContextAsync(Guid tenantId, string emailPrefix)
+    {
+        var user = await AuthTestHelpers.SeedUserAsync(_factory, emailPrefix, UserRole.Teacher, tenantId);
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var (accessToken, _) = await AuthTestHelpers.LoginAndExchangeAsync(client, user.Email!);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return (client, user.Id);
+    }
+
     [Fact]
     public async Task ListPlacements_TeacherIdFilter_ReturnsOnlyThatTeachersAssignments()
     {
@@ -142,7 +151,7 @@ public class TeacherJournalReviewTests : IClassFixture<VokasiaApiFactory>
     public async Task ListJournalsForTeacher_ReturnsEntriesNewestFirstWithChronologicalComments()
     {
         var tenantId = Guid.NewGuid();
-        var client = await AuthenticatedTeacherClientAsync(tenantId, "teacher-entries");
+        var (client, teacherId) = await AuthenticatedTeacherContextAsync(tenantId, "teacher-entries");
 
         Guid placementId;
         Guid olderEntryId, newerEntryId;
@@ -152,7 +161,7 @@ public class TeacherJournalReviewTests : IClassFixture<VokasiaApiFactory>
             var period = new Period { Id = Guid.NewGuid(), TenantId = tenantId, Name = "Periode Review", StartDate = new DateOnly(2026, 1, 1), EndDate = new DateOnly(2026, 12, 31), ClassLevels = "XII", Status = PeriodStatus.Active };
             var company = new Company { Id = Guid.NewGuid(), Name = "PT Review" };
             var student = new Student { Id = Guid.NewGuid(), TenantId = tenantId, FullName = "Siswa Direview", MajorId = Guid.NewGuid(), Classroom = "XII A" };
-            var placement = new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = student.Id, CompanyId = company.Id, PeriodId = period.Id, TeacherId = Guid.NewGuid(), Status = PlacementStatus.Active };
+            var placement = new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = student.Id, CompanyId = company.Id, PeriodId = period.Id, TeacherId = teacherId, Status = PlacementStatus.Active };
             placementId = placement.Id;
 
             var olderSlot = new JournalSlot { Id = Guid.NewGuid(), TenantId = tenantId, PlacementId = placement.Id, Date = new DateOnly(2026, 7, 1), Status = JournalSlotStatus.Filled };
@@ -222,5 +231,35 @@ public class TeacherJournalReviewTests : IClassFixture<VokasiaApiFactory>
         var resp = await client.GetAsync($"/api/journals/for-teacher/{Guid.NewGuid()}");
 
         Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task ListJournalsForTeacher_UnassignedPlacement_Returns403()
+    {
+        var tenantId = Guid.NewGuid();
+        var teacher = await AuthTestHelpers.SeedUserAsync(_factory, "teacher-unassigned-list", UserRole.Teacher, tenantId);
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var (accessToken, _) = await AuthTestHelpers.LoginAndExchangeAsync(client, teacher.Email!);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        Guid placementId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
+            var period = new Period { Id = Guid.NewGuid(), TenantId = tenantId, Name = "Periode Unassigned", StartDate = new DateOnly(2026, 1, 1), EndDate = new DateOnly(2026, 12, 31), ClassLevels = "XII", Status = PeriodStatus.Active };
+            var company = new Company { Id = Guid.NewGuid(), Name = "PT Unassigned" };
+            var student = new Student { Id = Guid.NewGuid(), TenantId = tenantId, FullName = "Siswa Unassigned", MajorId = Guid.NewGuid(), Classroom = "XII" };
+            var placement = new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = student.Id, CompanyId = company.Id, PeriodId = period.Id, TeacherId = Guid.NewGuid(), Status = PlacementStatus.Active };
+            placementId = placement.Id;
+            db.Periods.Add(period);
+            db.Companies.Add(company);
+            db.Students.Add(student);
+            db.Placements.Add(placement);
+            await db.SaveChangesAsync();
+        }
+
+        var response = await client.GetAsync($"/api/journals/for-teacher/{placementId}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 }

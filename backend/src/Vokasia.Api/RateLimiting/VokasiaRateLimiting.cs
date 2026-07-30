@@ -40,11 +40,43 @@ public static class VokasiaRateLimiting
 {
     public const string LoginPolicy = "login";
     public const string PublicPolicy = "public";
+    private const int LoginAttemptsPerIdentity = 5;
+    private const int DefaultLoginAttemptsPerIp = 20;
 
-    public static IServiceCollection AddVokasiaRateLimiting(this IServiceCollection services)
+    public static IServiceCollection AddVokasiaRateLimiting(
+        this IServiceCollection services,
+        IConfiguration? configuration = null)
     {
+        var loginAttemptsPerIp = int.TryParse(
+            configuration?["RateLimiting:LoginAttemptsPerIp"],
+            out var configuredLoginAttemptsPerIp) && configuredLoginAttemptsPerIp > 0
+            ? configuredLoginAttemptsPerIp
+            : DefaultLoginAttemptsPerIp;
+
         services.AddRateLimiter(options =>
         {
+            // Endpoint metadata hanya membawa satu named policy. Limiter IP dipasang sebagai
+            // global limiter yang hanya aktif pada POST /account/login, lalu policy "login"
+            // tetap membatasi partisi IP+email. Keduanya harus lolos pada setiap percobaan.
+            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+            {
+                if (!httpContext.Request.Path.Equals("/account/login", StringComparison.OrdinalIgnoreCase) ||
+                    !HttpMethods.IsPost(httpContext.Request.Method))
+                {
+                    return RateLimitPartition.GetNoLimiter<string>("not-login");
+                }
+
+                var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetSlidingWindowLimiter($"login-ip:{ip}", _ => new SlidingWindowRateLimiterOptions
+                {
+                    Window = TimeSpan.FromMinutes(1),
+                    SegmentsPerWindow = 4,
+                    PermitLimit = loginAttemptsPerIp,
+                    QueueLimit = 0,
+                    AutoReplenishment = true,
+                });
+            });
+
             // AC ticket §3 & §Acceptance Criteria: "Given 429, Then body & header Retry-After konsisten."
             options.OnRejected = async (context, ct) =>
             {
@@ -76,7 +108,7 @@ public static class VokasiaRateLimiting
                 {
                     Window = TimeSpan.FromMinutes(1),
                     SegmentsPerWindow = 4,
-                    PermitLimit = 5,
+                    PermitLimit = LoginAttemptsPerIdentity,
                     QueueLimit = 0,
                     AutoReplenishment = true,
                 });

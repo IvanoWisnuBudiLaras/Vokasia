@@ -8,6 +8,7 @@ using Vokasia.Domain.Common;
 using Vokasia.Infrastructure.Email;
 using Vokasia.Infrastructure.Messaging;
 using Vokasia.Infrastructure.Persistence;
+using Vokasia.Infrastructure.Security;
 using Vokasia.Infrastructure.TenantContext;
 
 namespace Vokasia.Infrastructure;
@@ -34,6 +35,7 @@ public static class DependencyInjection
 
         var redisConn = config["Redis:Connection"] ?? "localhost:6379";
         services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConn));
+        services.AddSingleton<IBffSessionRevoker, BffSessionRevoker>();
 
         services.AddMinio(configureClient => configureClient
             .WithEndpoint(config["Minio:Endpoint"] ?? "localhost:9000")

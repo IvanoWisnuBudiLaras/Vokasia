@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, StatusBadge } from "@/components/ui";
+import { Button, Icon, StatusBadge } from "@/components/ui";
 import { apiClient } from "@/lib/apiClient";
 import {
   JournalEntryStatus,
@@ -41,11 +41,12 @@ export function StudentDetailDrawer({ student, periodId, onClose }: StudentDetai
     if (!student) return;
 
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setError(false);
     setEntries([]);
 
-    (async () => {
+    const fetchDetail = async () => {
       try {
         const placements = await apiClient.get<Paged<PlacementDto>>(
           `/placements?periodId=${periodId}&studentId=${student.studentId}`
@@ -62,7 +63,9 @@ export function StudentDetailDrawer({ student, periodId, onClose }: StudentDetai
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
+    };
+
+    void fetchDetail();
 
     return () => {
       cancelled = true;
@@ -126,7 +129,9 @@ export function StudentDetailDrawer({ student, periodId, onClose }: StudentDetai
                   </div>
                   <p className="mt-1 line-clamp-2 text-sm text-ink">{entry.text}</p>
                   {comments.length > 0 && (
-                    <p className="mt-1 text-xs text-ink-muted">💬 {comments.length} komentar guru</p>
+                    <p className="mt-1 inline-flex items-center gap-1 text-xs text-ink-muted">
+                      <Icon name="message-square-text" size={16} /> {comments.length} komentar guru
+                    </p>
                   )}
                 </li>
               ))}

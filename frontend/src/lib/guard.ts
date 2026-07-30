@@ -46,7 +46,7 @@ export function resolveGuardDecision(pathname: string, session: SessionLite | nu
   if (!session) {
     return {
       type: "redirect",
-      to: `/login?error=unauthenticated&next=${encodeURIComponent(pathname)}`,
+      to: `/login?error=access_required&next=${encodeURIComponent(pathname)}`,
     };
   }
 

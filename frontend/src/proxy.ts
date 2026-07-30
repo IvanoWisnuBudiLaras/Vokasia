@@ -13,8 +13,8 @@ import { getSessionEdge } from "@/lib/session";
  * project ini ada di src/app — dok Next mewajibkan proxy.ts sejajar dgn app/. Dicatat eksplisit
  * (SOUL.md: dilarang menyimpang diam-diam), bukan perubahan logika — DECISIONS.md D16.
  */
-export function proxy(request: NextRequest): NextResponse {
-  const session = getSessionEdge(request);
+export async function proxy(request: NextRequest): Promise<NextResponse> {
+  const session = await getSessionEdge(request);
   const decision = resolveGuardDecision(request.nextUrl.pathname, session);
 
   if (decision.type === "redirect") {

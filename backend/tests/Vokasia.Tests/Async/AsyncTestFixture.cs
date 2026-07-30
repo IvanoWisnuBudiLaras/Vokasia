@@ -16,9 +16,9 @@ namespace Vokasia.Tests.Async;
 /// VOK-H4-E3 §1 — RabbitMQ + Postgres SUNGGUHAN (Testcontainers), BUKAN in-memory/mock. Beda TUJUAN
 /// dgn ConsumerDuplicateDeliveryTests.cs (H4-E1, MassTransit in-memory test transport, membuktikan
 /// WIRING consumer) - suite Async/ ini membuktikan PERILAKU TRANSPORT NYATA: retry eksponensial,
-/// redelivery, DLQ (`_error` queue) otomatis, replay - properti yang TIDAK ADA di transport
+/// DLQ (`_error` queue) otomatis, replay - properti yang TIDAK ADA di transport
 /// in-memory sama sekali (dikonfirmasi baca source MassTransit: in-memory transport tak
-/// mengimplementasikan retry/redelivery/DLQ persis spt RabbitMQ; harness Consumed/Sent bawaan
+/// mengimplementasikan retry/DLQ persis spt RabbitMQ; harness Consumed/Sent bawaan
 /// bahkan mendeduplikasi MessageId yang sama - lihat catatan teknis ConsumerDuplicateDeliveryTests.cs).
 ///
 /// DUA bus MassTransit terpisah, SATU broker Testcontainers yang sama (2 koneksi client biasa,
@@ -26,14 +26,13 @@ namespace Vokasia.Tests.Async;
 /// - <see cref="Prod"/>: AddVokasiaMassTransit YANG SAMA PERSIS dipakai Worker/Program.cs (retry
 ///   MessagingDefaults SUNGGUHAN, TIDAK dipercepat) + JournalApprovedConsumer/JournalSubmittedConsumer
 ///   - dipakai DuplicateDeliveryTests/OutOfOrderTests/OutboxGuaranteeTests (skenario ini TIDAK perlu
-///   menunggu retry/redelivery habis, jadi aman pakai angka produksi asli).
+///   menunggu retry habis, jadi aman pakai angka produksi asli).
 /// - <see cref="FastPoison"/>: registrasi MINIMAL terpisah (BUKAN AddVokasiaMassTransit) khusus
 ///   PoisonTestConsumer dgn retry DIPERCEPAT (3x @150ms, bukan MessagingDefaults - 5x 1-30dtk
 ///   terlalu lama utk test berulang). TANPA UseDelayedRedelivery (lihat doc-comment endpoint
 ///   PoisonQueueName di bawah - butuh plugin broker yg tak terpasang image polos project ini,
 ///   dicoba nyata & terbukti tak sampai DLQ). Properti INTI yang dibuktikan (retry habis -> DLQ
-///   otomatis) SAMA PERSIS spt produksi - redelivery scr KONSEP cuma tier retry tambahan dgn jeda
-///   lebih panjang, perilaku TERMINAL sama. MessagingDefaults produksi TIDAK diubah sama sekali.
+///   otomatis) SAMA PERSIS spt produksi.
 ///
 /// xUnit [CollectionDefinition] "AsyncTests" memaksa seluruh test class Async/ jalan SEKUENSIAL
 /// (bukan paralel default xUnit antar class) - PENTING krn PoisonTestConsumer pakai static mutable
@@ -91,7 +90,7 @@ public class AsyncTestFixture : IAsyncLifetime
         _prodBus = Prod.GetRequiredService<IBusControl>();
         await _prodBus.StartAsync();
 
-        // --- FastPoison bus: retry/redelivery DIPERCEPAT, lihat doc-comment kelas ---
+        // --- FastPoison bus: retry DIPERCEPAT, lihat doc-comment kelas ---
         var poisonServices = new ServiceCollection();
         poisonServices.AddLogging();
         poisonServices.AddMassTransit(x =>
@@ -116,11 +115,8 @@ public class AsyncTestFixture : IAsyncLifetime
                     // rabbitmq:3-management-alpine polos yang dipakai project ini) - percobaan pakai
                     // UseDelayedRedelivery di sini TERBUKTI (dicoba nyata) pesan tak pernah sampai
                     // DLQ dlm waktu wajar. Retry SAJA sudah cukup buktikan mekanisme inti AC
-                    // ("retry sesuai policy -> masuk DLQ setelah habis") - redelivery scr KONSEP
-                    // hanyalah TIER retry tambahan dgn jeda lebih panjang, perilaku TERMINAL yang
-                    // sama (habis -> DLQ). MessagingDefaults/AddVokasiaMassTransit produksi TETAP
-                    // pakai UseDelayedRedelivery apa adanya (TIDAK diubah) - ini HANYA simplifikasi
-                    // bus test PoisonTestConsumer, lihat DECISIONS.md utk keputusan lengkap.
+                    // ("retry sesuai policy -> masuk DLQ setelah habis"), sama dengan konfigurasi
+                    // produksi yang memakai image RabbitMQ standar tanpa plugin delayed exchange.
                     e.UseMessageRetry(r => r.Interval(3, TimeSpan.FromMilliseconds(150)));
                 });
             });

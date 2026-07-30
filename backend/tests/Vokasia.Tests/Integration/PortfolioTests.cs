@@ -90,6 +90,7 @@ public class PortfolioTests
         var publishBody = await publishResp.Content.ReadFromJsonAsync<JsonElement>();
         var slug = publishBody.GetProperty("slug").GetString()!;
         Assert.Contains("tkj", slug, StringComparison.OrdinalIgnoreCase);
+        Assert.Matches("-[0-9a-z]{8}$", slug);
 
         // GetPublicPortfolio (ANONIM) -> 200, tanpa NISN/kontak (dibuktikan lewat daftar properti mentah, pola sama VerifyCertificate_ValidCode_Returns200WithoutSensitiveFields).
         var anon = _factory.CreateClient();

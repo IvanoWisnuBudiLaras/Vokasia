@@ -1,8 +1,9 @@
-import { EmptyState, ErrorState } from "@/components/ui";
+import { EmptyState, ErrorState, Icon } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
 import { getSession } from "@/lib/session";
 import type { TodayJournalDto } from "@/lib/apiTypes";
 import { TodayJournalCard } from "./TodayJournalCard";
+import { PageHeading } from "@/components/PageHeading";
 
 export const dynamic = "force-dynamic";
 
@@ -47,23 +48,24 @@ export default async function StudentTodayPage() {
   const result = await loadToday();
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-ink">{session ? `Halo, ${session.name}` : "Hari Ini"}</h1>
-        <p className="text-sm capitalize text-ink-muted">{formatTanggal()}</p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeading
+        eyebrow="JURNAL HARI INI"
+        title={session ? `Halo, ${session.name}` : "Hari ini"}
+        description={formatTanggal()}
+      />
 
-      {/* Presensi placeholder — eksplisit "fase 2" di ticket, bukan cakupan H3-E2. */}
-      <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-dashed border-border p-3 text-sm text-ink-muted">
-        <span aria-hidden="true">⏰</span>
-        Presensi otomatis — menyusul fase berikutnya.
+      {/* Presensi belum masuk MVP; tidak ditampilkan sebagai data seolah sudah aktif. */}
+      <div className="flex items-start gap-3 rounded-[var(--radius-md)] border border-dashed border-border bg-surface-muted p-3 text-sm text-ink-muted">
+        <Icon name="calendar-days" size={20} className="mt-0.5 shrink-0" />
+        <span>Presensi belum tersedia di aplikasi ini. Fokuskan dulu pada pengisian jurnal kegiatan harian.</span>
       </div>
 
       {result.kind === "error" && <ErrorState message="Jurnal hari ini belum bisa dimuat. Coba muat ulang halaman." />}
 
       {result.kind === "not-found" && (
         <EmptyState
-          icon="📓"
+          icon={<Icon name="notebook-pen" size={32} />}
           title="Belum ada slot jurnal untuk hari ini"
           description="Slot jurnal dibuat otomatis tiap pagi (05:00 WIB) untuk hari kerja. Kalau hari ini libur atau kamu belum punya penempatan aktif, slot memang belum tersedia."
         />
@@ -76,6 +78,7 @@ export default async function StudentTodayPage() {
           competencies={result.data.competencies}
           initialWeekStatus={result.data.weekStatus}
           streak={result.data.streak}
+          draftScope={session ? `${session.tenantId ?? "tanpa-tenant"}:${session.id}` : null}
         />
       )}
     </div>

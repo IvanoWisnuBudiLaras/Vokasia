@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { Icon } from "@/components/ui";
 import { apiClient } from "@/lib/apiClient";
 import type { PresignedUploadDto } from "@/lib/apiTypes";
 
@@ -113,6 +114,8 @@ export function PhotoUploader({ max, photos, setPhotos, disabled, uploadUrlPath 
   }
 
   function removePhoto(localId: string) {
+    const target = photos.find((photo) => photo.localId === localId);
+    if (target) URL.revokeObjectURL(target.previewUrl);
     setPhotos((prev) => prev.filter((p) => p.localId !== localId));
   }
 
@@ -139,11 +142,11 @@ export function PhotoUploader({ max, photos, setPhotos, disabled, uploadUrlPath 
           <div key={p.localId} className="relative h-20 w-20 overflow-hidden rounded-[var(--radius-md)] border border-border">
             {/* Preview blob URL lokal, bukan aset remote - <img> biasa, bukan next/image. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p.previewUrl} alt="" className="h-full w-full object-cover" />
+            <img src={p.previewUrl} alt={`Pratinjau ${p.file.name}`} className="h-full w-full object-cover" />
             {p.status === "uploading" && (
               <div className="absolute inset-0 flex items-center justify-center bg-ink/40">
                 <span
-                  className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"
+                  className="h-5 w-5 animate-spin rounded-full border-2 border-primary-ink border-t-transparent"
                   aria-hidden="true"
                 />
               </div>
@@ -153,19 +156,20 @@ export function PhotoUploader({ max, photos, setPhotos, disabled, uploadUrlPath 
                 type="button"
                 onClick={() => retryPhoto(p.localId)}
                 title={p.errorMessage}
-                className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-status-red-bg text-[10px] font-medium text-status-red"
+                aria-label={`Unggah ulang ${p.file.name}`}
+                className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-status-red-bg text-[10px] font-medium text-status-red outline-none transition-[color,background-color,border-color] hover:bg-status-red-bg/80 focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[-2px] active:bg-status-red-bg/60"
               >
-                <span aria-hidden="true">⚠</span>
+                <Icon name="warning" size={16} />
                 Ulangi
               </button>
             )}
             <button
               type="button"
               onClick={() => removePhoto(p.localId)}
-              aria-label="Batalkan atau hapus foto ini"
-              className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-ink/60 text-xs text-white"
+              aria-label="Hapus foto ini"
+              className="absolute right-0 top-0 flex min-h-[var(--tap-min)] min-w-[var(--tap-min)] items-center justify-center rounded-bl-[var(--radius-md)] bg-ink/70 text-primary-ink outline-none transition-[color,background-color,border-color] hover:bg-ink/80 focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[-2px] active:bg-ink/90"
             >
-              ✕
+              <Icon name="x" size={16} />
             </button>
           </div>
         ))}
@@ -175,12 +179,10 @@ export function PhotoUploader({ max, photos, setPhotos, disabled, uploadUrlPath 
             type="button"
             disabled={disabled}
             onClick={() => inputRef.current?.click()}
-            className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] border border-dashed border-border text-ink-muted hover:bg-surface-muted disabled:opacity-50"
+            className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] border border-dashed border-border text-ink-muted outline-none transition-[color,background-color,border-color] hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:bg-primary-muted disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:active:bg-transparent"
           >
-            <span className="text-xl" aria-hidden="true">
-              📷
-            </span>
-            <span className="text-[11px]">tambah</span>
+            <Icon name="camera" size={20} />
+            <span className="text-[11px]">Tambah foto</span>
           </button>
         )}
       </div>

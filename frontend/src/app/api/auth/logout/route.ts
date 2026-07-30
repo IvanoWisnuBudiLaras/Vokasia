@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { decodeSessCookie, deleteSession, SESS_COOKIE_NAME } from "@/lib/bffSession";
 import { SESSION_COOKIE } from "@/lib/session";
+import { getOidcClientSecret, getRuntimeUrl } from "@/lib/runtimeUrls";
 
 const BFF_CLIENT_ID = "vokasia-bff";
 
@@ -21,7 +22,7 @@ export async function POST() {
           token: data.refreshToken,
           token_type_hint: "refresh_token",
           client_id: BFF_CLIENT_ID,
-          client_secret: process.env.OIDC_BFF_CLIENT_SECRET ?? "dev-only-secret-change-me",
+          client_secret: getOidcClientSecret(),
         }),
         cache: "no-store",
       }).catch(() => {
@@ -31,7 +32,7 @@ export async function POST() {
     }
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = getRuntimeUrl("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
   const res = NextResponse.redirect(new URL("/login", appUrl), { status: 303 });
   res.cookies.delete(SESS_COOKIE_NAME);
   res.cookies.delete(SESSION_COOKIE);

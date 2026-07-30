@@ -10,8 +10,14 @@ public interface ITenantContext
     Guid? UserId { get; }
     string? Role { get; }
 
-    /// <summary>True bila SuperAdmin sedang mem-bypass filter tenant lewat header X-Acting-Tenant (H2-E3).</summary>
-    bool IsSuperAdminActingAsTenant { get; }
+    /// <summary>
+    /// VOK-H6-E3: UserId SuperAdmin ASLI bila request ini memakai access token hasil StartImpersonation
+    /// (claim "impersonator_id") — null dalam kondisi normal. Identitas request ditukar penuh menjadi
+    /// identitas user target (role/tenant_id/UserId semuanya milik target), lalu field ini dipakai
+    /// VokasiaDbContext.SaveChangesAsync untuk menegakkan AC "audit log mencatat actor=SA, as=user"
+    /// tanpa menyentuh setiap endpoint yang sudah menulis AuditLog.
+    /// </summary>
+    Guid? ImpersonatorUserId { get; }
 }
 
 /// <summary>Ditandai pada entitas yang wajib difilter per tenant oleh EF global query filter.</summary>

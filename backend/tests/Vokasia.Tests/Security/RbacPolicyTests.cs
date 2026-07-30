@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
 using Vokasia.Api.Auth;
 using Vokasia.Domain.Common;
@@ -81,6 +82,24 @@ public class RbacPolicyTests : IClassFixture<VokasiaApiFactory>
         Assert.NotEqual(HttpStatusCode.Forbidden, resp.StatusCode);
     }
 
+    [Fact]
+    public async Task DeptHeadWithoutTenantClaim_UpdatePeriod_IsForbidden()
+    {
+        var client = await AuthenticatedClientAsync(UserRole.DeptHead, null);
+        var body = JsonBody(new
+        {
+            Name = "Periode Tanpa Tenant",
+            StartDate = "2026-01-01",
+            EndDate = "2026-06-30",
+            ClassLevels = new[] { "XII" },
+            Holidays = (object?)null,
+        });
+
+        var resp = await client.PutAsync($"/api/periods/{Guid.NewGuid()}", body);
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
     // --- RbacPolicies.TenantAdminOnly — POST /api/school-users (LEBIH KETAT dari DeptHeadPlus) ---
 
     [Fact]
@@ -107,6 +126,21 @@ public class RbacPolicyTests : IClassFixture<VokasiaApiFactory>
         Assert.NotEqual(HttpStatusCode.Forbidden, resp.StatusCode);
     }
 
+    [Fact]
+    public async Task TenantAdminWithoutTenantClaim_UpdateRubric_IsForbidden()
+    {
+        var client = await AuthenticatedClientAsync(UserRole.TenantAdmin, null);
+        var body = JsonBody(new
+        {
+            Name = "Rubrik Tanpa Tenant",
+            Aspects = Array.Empty<object>(),
+        });
+
+        var resp = await client.PutAsync($"/api/rubrics/{Guid.NewGuid()}", body);
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
     // --- RbacPolicies.TenantMember (siapa saja berklaim tenant_id) — GET /api/periods ---
 
     [Fact]
@@ -117,6 +151,77 @@ public class RbacPolicyTests : IClassFixture<VokasiaApiFactory>
         var resp = await client.GetAsync("/api/periods");
 
         Assert.NotEqual(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task TeacherWithoutTenantClaim_ListCompetencies_IsForbidden()
+    {
+        var client = await AuthenticatedClientAsync(UserRole.Teacher, null);
+
+        var resp = await client.GetAsync("/api/competencies");
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task StudentWithoutTenantClaim_GetTodayJournal_IsForbidden()
+    {
+        var client = await AuthenticatedClientAsync(UserRole.Student, null);
+
+        var resp = await client.GetAsync("/api/journals/today");
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(nameof(UserRole.TenantAdmin), RbacPolicies.TenantAdminOnly)]
+    [InlineData(nameof(UserRole.DeptHead), RbacPolicies.DeptHeadPlus)]
+    [InlineData(nameof(UserRole.Teacher), RbacPolicies.TeacherPlus)]
+    [InlineData(nameof(UserRole.Student), RbacPolicies.StudentSelf)]
+    [InlineData(nameof(UserRole.Teacher), RbacPolicies.TenantMember)]
+    public async Task TenantPolicies_MalformedTenantClaim_IsForbidden(
+        string role,
+        string policy)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddVokasiaRbacPolicies();
+        await using var provider = services.BuildServiceProvider();
+        var authorization = provider.GetRequiredService<IAuthorizationService>();
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim("role", role),
+            new Claim("tenant_id", "not-a-guid"),
+        ], "test"));
+
+        var result = await authorization.AuthorizeAsync(principal, null, policy);
+
+        Assert.False(result.Succeeded);
+    }
+
+    [Theory]
+    [InlineData(nameof(UserRole.TenantAdmin), RbacPolicies.TenantAdminOnly)]
+    [InlineData(nameof(UserRole.DeptHead), RbacPolicies.DeptHeadPlus)]
+    [InlineData(nameof(UserRole.Teacher), RbacPolicies.TeacherPlus)]
+    [InlineData(nameof(UserRole.Student), RbacPolicies.StudentSelf)]
+    [InlineData(nameof(UserRole.Teacher), RbacPolicies.TenantMember)]
+    public async Task TenantPolicies_MissingTenantClaim_IsForbidden(
+        string role,
+        string policy)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddVokasiaRbacPolicies();
+        await using var provider = services.BuildServiceProvider();
+        var authorization = provider.GetRequiredService<IAuthorizationService>();
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim("role", role),
+        ], "test"));
+
+        var result = await authorization.AuthorizeAsync(principal, null, policy);
+
+        Assert.False(result.Succeeded);
     }
 
     // --- PlacementScopeHandler (MentorOwnPlacement) — unit test langsung, belum ada endpoint HTTP nyata ---

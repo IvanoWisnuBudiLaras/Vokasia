@@ -1,3 +1,4 @@
+import { PageHeading } from "@/components/PageHeading";
 import { ErrorState } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
 import { getSession } from "@/lib/session";
@@ -23,11 +24,12 @@ export default async function MentorHomePage() {
   const total = groups.reduce((sum, g) => sum + g.entries.length, 0);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-ink">{session ? `Halo, ${session.name}` : "Approve Mingguan"}</h1>
-        <p className="text-sm text-ink-muted">Jurnal menunggu approval ({total})</p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeading
+        eyebrow="TINDAKAN MENTOR"
+        title={session ? `Halo, ${session.name}` : "Approval mingguan"}
+        description={total === 0 ? "Tidak ada jurnal yang menunggu persetujuan." : `${total} jurnal menunggu persetujuan Anda.`}
+      />
 
       {error ? (
         <ErrorState message="Daftar jurnal belum bisa dimuat. Coba muat ulang halaman." />

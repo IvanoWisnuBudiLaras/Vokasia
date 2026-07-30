@@ -51,15 +51,16 @@ export function UploadProofPanel({ invoice, onUploaded, onCancel }: UploadProofP
         type="text"
         value={objectKey}
         onChange={(e) => setObjectKey(e.target.value)}
+        aria-label="Kode objek bukti transfer"
         placeholder="mis. bukti-transfer/invoice-xxx.jpg"
-        className="h-9 w-full rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:outline-2 focus:outline-primary focus:outline-offset-1"
+        className="h-[var(--tap-min)] w-full rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-1"
       />
       {error && <p className="text-xs text-status-red">{error}</p>}
       <div className="flex gap-2">
-        <Button variant="primary" size="md" loading={submitting} disabled={objectKey.trim().length === 0} onClick={handleSubmit} className="h-8 px-3 text-xs">
+        <Button variant="primary" size="md" loading={submitting} disabled={objectKey.trim().length === 0} onClick={handleSubmit} className="px-3 text-xs">
           Simpan Bukti
         </Button>
-        <Button variant="secondary" size="md" onClick={onCancel} disabled={submitting} className="h-8 px-3 text-xs">
+        <Button variant="secondary" size="md" onClick={onCancel} disabled={submitting} className="px-3 text-xs">
           Batal
         </Button>
       </div>

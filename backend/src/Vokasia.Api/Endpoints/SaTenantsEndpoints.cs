@@ -8,6 +8,7 @@ using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
 using Vokasia.Infrastructure.Identity;
 using Vokasia.Infrastructure.Persistence;
+using Vokasia.Infrastructure.Security;
 
 namespace Vokasia.Api.Endpoints;
 
@@ -28,8 +29,34 @@ public static class SaTenantsEndpoints
         group.MapGet("/", ListTenants);
         group.MapGet("/{id:guid}", GetTenant);
         group.MapPost("/{id:guid}/deactivate", DeactivateTenant);
+        group.MapGet("/{id:guid}/staff", ListTenantStaff); // VOK-H6-E3 §1: sumber pemilihan target StartImpersonation di UI SA.
 
         return app;
+    }
+
+    /// <summary>
+    /// VOK-H6-E3 §1 — SA butuh cara memilih SIAPA yang mau diimpersonasi ("SuperAdmin → user
+    /// target"). `SchoolUsersEndpoints.ListSchoolUsers` TIDAK bisa dipakai langsung (policy
+    /// TenantAdminOnly, SA tak punya tenant_id) — endpoint kecil ini reuse `SchoolUserDto` yang
+    /// SAMA (bentuk respons identik, cukup query dari sisi SA dgn {id} tenant eksplisit alih2
+    /// tenant_id dari klaim). Hanya staf AKTIF yang ditampilkan (impersonasi user nonaktif tak
+    /// masuk akal — StartImpersonation sendiri juga menolaknya).
+    /// </summary>
+    private static async Task<IResult> ListTenantStaff(Guid id, VokasiaDbContext db, CancellationToken ct)
+    {
+        var tenantExists = await db.Tenants.AsNoTracking().AnyAsync(t => t.Id == id, ct);
+        if (!tenantExists)
+        {
+            return Results.NotFound();
+        }
+
+        var staff = await db.Users.AsNoTracking()
+            .Where(u => u.TenantId == id && u.IsActive)
+            .OrderBy(u => u.FullName)
+            .Select(u => new SchoolUserDto(u.Id, u.Email ?? "", u.FullName, u.Role, u.IsActive))
+            .ToListAsync(ct);
+
+        return Results.Ok(staff);
     }
 
     /// <summary>
@@ -206,13 +233,17 @@ public static class SaTenantsEndpoints
     }
 
     /// <summary>
-    /// AC: "nonaktif -> semua session user tenant dicabut (hook H2-E3) + placement baru terblokir;
-    /// data TIDAK dihapus." Hook revocation Redis SENDIRI belum ada di manapun sampai sesi ini
-    /// (SchoolUsersEndpoints.DeactivateUser sudah catat TODO-H2E3 yang sama, gap dipertahankan
-    /// konsisten - BUKAN pura-pura selesai). "Placement baru terblokir" DITEGAKKAN nyata: lihat
-    /// CompaniesAndPlacementsEndpoints.CreatePlacement (cek Tenant.IsActive ditambahkan H6-E1).
+    /// AC: "nonaktif -> semua session user tenant dicabut + placement baru terblokir; data TIDAK
+    /// dihapus." Revocation berjalan setelah perubahan status tersimpan; bila Redis sedang gagal,
+    /// IsActive tetap memblokir login/refresh berikutnya dan kegagalan dicatat oleh revoker.
     /// </summary>
-    private static async Task<IResult> DeactivateTenant(Guid id, DeactivateTenantRequest req, VokasiaDbContext db, ITenantContext actingUser, CancellationToken ct)
+    private static async Task<IResult> DeactivateTenant(
+        Guid id,
+        DeactivateTenantRequest req,
+        VokasiaDbContext db,
+        ITenantContext actingUser,
+        IBffSessionRevoker sessionRevoker,
+        CancellationToken ct)
     {
         var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == id, ct);
         if (tenant is null)
@@ -223,11 +254,10 @@ public static class SaTenantsEndpoints
         tenant.IsActive = false;
 
         var tenantUsers = await db.Users.Where(u => u.TenantId == id).ToListAsync(ct);
+        var tenantUserIds = tenantUsers.Select(u => u.Id).ToArray();
         foreach (var u in tenantUsers)
         {
             u.IsActive = false;
-            // TODO-H2E3 (gap sama persis SchoolUsersEndpoints.DeactivateUser): cabut session Redis
-            // user ini instan begitu revocation store tersedia.
         }
 
         db.AuditLogs.Add(new AuditLog
@@ -242,6 +272,7 @@ public static class SaTenantsEndpoints
         });
 
         await db.SaveChangesAsync(ct);
+        await sessionRevoker.RevokeUserSessionsAsync(tenantUserIds, ct);
         return Results.NoContent();
     }
 

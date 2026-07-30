@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSession, encodeSessCookie, SESS_COOKIE_NAME } from "@/lib/bffSession";
 import { roleHome } from "@/lib/roleHome";
 import { encodeSessionCookie, SESSION_COOKIE, type Role } from "@/lib/session";
+import { getOidcClientSecret, getRuntimeUrl } from "@/lib/runtimeUrls";
 
 const BFF_CLIENT_ID = "vokasia-bff";
 const MAGIC_LINK_GRANT_TYPE = "urn:vokasia:params:oauth:grant-type:magic-link";
@@ -44,7 +45,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const token = url.searchParams.get("token");
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = getRuntimeUrl("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
   const apiBase = process.env.API_INTERNAL_URL ?? "http://localhost:5000";
 
   if (!token) {
@@ -58,7 +59,7 @@ export async function GET(req: Request) {
       grant_type: MAGIC_LINK_GRANT_TYPE,
       token,
       client_id: BFF_CLIENT_ID,
-      client_secret: process.env.OIDC_BFF_CLIENT_SECRET ?? "dev-only-secret-change-me",
+      client_secret: getOidcClientSecret(),
     }),
     cache: "no-store",
   });
@@ -89,7 +90,7 @@ export async function GET(req: Request) {
 
   const maxAge = 60 * 60 * 24 * 14; // 14 hari, cermin refresh token lifetime — sama dgn callback/route.ts.
   res.cookies.set(SESS_COOKIE_NAME, encodeSessCookie(sessionId), cookieOpts(maxAge));
-  res.cookies.set(SESSION_COOKIE, encodeSessionCookie(user), cookieOpts(maxAge));
+  res.cookies.set(SESSION_COOKIE, await encodeSessionCookie(user), cookieOpts(maxAge));
 
   return res;
 }

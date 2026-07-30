@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Input } from "@/components/ui";
+import { Button, Icon, Input } from "@/components/ui";
 import { apiClient, ApiError } from "@/lib/apiClient";
 import { FeatureFlagKey, type PlanDto } from "@/lib/apiTypes";
 
@@ -81,7 +81,7 @@ function PlanFlagsRow({ planId }: { planId: string }) {
   return (
     <div className="flex flex-wrap gap-3 text-xs text-ink-muted">
       {FLAG_KEYS.map((key) => (
-        <label key={key} className="flex items-center gap-1.5">
+        <label key={key} className="flex min-h-[var(--tap-min)] items-center gap-1.5">
           <input
             type="checkbox"
             disabled={pending === key}
@@ -89,7 +89,7 @@ function PlanFlagsRow({ planId }: { planId: string }) {
             className="h-4 w-4"
           />
           {FLAG_LABELS[key]}
-          {saved.has(key) && <span className="text-status-green">✓</span>}
+          {saved.has(key) && <Icon name="check" size={16} className="text-status-green" />}
         </label>
       ))}
     </div>
@@ -155,7 +155,7 @@ export function PlansPageClient({ initialPlans }: PlansPageClientProps) {
                     Rp {p.priceMonthly.toLocaleString("id-ID")}/bln · maks {p.maxStudents} siswa · maks {p.maxPlacements} placement
                   </p>
                 </div>
-                <Button variant="secondary" size="md" onClick={() => setEditingId(p.id)} className="h-8 px-3 text-xs">
+                <Button variant="secondary" size="md" onClick={() => setEditingId(p.id)} className="px-3 text-xs">
                   Ubah
                 </Button>
               </div>

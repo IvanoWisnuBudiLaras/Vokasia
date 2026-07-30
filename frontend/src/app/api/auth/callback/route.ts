@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { consumePkce, createSession, encodeSessCookie, SESS_COOKIE_NAME } from "@/lib/bffSession";
+import { getSafeLocalReturnUrl } from "@/lib/localReturnUrl";
 import { roleHome } from "@/lib/roleHome";
 import { encodeSessionCookie, SESSION_COOKIE, type Role } from "@/lib/session";
+import { getOidcClientSecret, getRuntimeUrl } from "@/lib/runtimeUrls";
 
 const BFF_CLIENT_ID = "vokasia-bff";
 
@@ -33,7 +35,7 @@ export async function GET(req: Request) {
   const state = url.searchParams.get("state");
   const oauthError = url.searchParams.get("error");
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = getRuntimeUrl("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
   const apiBase = process.env.API_INTERNAL_URL ?? "http://localhost:5000";
 
   if (oauthError || !code || !state) {
@@ -55,7 +57,7 @@ export async function GET(req: Request) {
       code,
       redirect_uri: `${appUrl}/api/auth/callback`,
       client_id: BFF_CLIENT_ID,
-      client_secret: process.env.OIDC_BFF_CLIENT_SECRET ?? "dev-only-secret-change-me",
+      client_secret: getOidcClientSecret(),
       code_verifier: verifier,
     }),
     cache: "no-store",
@@ -81,13 +83,13 @@ export async function GET(req: Request) {
     user,
   });
 
-  const dest = next && next !== "" ? next : roleHome(user.role);
+  const dest = getSafeLocalReturnUrl(next) ?? roleHome(user.role);
   const res = NextResponse.redirect(new URL(dest === "/login" ? "/" : dest, appUrl));
 
   const maxAge = 60 * 60 * 24 * 14; // 14 hari, cermin refresh token lifetime.
   res.cookies.set(SESS_COOKIE_NAME, encodeSessCookie(sessionId), cookieOpts(maxAge));
   // Cookie "lite" (VOK-H2-E2 lib/session.ts) — role/tenantId dibaca proxy.ts, TANPA token.
-  res.cookies.set(SESSION_COOKIE, encodeSessionCookie(user), cookieOpts(maxAge));
+  res.cookies.set(SESSION_COOKIE, await encodeSessionCookie(user), cookieOpts(maxAge));
 
   return res;
 }

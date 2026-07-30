@@ -6,11 +6,13 @@ import { InvoicesTable } from "./InvoicesTable";
 export const dynamic = "force-dynamic";
 
 export default async function SaInvoicesPage() {
+  let invoices: InvoiceDto[];
   try {
-    const invoices = await fetcher<InvoiceDto[]>("/sa/invoices");
-    return <InvoicesTable initialInvoices={invoices} />;
+    invoices = await fetcher<InvoiceDto[]>("/sa/invoices");
   } catch (err) {
     console.error("[sa/invoices] gagal memuat:", err);
     return <ErrorState message="Daftar invoice belum bisa dimuat." />;
   }
+
+  return <InvoicesTable initialInvoices={invoices} />;
 }

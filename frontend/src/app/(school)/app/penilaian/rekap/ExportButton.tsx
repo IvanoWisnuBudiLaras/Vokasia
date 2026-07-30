@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui";
+import { Button, Icon } from "@/components/ui";
 import { apiClient, ApiError } from "@/lib/apiClient";
 import { ExportFormat, type ExportAcceptedDto } from "@/lib/apiTypes";
 
@@ -28,7 +28,7 @@ export function ExportButton({ periodId }: ExportButtonProps) {
     setSubmitting(true);
     try {
       await apiClient.post<ExportAcceptedDto>(`/periods/${periodId}/exports`, { format });
-      setToast("Export sedang diproses — cek notifikasi 🔔 saat file siap diunduh.");
+      setToast("Export sedang diproses — cek notifikasi saat file siap diunduh.");
     } catch (err) {
       setToast(err instanceof ApiError ? err.message : "Gagal meminta export. Coba lagi.");
     } finally {
@@ -44,14 +44,14 @@ export function ExportButton({ periodId }: ExportButtonProps) {
           <select
             value={format}
             onChange={(e) => setFormat(Number(e.target.value))}
-            className="h-9 rounded-[var(--radius-md)] border border-border bg-surface px-2 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+            className="h-[var(--tap-min)] rounded-[var(--radius-md)] border border-border bg-surface px-2 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
           >
             <option value={ExportFormat.Xlsx}>Excel (.xlsx)</option>
             <option value={ExportFormat.Pdf}>PDF</option>
           </select>
         </label>
-        <Button variant="secondary" size="md" loading={submitting} onClick={handleExport}>
-          Export Rekap
+        <Button variant="secondary" size="lg" loading={submitting} onClick={handleExport}>
+          <Icon name="download" size={16} /> Export Rekap
         </Button>
       </div>
       {toast && <span className="max-w-xs text-right text-xs text-ink-muted">{toast}</span>}

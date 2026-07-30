@@ -2,12 +2,27 @@ using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Vokasia.Infrastructure;
 using Vokasia.Infrastructure.Messaging;
 using Vokasia.Worker;
 using Vokasia.Worker.Consumers;
+using Vokasia.Worker.Health;
 using Vokasia.Worker.Jobs;
+
+if (args is ["--healthcheck"])
+{
+    var markerPath = Environment.GetEnvironmentVariable("Worker__ReadinessFile")
+        ?? WorkerReadinessMarker.DefaultFilePath;
+    Environment.ExitCode = WorkerReadinessMarker.IsFresh(
+        markerPath,
+        TimeProvider.System.GetUtcNow(),
+        WorkerReadinessMarker.MaxMarkerAge)
+        ? 0
+        : 1;
+    return;
+}
 
 // VOK-H5-E1 §4/§5: QuestPDF (pre-approved PRD.md baris 82) wajib deklarasi lisensi eksplisit
 // sebelum Document.Create dipanggil manapun (versi modern QuestPDF melempar exception saat
@@ -22,6 +37,35 @@ var builder = Host.CreateApplicationBuilder(args);
 // VokasiaDbContext otomatis "mati", cron LINTAS SEMUA TENANT by design (lihat doc-comment
 // JournalCronJobs).
 builder.Services.AddVokasiaInfrastructure(builder.Configuration, builder.Environment);
+
+// Readiness worker mencakup dependency yang benar-benar diperlukan. MassTransit menambahkan
+// check RabbitMQ ber-tag "ready" sendiri; tiga check di bawah melengkapi Postgres, Redis, MinIO.
+builder.Services.AddHealthChecks()
+    .AddCheck<WorkerPostgresHealthCheck>(
+        "postgres",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["ready"],
+        timeout: TimeSpan.FromSeconds(5))
+    .AddCheck<WorkerRedisHealthCheck>(
+        "redis",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["ready"],
+        timeout: TimeSpan.FromSeconds(5))
+    .AddCheck<WorkerMinioHealthCheck>(
+        "minio",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["ready"],
+        timeout: TimeSpan.FromSeconds(5));
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+builder.Services.AddSingleton<WorkerReadinessMarker>();
+builder.Services.AddSingleton<IHealthCheckPublisher, WorkerReadinessPublisher>();
+builder.Services.Configure<HealthCheckPublisherOptions>(options =>
+{
+    options.Delay = TimeSpan.FromSeconds(5);
+    options.Period = TimeSpan.FromSeconds(10);
+    options.Timeout = TimeSpan.FromSeconds(8);
+    options.Predicate = registration => registration.Tags.Contains("ready");
+});
 
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? builder.Configuration["ConnectionStrings:Default"]
@@ -75,6 +119,10 @@ builder.Services.AddHostedService<OutboxDispatcher>();
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();
+var readinessMarker = host.Services.GetRequiredService<WorkerReadinessMarker>();
+readinessMarker.Clear();
+host.Services.GetRequiredService<IHostApplicationLifetime>()
+    .ApplicationStopping.Register(readinessMarker.Clear);
 
 // GAP ditemukan+ditambal Gate M0 redeploy (DECISIONS.md D24): static RecurringJob.AddOrUpdate
 // GAGAL runtime nyata ("Current JobStorage instance has not been initialized yet") di host Worker

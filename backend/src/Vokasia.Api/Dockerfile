@@ -12,7 +12,9 @@ EXPOSE 8080
 # `wget` — base image aspnet:10.0 (Debian, bukan Alpine) TIDAK menyertakan wget/curl bawaan.
 # Tanpa baris ini healthcheck SELALU gagal ("exec: wget: executable file not found"), container
 # tetap "unhealthy" selamanya meski app-nya sendiri sehat (log app normal, listening 8080).
-RUN apt-get update && apt-get install -y --no-install-recommends wget \
+# Npgsql mem-probe GSSAPI saat membuka koneksi PostgreSQL; sertakan runtime library Debian
+# supaya fallback autentikasi tidak menulis "Cannot load library libgssapi_krb5.so.2" di setiap boot.
+RUN apt-get update && apt-get install -y --no-install-recommends wget libgssapi-krb5-2 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "Vokasia.Api.dll"]

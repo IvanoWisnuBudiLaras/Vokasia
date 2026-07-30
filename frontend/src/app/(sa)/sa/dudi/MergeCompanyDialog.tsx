@@ -66,7 +66,7 @@ export function MergeCompanyDialog({ sourceId, sourceName, onMerged, onCancel }:
     return (
       <div className="flex flex-col gap-2 rounded-[var(--radius-md)] border border-status-green/30 bg-status-green-bg p-3 text-sm text-status-green">
         <p>
-          "{sourceName}" digabung ke target. {result.movedTenantCompanies} link tenant dipindah,{" "}
+          &quot;{sourceName}&quot; digabung ke target. {result.movedTenantCompanies} link tenant dipindah,{" "}
           {result.movedPlacements} placement dipindah. Riwayat merge tercatat.
         </p>
         <Button variant="secondary" size="md" onClick={onMerged} className="self-end">
@@ -86,8 +86,9 @@ export function MergeCompanyDialog({ sourceId, sourceName, onMerged, onCancel }:
       <input
         value={query}
         onChange={(e) => void handleSearch(e.target.value)}
+        aria-label="Cari DUDI tujuan penggabungan"
         placeholder="Cari company target…"
-        className="h-9 rounded-[var(--radius-md)] border border-border bg-surface px-3 text-sm text-ink outline-none"
+        className="h-[var(--tap-min)] rounded-[var(--radius-md)] border border-border bg-surface px-3 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-1"
       />
 
       {searching && <p className="text-xs text-ink-muted">Mencari…</p>}
@@ -99,7 +100,7 @@ export function MergeCompanyDialog({ sourceId, sourceName, onMerged, onCancel }:
               <button
                 type="button"
                 onClick={() => setTarget(c)}
-                className="w-full rounded-[var(--radius-sm)] px-2 py-1.5 text-left text-sm text-ink hover:bg-surface"
+                className="min-h-[var(--tap-min)] w-full rounded-[var(--radius-sm)] px-2 py-2 text-left text-sm text-ink outline-none transition-[color,background-color,border-color] hover:bg-surface focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:bg-primary-muted"
               >
                 {c.name} {c.city && <span className="text-ink-muted">— {c.city}</span>}
               </button>
@@ -111,7 +112,7 @@ export function MergeCompanyDialog({ sourceId, sourceName, onMerged, onCancel }:
       {target && !confirming && (
         <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-border bg-surface p-2 text-sm">
           <span>Target: <strong>{target.name}</strong></span>
-          <Button variant="primary" size="md" onClick={() => setConfirming(true)} className="h-8 px-3 text-xs">
+          <Button variant="primary" size="md" onClick={() => setConfirming(true)} className="px-3 text-xs">
             Lanjut
           </Button>
         </div>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { apiClient, ApiError } from "@/lib/apiClient";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, Icon } from "@/components/ui";
 import type { BatchResult, JournalDto, PendingGroupDto } from "@/lib/apiTypes";
 import { ApprovalCard } from "./ApprovalCard";
 import { RejectDialog } from "./RejectDialog";
@@ -167,8 +167,8 @@ export function ApprovalList({ initialGroups }: ApprovalListProps) {
   if (total === 0) {
     return (
       <EmptyState
-        icon="🎉"
-        title="Belum ada jurnal untuk di-approve"
+        icon={<Icon name="check" size={32} />}
+        title="Belum ada jurnal untuk ditinjau"
         description="Semua jurnal siswa bimbinganmu sudah diproses. Jurnal baru akan muncul di sini begitu dikirim."
       />
     );

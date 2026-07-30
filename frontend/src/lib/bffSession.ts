@@ -22,6 +22,19 @@ export interface BffSession {
   accessExp: number; // epoch ms
   refreshToken: string;
   user: BffSessionUser;
+  /**
+   * VOK-H6-E3 §2: non-null SELAMA SuperAdmin sedang impersonasi user lain — token/identitas SA
+   * ASLI di-stash di sini (BUKAN dibuang), accessToken/refreshToken/user di level atas ditimpa
+   * sementara dgn identitas TARGET. EndImpersonation mengembalikan field-field level atas dari
+   * sini lalu menghapus field ini — sessionId (cookie vok_sess) TIDAK PERNAH berganti selama
+   * seluruh siklus (start->end), hanya ISI record Redis-nya yang ditukar-tukar.
+   */
+  impersonation?: {
+    originalAccessToken: string;
+    originalAccessExp: number;
+    originalRefreshToken: string;
+    originalUser: BffSessionUser;
+  };
 }
 
 function secret(): string {
@@ -107,6 +120,51 @@ export async function deleteSession(sessionId: string): Promise<BffSession | nul
   await redis.del(`${SESS_PREFIX}${sessionId}`);
   if (data) await redis.srem(`${USER_SESSIONS_PREFIX}${data.user.id}`, sessionId);
   return data;
+}
+
+/**
+ * VOK-H6-E3 §2 StartImpersonation (sisi BFF) — stash identitas SA ASLI (level atas record
+ * SEKARANG, SEBELUM ditimpa) ke field `impersonation`, lalu timpa accessToken/refreshToken/user
+ * dgn identitas target. sessionId/cookie vok_sess TIDAK berubah (1 record Redis yang sama diedit
+ * di tempat) — proxy.ts/fetcher.ts lain tak perlu tahu apa pun berubah, mereka tetap baca
+ * getSessionData(sessionId) seperti biasa dan dapat identitas TARGET secara transparan.
+ */
+export async function startImpersonation(
+  sessionId: string,
+  target: { accessToken: string; accessExp: number; user: BffSessionUser }
+): Promise<BffSession | null> {
+  const existing = await getSessionData(sessionId);
+  if (!existing) return null;
+
+  const updated: BffSession = {
+    accessToken: target.accessToken,
+    accessExp: target.accessExp,
+    refreshToken: "", // grant impersonation TIDAK menerbitkan refresh token (short-lived by design, lihat DECISIONS.md D39) - habis 15 mnt, EndImpersonation wajib dipanggil sebelum itu utk kembali normal.
+    user: target.user,
+    impersonation: {
+      originalAccessToken: existing.accessToken,
+      originalAccessExp: existing.accessExp,
+      originalRefreshToken: existing.refreshToken,
+      originalUser: existing.user,
+    },
+  };
+  await getRedis().set(`${SESS_PREFIX}${sessionId}`, JSON.stringify(updated), "EX", SESSION_TTL_SECONDS);
+  return updated;
+}
+
+/** VOK-H6-E3 §2 EndImpersonation (sisi BFF) — kembalikan field level atas dari stash, buang `impersonation`. Null bila memang tidak sedang impersonasi (caller wajib cek dulu). */
+export async function endImpersonation(sessionId: string): Promise<BffSession | null> {
+  const existing = await getSessionData(sessionId);
+  if (!existing?.impersonation) return null;
+
+  const restored: BffSession = {
+    accessToken: existing.impersonation.originalAccessToken,
+    accessExp: existing.impersonation.originalAccessExp,
+    refreshToken: existing.impersonation.originalRefreshToken,
+    user: existing.impersonation.originalUser,
+  };
+  await getRedis().set(`${SESS_PREFIX}${sessionId}`, JSON.stringify(restored), "EX", SESSION_TTL_SECONDS);
+  return restored;
 }
 
 /** Reuse detection VOK-H2-E3 AC: "seluruh keluarga sesi tercabut" — hapus SEMUA sesi user ini. */

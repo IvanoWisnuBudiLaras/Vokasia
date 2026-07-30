@@ -41,15 +41,22 @@ export function Textarea({
         maxLength={maxLength}
         value={value}
         aria-invalid={!!error}
+        aria-describedby={error ? `${textareaId}-error` : undefined}
         className={cn(
-          "min-h-32 rounded-[var(--radius-md)] border px-3 py-2 text-base outline-none resize-y",
-          "focus:outline-2 focus:outline-primary focus:outline-offset-1",
+          "min-h-32 resize-y rounded-[var(--radius-md)] border bg-surface px-3 py-2 text-base text-ink outline-none transition-[color,background-color,border-color] placeholder:text-ink-muted/80 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-muted disabled:opacity-[0.55]",
+          "hover:border-primary/50 focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-1",
           error ? "border-status-red" : "border-border",
           className
         )}
         {...rest}
       />
-      {error && <span className="text-xs text-status-red">{error}</span>}
+      <div className="min-h-[1.25rem] text-xs">
+        {error && (
+          <span id={`${textareaId}-error`} className="text-status-red">
+            {error}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

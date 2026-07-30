@@ -162,4 +162,6 @@ public record SetFeatureFlagRequest(FeatureFlagKey Key, bool Enabled);
 // VOK-H6-E1 §4: Ops — KPI/health/audit (FR-SA-05..07).
 public record KpiDto(int ActiveTenants, int ActiveStudents, int JournalsToday, double JournalFillRate, decimal Mrr);
 public record HealthDto(int? QueueDepth, int? DlqCount, int? FailedJobs, int OutboxUnpublished, double? ApiP95Ms, double? DiskPct);
-public record AuditDto(Guid Id, Guid? TenantId, Guid ActorUserId, string Action, string Entity, string EntityId, string MetaJson, DateTimeOffset CreatedAt);
+// ActingAsUserId (VOK-H6-E3): non-null = ActorUserId beraksi SEBAGAI user ini (impersonasi) — lihat
+// AuditLog entity + VokasiaDbContext.SaveChangesAsync utk mekanisme pengisiannya.
+public record AuditDto(Guid Id, Guid? TenantId, Guid ActorUserId, Guid? ActingAsUserId, string Action, string Entity, string EntityId, string MetaJson, DateTimeOffset CreatedAt);

@@ -24,7 +24,7 @@ export function PeriodSelector({ periods, value }: PeriodSelectorProps) {
         value={value}
         onChange={(e) => router.push(`/app?periodId=${e.target.value}`)}
         className={
-          "h-9 rounded-[var(--radius-md)] border border-border bg-surface px-2 text-sm text-ink outline-none " +
+          "h-[var(--tap-min)] rounded-[var(--radius-md)] border border-border bg-surface px-2 text-sm text-ink outline-none " +
           "focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
         }
       >

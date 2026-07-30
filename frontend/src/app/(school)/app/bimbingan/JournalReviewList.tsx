@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, EmptyState, ErrorState, StatusBadge, Textarea } from "@/components/ui";
+import { Button, EmptyState, ErrorState, Icon, StatusBadge, Textarea } from "@/components/ui";
 import { apiClient, ApiError } from "@/lib/apiClient";
 import { JournalEntryStatus, type JournalWithCommentsDto } from "@/lib/apiTypes";
 
@@ -44,7 +44,8 @@ export function JournalReviewList({ placementId }: JournalReviewListProps) {
   }
 
   useEffect(() => {
-    load();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placementId]);
 
@@ -74,7 +75,7 @@ export function JournalReviewList({ placementId }: JournalReviewListProps) {
   }
 
   if (items.length === 0) {
-    return <EmptyState icon="📓" title="Belum ada jurnal" description="Siswa ini belum mengirim jurnal apa pun." />;
+    return <EmptyState icon={<Icon name="notebook-pen" size={32} />} title="Belum ada jurnal" description="Siswa ini belum mengirim jurnal apa pun." />;
   }
 
   return (
@@ -91,7 +92,11 @@ export function JournalReviewList({ placementId }: JournalReviewListProps) {
               {statusBadge(entry.status)}
             </div>
             <p className="mt-2 text-sm text-ink">{entry.text}</p>
-            {entry.photos.length > 0 && <p className="mt-1 text-xs text-ink-muted">📎 {entry.photos.length} foto</p>}
+            {entry.photos.length > 0 && (
+              <p className="mt-1 inline-flex items-center gap-1 text-xs text-ink-muted">
+                <Icon name="image" size={16} /> {entry.photos.length} foto
+              </p>
+            )}
 
             {comments.length > 0 && (
               <ul className="mt-3 flex flex-col gap-2 border-t border-border pt-3">

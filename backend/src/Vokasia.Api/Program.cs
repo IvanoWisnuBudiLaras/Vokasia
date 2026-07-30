@@ -1,5 +1,11 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.DataProtection;
+using System.Security.Cryptography.X509Certificates;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.HttpOverrides;
+using System.Text.Json;
 using Minio;
 using Minio.DataModel.Args;
 using Vokasia.Api.Auth;
@@ -13,6 +19,37 @@ using Vokasia.Infrastructure.Persistence;
 using Vokasia.Infrastructure.Seeding;
 
 var builder = WebApplication.CreateBuilder(args);
+var developmentLikeEnvironment = builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing");
+
+var dataProtection = builder.Services.AddDataProtection()
+    .SetApplicationName("Vokasia.Api");
+var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
+if (!developmentLikeEnvironment)
+{
+    if (string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+    {
+        throw new InvalidOperationException(
+            "DataProtection:KeysPath wajib diisi di Production agar cookie/anti-forgery keys persisten.");
+    }
+
+    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+    var dataProtectionCertificatePath = builder.Configuration["DataProtection:CertificatePath"];
+    if (string.IsNullOrWhiteSpace(dataProtectionCertificatePath) || !File.Exists(dataProtectionCertificatePath))
+    {
+        throw new InvalidOperationException(
+            "DataProtection:CertificatePath wajib menunjuk ke sertifikat PFX yang valid di Production.");
+    }
+
+    var dataProtectionCertificate = X509CertificateLoader.LoadPkcs12FromFile(
+        dataProtectionCertificatePath,
+        builder.Configuration["DataProtection:CertificatePassword"],
+        X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.MachineKeySet);
+    dataProtection.ProtectKeysWithCertificate(dataProtectionCertificate);
+}
+else if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+{
+    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+}
 
 builder.Services.AddOpenApi();
 builder.Services.AddVokasiaInfrastructure(builder.Configuration, builder.Environment);
@@ -21,9 +58,21 @@ builder.Services.AddVokasiaInfrastructure(builder.Configuration, builder.Environ
 builder.Services.AddVokasiaIdentity();
 
 builder.Services.AddVokasiaOpenIddict(builder.Configuration, builder.Environment);
-builder.Services.AddVokasiaRbacPolicies(); // AddAuthorizationBuilder() di dalamnya — jangan tambah AddAuthorization() lagi.
+builder.Services.AddVokasiaRbacPolicies(); // AddAuthorizationBuilder() di dalamnya – jangan tambah AddAuthorization() lagi.
 builder.Services.AddControllers();
+builder.Services.AddAntiforgery(options =>
+{
+    options.Cookie.Name = "vok_antiforgery";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+});
 builder.Services.AddScoped<MagicLinkService>(); // VOK-H2-E3 §3
+
+// VOK-H7-E1: Tambahkan ASP.NET Core Health Checks bawaan. Kita gunakan custom ping sederhana untuk database, redis, dan rabbitmq agar tidak menambah dependencies NuGet baru (AGENTS.md #13).
+builder.Services.AddHealthChecks()
+    .AddCheck<PostgresHealthCheck>("postgres")
+    .AddCheck<RedisHealthCheck>("redis");
 
 // VOK-H3-E3 §1: DomainImmutableException -> 409 {code,message} (bukan 500 generik) + ProblemDetails
 // bawaan framework utk exception lain yang tak sengaja lolos (tetap format JSON konsisten, bukan
@@ -31,6 +80,8 @@ builder.Services.AddScoped<MagicLinkService>(); // VOK-H2-E3 §3
 builder.Services.AddExceptionHandler<DomainImmutableExceptionHandler>();
 builder.Services.AddExceptionHandler<QuotaExceededExceptionHandler>(); // VOK-H6-E1 §5 (FR-BIL-03)
 builder.Services.AddProblemDetails();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    ForwardedHeadersSetup.Configure(options, builder.Configuration));
 
 // VOK-H3-E3 §2: FluentValidation — semua Validator di assembly ini (Vokasia.Api) otomatis terdaftar
 // sbg IValidator<T> DI, dibaca ValidationFilter (Endpoints/*.cs) per request type. Assembly-scan
@@ -38,7 +89,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
 // VOK-H3-E3 §3: rate limit login (/connect/token) + endpoint publik (/api/mentor-invites/validate).
-builder.Services.AddVokasiaRateLimiting();
+builder.Services.AddVokasiaRateLimiting(builder.Configuration);
 
 var app = builder.Build();
 
@@ -49,8 +100,34 @@ if (app.Environment.IsDevelopment())
 
 // VOK-H3-E3 §1: paling awal — tangkap exception dari SEMUA middleware/endpoint di bawahnya.
 app.UseExceptionHandler();
+// Trust X-Forwarded-* only from explicitly configured proxy addresses/networks. This must run
+// before HTTPS redirection, authentication and rate limiting so scheme/client-IP decisions use
+// the original request values supplied by the trusted reverse proxy.
+app.UseForwardedHeaders();
+
+// VOK-H6-E3 §3 (NFR-SEC-07): HSTS HANYA non-Development (rekomendasi resmi ASP.NET Core — di
+// localhost http, HSTS bikin browser "mengingat" paksa-https utk domain lokal, menyulitkan dev
+// berikutnya. Produksi WAJIB HTTPS, jadi HSTS aman & diinginkan di sana).
+if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
+{
+    app.UseHsts();
+}
+app.UseMiddleware<Vokasia.Api.Middleware.SecurityHeadersMiddleware>(); // nosniff/CSP dasar/X-Frame-Options/Referrer-Policy — SEMUA response, termasuk publik & error.
 
 app.UseHttpsRedirection();
+app.UseRouting();
+app.UseStatusCodePages(async statusContext =>
+{
+    var context = statusContext.HttpContext;
+    if (context.Response.StatusCode is not (StatusCodes.Status401Unauthorized or StatusCodes.Status403Forbidden or StatusCodes.Status404NotFound) ||
+        !ApiStatusCodePages.ShouldWriteJson(context))
+    {
+        return;
+    }
+
+    context.Response.ContentType = "application/problem+json; charset=utf-8";
+    await context.Response.WriteAsync(JsonSerializer.Serialize(ApiStatusCodePages.CreatePayload(context)));
+});
 app.UseAuthentication();
 app.UseMiddleware<TenantResolutionMiddleware>(); // AC VOK-H2-E3: isi ITenantContext sebelum endpoint apa pun jalan.
 app.UseAuthorization();
@@ -80,6 +157,7 @@ app.MapCompaniesAndPlacementsEndpoints();
 app.MapSchoolUsersEndpoints();
 app.MapAccountEndpoints(); // VOK-H2-E3: tambal gap /account/login (LoginPath H1-E3, lihat DECISIONS.md D17)
 app.MapAuditEndpoints(); // VOK-H2-E3 §2: WriteAuditLog — dipanggil BFF (TokenReuseDetected dst.)
+app.MapImpersonationEndpoints(); // VOK-H6-E3 §1: EndImpersonation (StartImpersonation ada di AuthorizationController.Exchange())
 app.MapMagicLinkEndpoints(); // VOK-H2-E3 §3: create+validate magic link mentor
 app.MapJournalEndpoints(); // VOK-H3-E1: siklus jurnal siswa/mentor/guru
 app.MapNotificationEndpoints(); // VOK-H4-E1 §4: bell notifikasi in-app lintas peran
@@ -98,6 +176,16 @@ app.MapSaOpsEndpoints(); // VOK-H6-E1 §4: KPI platform + kesehatan sistem + aud
 
 // Smoke endpoint H1 — dibuktikan compose+migration hidup end-to-end (gate M0).
 app.MapGet("/health/ping", () => Results.Ok(new { status = "ok", service = "Vokasia.Api" }));
+
+// VOK-H7-E1: Map endpoint /health bawaan ASP.NET Core
+app.MapHealthChecks("/health");
+
+// CLI hook is development-only. A production process must never populate demo tenants by
+// accident, even when an operator passes the argument to the deployed binary.
+if (args is ["seed", "demo", ..] && !app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
+{
+    throw new InvalidOperationException("seed demo hanya boleh dijalankan saat ASPNETCORE_ENVIRONMENT=Development atau Testing.");
+}
 
 // Seed client OAuth BFF — idempoten, aman tiap startup (VOK-H1-E3).
 await OpenIddictSetup.SeedOAuthClientsAsync(app.Services);
@@ -147,3 +235,48 @@ if (args is ["seed", "demo", ..])
 app.Run();
 
 public partial class Program { } // agar Vokasia.Tests bisa pakai WebApplicationFactory<Program>
+
+internal sealed class PostgresHealthCheck(
+    IServiceScopeFactory scopeFactory) : IHealthCheck
+{
+    public async Task<HealthCheckResult> CheckHealthAsync(
+        HealthCheckContext context,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
+            return await db.Database.CanConnectAsync(cancellationToken)
+                ? HealthCheckResult.Healthy()
+                : HealthCheckResult.Unhealthy("Gagal terhubung ke Postgres.");
+        }
+        catch (Exception ex)
+        {
+            return HealthCheckResult.Unhealthy(
+                "Pemeriksaan Postgres gagal.",
+                ex);
+        }
+    }
+}
+
+internal sealed class RedisHealthCheck(
+    StackExchange.Redis.IConnectionMultiplexer multiplexer) : IHealthCheck
+{
+    public async Task<HealthCheckResult> CheckHealthAsync(
+        HealthCheckContext context,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await multiplexer.GetDatabase().PingAsync();
+            return HealthCheckResult.Healthy();
+        }
+        catch (Exception ex)
+        {
+            return HealthCheckResult.Unhealthy(
+                "Pemeriksaan Redis gagal.",
+                ex);
+        }
+    }
+}

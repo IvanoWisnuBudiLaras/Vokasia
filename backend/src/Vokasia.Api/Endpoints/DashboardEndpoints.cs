@@ -35,12 +35,19 @@ public static class DashboardEndpoints
             return Results.Forbid();
         }
 
+        var teacherScoped = string.Equals(tenant.Role, UserRole.Teacher.ToString(), StringComparison.OrdinalIgnoreCase);
+        if (teacherScoped && !tenant.UserId.HasValue)
+        {
+            return Results.Forbid();
+        }
+
         var today = AppTimeZone.TodayJakarta();
 
         var todaySlotStatuses = await db.JournalSlots.AsNoTracking()
             .Where(s => s.Date == today)
             .Join(
-                db.Placements.AsNoTracking().Where(p => p.PeriodId == periodId && p.Status == PlacementStatus.Active),
+                db.Placements.AsNoTracking().Where(p => p.PeriodId == periodId && p.Status == PlacementStatus.Active &&
+                    (!teacherScoped || p.TeacherId == tenant.UserId)),
                 s => s.PlacementId, p => p.Id, (s, _) => s.Status)
             .ToListAsync(ct);
 
@@ -51,7 +58,8 @@ public static class DashboardEndpoints
 
         var pendingApprovals = await db.JournalEntries.AsNoTracking()
             .Where(e => e.Status == JournalEntryStatus.Submitted)
-            .Join(db.Placements.AsNoTracking().Where(p => p.PeriodId == periodId), e => e.PlacementId, p => p.Id, (e, _) => e.Id)
+            .Join(db.Placements.AsNoTracking().Where(p => p.PeriodId == periodId &&
+                (!teacherScoped || p.TeacherId == tenant.UserId)), e => e.PlacementId, p => p.Id, (e, _) => e.Id)
             .CountAsync(ct);
 
         // [GAP dicatat, bukan diam-diam dihitung asal2an - lihat DECISIONS.md]: Visit
@@ -65,7 +73,8 @@ public static class DashboardEndpoints
             .Where(x => x.PeriodId == periodId && x.Date == today && x.Rag != RagStatus.Green)
             .Join(db.Students.AsNoTracking(), x => x.StudentId, s => s.Id, (x, s) => new { x.Rag, StudentId = s.Id, s.FullName })
             .Join(
-                db.Placements.AsNoTracking().Where(p => p.PeriodId == periodId),
+                db.Placements.AsNoTracking().Where(p => p.PeriodId == periodId &&
+                    (!teacherScoped || p.TeacherId == tenant.UserId)),
                 x => x.StudentId, p => p.StudentId, (x, p) => new { x.Rag, x.StudentId, x.FullName, p.CompanyId })
             .Join(db.Companies.AsNoTracking(), x => x.CompanyId, c => c.Id, (x, c) => new DashboardFlaggedStudentDto(
                 x.StudentId, x.FullName, c.Name, x.Rag,

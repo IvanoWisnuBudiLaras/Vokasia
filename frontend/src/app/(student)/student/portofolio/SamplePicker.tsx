@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Icon } from "@/components/ui";
 import type { JournalDto } from "@/lib/apiTypes";
 
 interface SamplePickerProps {
@@ -45,7 +46,7 @@ export function SamplePicker({ approvedJournals, selected, max, onChange }: Samp
 
       {approvedJournals.length === 0 ? (
         <p className="rounded-[var(--radius-md)] border border-dashed border-border p-3 text-sm text-ink-muted">
-          Belum ada jurnal disetujui (Approved) yang bisa dijadikan sampel.
+          Belum ada jurnal yang disetujui untuk dijadikan sampel.
         </p>
       ) : (
         <>
@@ -54,7 +55,7 @@ export function SamplePicker({ approvedJournals, selected, max, onChange }: Samp
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Cari jurnal..."
-            className="h-9 w-full rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:outline-2 focus:outline-primary focus:outline-offset-1"
+            className="h-[var(--tap-min)] w-full rounded-[var(--radius-md)] border border-border px-3 text-sm outline-none focus:outline-2 focus:outline-primary focus:outline-offset-1"
           />
           <div className="flex max-h-72 flex-col gap-1.5 overflow-y-auto">
             {filtered.map((j) => {
@@ -66,15 +67,17 @@ export function SamplePicker({ approvedJournals, selected, max, onChange }: Samp
                   type="button"
                   disabled={disabled}
                   onClick={() => toggle(j.id)}
-                  className={`flex items-start gap-2 rounded-[var(--radius-md)] border p-2.5 text-left text-sm transition-colors ${
+                  className={`flex min-h-[var(--tap-min)] items-start gap-2 rounded-[var(--radius-md)] border p-2.5 text-left text-sm outline-none transition-[color,background-color,border-color] focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 ${
                     isSelected
                       ? "border-primary bg-primary-muted text-ink"
                       : "border-border text-ink hover:bg-surface-muted"
-                  } ${disabled ? "opacity-40" : ""}`}
+                  } ${disabled ? "cursor-not-allowed opacity-40 hover:bg-transparent active:translate-y-0" : "active:translate-y-px"}`}
                 >
-                  <span aria-hidden="true" className="mt-0.5">
-                    {isSelected ? "✓" : "○"}
-                  </span>
+                  {isSelected ? (
+                    <Icon name="check" size={16} className="mt-0.5 shrink-0 text-primary" />
+                  ) : (
+                    <span className="mt-0.5 h-4 w-4 shrink-0 rounded-full border border-border" aria-hidden="true" />
+                  )}
                   <span className="flex-1">
                     <span className="block text-xs text-ink-muted">
                       {new Date(j.submittedAt).toLocaleDateString("id-ID")}

@@ -12,7 +12,7 @@ namespace Vokasia.Tests.Integration;
 /// VOK-H5-E3 §1 TenantIsolationTests — endpoint utama (journals, placements, students, assessment,
 /// dashboard, audit) diakses lintas tenant → 404/kosong (BUKAN kebocoran data), lewat query filter
 /// tenant EF Core sungguhan (Postgres Testcontainers, bukan InMemory - filter global perlu skema
-/// relasional nyata utk benar2 teruji). SuperAdmin tanpa X-Acting-Tenant → kosong (tak ada tenant_id
+/// relasional nyata utk benar2 teruji). SuperAdmin tanpa tenant_id claim → kosong
 /// claim, TIDAK error). NFR-SEC-04.
 /// </summary>
 [Collection("IntegrationTests")]
@@ -165,7 +165,7 @@ public class TenantIsolationTests
         Assert.Equal(tenantA.Id, log.TenantId);
     }
 
-    /// <summary>SuperAdmin TANPA header X-Acting-Tenant -&gt; tenant_id claim kosong (TenantResolutionMiddleware), endpoint bare-authorize (GetPendingApprovals) tetap bisa dipanggil TAPI hasilnya query "mentor = diri sendiri" -&gt; SuperAdmin bukan mentor siapa pun -&gt; array kosong, BUKAN error/lintas-tenant bocor.</summary>
+    /// <summary>SuperAdmin tanpa tenant_id claim dapat memanggil endpoint bare-authorize, tetapi query mentor tetap scoped ke identitasnya dan menghasilkan array kosong—bukan kebocoran lintas tenant.</summary>
     [Fact]
     public async Task SuperAdmin_WithoutActingTenant_PendingApprovals_ReturnsEmpty()
     {

@@ -83,7 +83,7 @@ export function TenantWizard({ plans, onCreated, onCancel }: TenantWizardProps) 
             <select
               value={planId}
               onChange={(e) => setPlanId(e.target.value)}
-              className="h-10 rounded-[var(--radius-md)] border border-border bg-surface px-3 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+              className="h-[var(--tap-min)] rounded-[var(--radius-md)] border border-border bg-surface px-3 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
             >
               {plans.length === 0 && <option value="">Belum ada plan — buat di /sa/plans dulu</option>}
               {plans.map((p) => (

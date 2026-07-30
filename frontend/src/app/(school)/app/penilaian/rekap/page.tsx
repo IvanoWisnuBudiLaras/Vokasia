@@ -1,4 +1,4 @@
-import { EmptyState, ErrorState } from "@/components/ui";
+import { EmptyState, ErrorState, Icon } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
 import { PeriodStatusNum, type Paged, type PeriodSummary, type RecapRowDto } from "@/lib/apiTypes";
 import { RecapTable } from "./RecapTable";
@@ -60,10 +60,10 @@ export default async function GradeRecapPage() {
 
       {loadError && <ErrorState message="Rekap nilai belum bisa dimuat." />}
 
-      {!loadError && noPeriod && <EmptyState icon="📊" title="Belum ada periode" description="Buat periode PKL terlebih dahulu." />}
+      {!loadError && noPeriod && <EmptyState icon={<Icon name="layout-dashboard" size={32} />} title="Belum ada periode" description="Buat periode PKL terlebih dahulu." />}
 
       {!loadError && periodId && rows.length === 0 && (
-        <EmptyState icon="📊" title="Belum ada placement" description="Belum ada siswa placement di periode ini." />
+        <EmptyState icon={<Icon name="layout-dashboard" size={32} />} title="Belum ada penempatan" description="Belum ada siswa yang ditempatkan pada periode ini." />
       )}
 
       {!loadError && periodId && rows.length > 0 && <RecapTable periodId={periodId} initialRows={rows} />}

@@ -68,6 +68,7 @@ services:
     environment:
       ConnectionStrings__Default: Host=postgres;Port=5432;Database=${POSTGRES_DB:-vokasia};Username=${POSTGRES_USER:-vokasia};Password=${POSTGRES_PASSWORD:-vokasia_dev}
       Redis__Connection: redis:6379
+      RabbitMq__Host: rabbitmq
       # GAP ditemukan+ditambal Gate M0 redeploy VOK-H3-E1 (DECISIONS.md D24): tanpa baris ini, api
       # jatuh ke fallback DependencyInjection.cs ("localhost:9000") - DARI DALAM container api
       # sendiri, "localhost" itu loopback container itu sendiri, BUKAN container minio terpisah ->
@@ -96,7 +97,7 @@ services:
       rabbitmq: { condition: service_healthy }
       minio: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/ping || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -118,6 +119,9 @@ services:
       # TAK PERNAH benar2 tersambung ke broker sejak kode H4-E1 ditulis, walau container tetap
       # "healthy" krn healthcheck cuma `pgrep dotnet` - proses hidup, bukan koneksi broker sehat).
       RabbitMq__Host: rabbitmq
+      # Worker juga membuat presigned/thumbnail object-store access. `localhost` dari `.env`
+      # menunjuk ke container worker sendiri, jadi selalu gunakan nama service Docker.
+      Minio__Endpoint: minio:9000
       # Konsistensi dgn api (DECISIONS.md D28, lihat komentar lengkap di service api di atas) - worker
       # tak py branch IsDevelopment() sendiri saat ini, tp disamakan supaya dua service dev-compose
       # yang sama tak diam2 berbeda mode hosting (mencegah kelas gap yg sama muncul lain waktu tanpa
@@ -125,13 +129,15 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
     depends_on:
       postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
+      minio: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "pgrep dotnet || exit 1"]
+      test: ["CMD", "dotnet", "Vokasia.Worker.dll", "--healthcheck"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 20s
+      start_period: 30s
 
   frontend:
     build: ./frontend

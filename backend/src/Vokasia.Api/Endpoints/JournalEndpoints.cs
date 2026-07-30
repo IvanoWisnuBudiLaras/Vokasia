@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Minio;
 using Minio.DataModel.Args;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Security;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
@@ -293,6 +294,11 @@ public static class JournalEndpoints
             return Results.Conflict(new { message = $"Maksimal {MaxPhotosPerEntry} foto per jurnal." });
         }
 
+        if (!ObjectStorageKeyPolicy.IsOwnedKey(req.ObjectKey, placement.TenantId, "journal"))
+        {
+            return Results.BadRequest(new { message = "ObjectKey foto harus berada di ruang penyimpanan tenant ini." });
+        }
+
         var photo = new JournalPhoto { Id = Guid.NewGuid(), TenantId = placement.TenantId, JournalEntryId = id, ObjectKey = req.ObjectKey, Status = PhotoStatus.Pending };
         db.JournalPhotos.Add(photo);
         db.OutboxMessages.Add(new OutboxMessage
@@ -563,6 +569,13 @@ public static class JournalEndpoints
             return Results.NotFound();
         }
 
+        var placement = await db.Placements.AsNoTracking().FirstOrDefaultAsync(p => p.Id == entry.PlacementId, ct);
+        if (placement is null || !Enum.TryParse<UserRole>(tenant.Role, ignoreCase: true, out var role) ||
+            !TeacherPlacementScope.CanAccess(role, tenant.UserId.Value, placement.TeacherId))
+        {
+            return Results.Forbid();
+        }
+
         var comment = new TeacherComment { Id = Guid.NewGuid(), TenantId = entry.TenantId, JournalEntryId = id, TeacherId = tenant.UserId.Value, Text = TextSanitizer.Clean(req.Text) };
         db.TeacherComments.Add(comment);
 
@@ -582,18 +595,26 @@ public static class JournalEndpoints
 
     /// <summary>
     /// VOK-H4-E2 — baca jurnal (+komentar kronologis) 1 placement, utk guru bimbingan/dashboard
-    /// drawer. TIDAK ada pengecekan `placement.TeacherId == caller` tambahan (lihat komentar
-    /// filter `teacherId` di CompaniesAndPlacements.cs: scope keamanan staf-sekolah-internal
-    /// sudah cukup lewat TeacherPlus + tenant global filter, bukan per-row ownership) - siapa pun
-    /// staf sekolah (TenantAdmin/DeptHead/Teacher) dlm tenant yang sama boleh baca, konsisten dgn
-    /// AddTeacherComment yang JUGA tak py cek kepemilikan tambahan.
+    /// drawer. Teacher dibatasi ke placement yang ditugaskan; TenantAdmin/DeptHead boleh lintas
+    /// filter `teacherId` di CompaniesAndPlacements.cs: TenantAdmin/DeptHead tetap boleh lintas
+    /// placement dalam tenant yang sama, sedangkan Teacher harus menjadi guru penanggung jawab.
     /// </summary>
-    private static async Task<IResult> ListJournalsForTeacher(Guid placementId, VokasiaDbContext db, CancellationToken ct)
+    private static async Task<IResult> ListJournalsForTeacher(Guid placementId, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
     {
-        var placementExists = await db.Placements.AsNoTracking().AnyAsync(p => p.Id == placementId, ct);
-        if (!placementExists)
+        if (!tenant.UserId.HasValue || !Enum.TryParse<UserRole>(tenant.Role, ignoreCase: true, out var role))
+        {
+            return Results.Forbid();
+        }
+
+        var placement = await db.Placements.AsNoTracking().FirstOrDefaultAsync(p => p.Id == placementId, ct);
+        if (placement is null)
         {
             return Results.NotFound();
+        }
+
+        if (!TeacherPlacementScope.CanAccess(role, tenant.UserId.Value, placement.TeacherId))
+        {
+            return Results.Forbid();
         }
 
         var items = await db.JournalEntries.AsNoTracking()

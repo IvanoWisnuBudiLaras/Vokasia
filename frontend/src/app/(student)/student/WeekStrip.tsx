@@ -1,5 +1,6 @@
 import type { WeekDayStatusDto } from "@/lib/apiTypes";
 import { JournalSlotStatus } from "@/lib/apiTypes";
+import { Icon } from "@/components/ui";
 
 const DAY_LABEL = ["Sen", "Sel", "Rab", "Kam", "Jum"];
 
@@ -15,20 +16,29 @@ const DAY_LABEL = ["Sen", "Sel", "Rab", "Kam", "Jum"];
  */
 export function WeekStrip({ days, streak }: { days: WeekDayStatusDto[]; streak: number }) {
   return (
-    <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-border bg-surface-muted px-3 py-2.5">
-      <div className="flex items-center gap-2" aria-label="Status jurnal minggu ini, Senin sampai Jumat">
+    <div className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-border bg-surface-muted px-3 py-2.5">
+      <ul className="flex min-w-0 items-center gap-1.5" aria-label="Status jurnal minggu ini, Senin sampai Jumat">
         {days.map((d, i) => (
-          <span
+          <li
             key={d.date}
             title={`${DAY_LABEL[i] ?? ""} — ${d.status === JournalSlotStatus.Filled ? "terisi" : "kosong"}`}
-            className="text-lg leading-none"
-            aria-hidden="true"
+            className="flex min-w-8 flex-col items-center gap-1 text-xs text-ink-muted"
           >
-            {d.status === JournalSlotStatus.Filled ? "✅" : "⬜"}
-          </span>
+            <span>{DAY_LABEL[i] ?? ""}</span>
+            {d.status === JournalSlotStatus.Filled ? (
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-status-green text-primary-ink">
+                <Icon name="check" size={16} />
+                <span className="sr-only">Terisi</span>
+              </span>
+            ) : (
+              <span className="h-5 w-5 rounded-full border border-border bg-surface">
+                <span className="sr-only">Kosong</span>
+              </span>
+            )}
+          </li>
         ))}
-      </div>
-      <span className="text-sm font-medium text-ink">
+      </ul>
+      <span className="shrink-0 text-sm font-medium text-ink">
         Streak <span className="tabular-nums">{streak}</span>
       </span>
     </div>
