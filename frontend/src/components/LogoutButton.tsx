@@ -8,7 +8,7 @@ import { Button } from "@/components/ui";
 export function LogoutButton() {
   return (
     <form action="/api/auth/logout" method="POST">
-      <Button type="submit" variant="secondary" size="md">
+      <Button type="submit" variant="danger-outline" size="md">
         Keluar
       </Button>
     </form>

@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, EmptyState, ErrorState, Icon, StatusBadge, Textarea } from "@/components/ui";
+import { Button, EmptyState, ErrorState, Icon, StatusBadge, StudentPortfolioModal, Textarea } from "@/components/ui";
 import { apiClient, ApiError } from "@/lib/apiClient";
 import { JournalEntryStatus, type JournalWithCommentsDto } from "@/lib/apiTypes";
 
 export interface JournalReviewListProps {
   placementId: string;
+  studentId?: string;
+  studentName?: string;
 }
 
 function statusBadge(status: number) {
@@ -15,20 +17,14 @@ function statusBadge(status: number) {
   return <StatusBadge status="amber" label="Menunggu" />;
 }
 
-/**
- * VOK-H4-E2 §2 JournalReviewList({placementId}) — baca jurnal siswa (GET /journals/for-teacher/
- * {placementId}, endpoint baru H4-E2) + AddTeacherComment inline (FR-JRN-05); komentar tampil
- * kronologis (API sudah urutkan by CreatedAt ascending, lihat backend). Client component penuh
- * (fetch on mount by placementId + submit komentar) — dipanggil dari bimbingan/page.tsx (Server
- * Component) yang cuma meneruskan placementId terpilih dari ?placementId= URL query.
- */
-export function JournalReviewList({ placementId }: JournalReviewListProps) {
+export function JournalReviewList({ placementId, studentId, studentName = "Siswa" }: JournalReviewListProps) {
   const [items, setItems] = useState<JournalWithCommentsDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [showPortfolioModal, setShowPortfolioModal] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -80,6 +76,18 @@ export function JournalReviewList({ placementId }: JournalReviewListProps) {
 
   return (
     <div className="flex flex-col gap-3">
+      {studentId && (
+        <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-border bg-surface-muted p-3">
+          <div className="flex items-center gap-2">
+            <Icon name="briefcase-business" size={20} className="text-primary" />
+            <span className="text-xs font-medium text-ink">Portofolio & Kompetensi Terverifikasi Siswa</span>
+          </div>
+          <Button variant="secondary" size="md" onClick={() => setShowPortfolioModal(true)}>
+            <Icon name="file-text" size={16} /> Lihat Portofolio
+          </Button>
+        </div>
+      )}
+
       {submitError && <p className="text-sm text-status-red">{submitError}</p>}
 
       <ul className="flex flex-col gap-3">
@@ -134,6 +142,15 @@ export function JournalReviewList({ placementId }: JournalReviewListProps) {
           </li>
         ))}
       </ul>
+
+      {studentId && (
+        <StudentPortfolioModal
+          studentId={studentId}
+          studentName={studentName}
+          isOpen={showPortfolioModal}
+          onClose={() => setShowPortfolioModal(false)}
+        />
+      )}
     </div>
   );
 }

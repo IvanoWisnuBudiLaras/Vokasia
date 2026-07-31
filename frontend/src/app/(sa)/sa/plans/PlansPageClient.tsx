@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Icon, Input } from "@/components/ui";
+import { Button, Icon, Input, TableExportToolbar, Tooltip } from "@/components/ui";
 import { apiClient, ApiError } from "@/lib/apiClient";
 import { FeatureFlagKey, type PlanDto } from "@/lib/apiTypes";
 
@@ -15,7 +15,6 @@ const FLAG_LABELS: Record<number, string> = {
 };
 const FLAG_KEYS: number[] = Object.values(FeatureFlagKey);
 
-/** Form buat/ubah 1 plan — dipakai baris "+ Plan Baru" dan tombol Ubah per baris. */
 function PlanForm({ initial, onSaved, onCancel }: { initial?: PlanDto; onSaved: () => void; onCancel: () => void }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [priceMonthly, setPriceMonthly] = useState(String(initial?.priceMonthly ?? 0));
@@ -63,7 +62,6 @@ function PlanForm({ initial, onSaved, onCancel }: { initial?: PlanDto; onSaved: 
   );
 }
 
-/** Toggle 2 flag terdaftar (GeotagAllowed/ParentDigest) — SetFeatureFlag per plan. */
 function PlanFlagsRow({ planId }: { planId: string }) {
   const [pending, setPending] = useState<number | null>(null);
   const [saved, setSaved] = useState<Set<number>>(new Set());
@@ -81,7 +79,7 @@ function PlanFlagsRow({ planId }: { planId: string }) {
   return (
     <div className="flex flex-wrap gap-3 text-xs text-ink-muted">
       {FLAG_KEYS.map((key) => (
-        <label key={key} className="flex min-h-[var(--tap-min)] items-center gap-1.5">
+        <label key={key} className="flex min-h-[var(--tap-min)] items-center gap-1.5 cursor-pointer">
           <input
             type="checkbox"
             disabled={pending === key}
@@ -96,33 +94,56 @@ function PlanFlagsRow({ planId }: { planId: string }) {
   );
 }
 
-/**
- * VOK-H6-E2 §1 sa/plans/page.tsx — CRUD plan + toggle feature flags per plan. Override per tenant
- * SENGAJA di halaman TERPISAH (bukan di sini): butuh cari tenant dulu (banyak tenant, tak muat di
- * 1 layar bersama daftar plan) — `GetEffectiveFlags`/`OverrideTenantFlag` dipanggil dari kartu
- * "kelola" tenant di `sa/tenants` akan lebih pas ticket berikutnya; utk cakupan ticket INI, toggle
- * plan-level sudah memenuhi "CRUD plan + toggle feature flags" literal.
- */
 export function PlansPageClient({ initialPlans }: PlansPageClientProps) {
   const [plans, setPlans] = useState(initialPlans);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function refresh() {
     const data = await apiClient.get<PlanDto[]>("/sa/plans");
     setPlans(data);
   }
 
+  async function handleDelete(id: string) {
+    setDeletingId(id);
+    setError(null);
+    try {
+      await apiClient.delete(`/sa/plans/${id}`);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Gagal menghapus plan.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-ink">Plans</h1>
-        {!creating && (
-          <Button variant="primary" size="md" onClick={() => setCreating(true)}>
-            + Plan Baru
-          </Button>
-        )}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold text-ink">Paket Langganan (Plans)</h1>
+        <div className="flex items-center gap-2">
+          <TableExportToolbar
+            data={plans}
+            filename="daftar_paket_plan_vokasia"
+            title="Daftar Paket Langganan Vokasia Platform"
+            columns={[
+              { key: "name", label: "Nama Paket" },
+              { key: "priceMonthly", label: "Harga/Bulan", format: (val) => `Rp ${val.toLocaleString("id-ID")}` },
+              { key: "maxStudents", label: "Maks Siswa" },
+              { key: "maxPlacements", label: "Maks Placement" },
+            ]}
+          />
+          {!creating && (
+            <Button variant="primary" size="md" onClick={() => setCreating(true)}>
+              + Plan Baru
+            </Button>
+          )}
+        </div>
       </div>
+
+      {error && <p className="text-sm text-status-red">{error}</p>}
 
       {creating && (
         <PlanForm
@@ -147,17 +168,36 @@ export function PlansPageClient({ initialPlans }: PlansPageClientProps) {
               }}
             />
           ) : (
-            <div key={p.id} className="flex flex-col gap-2 rounded-[var(--radius-lg)] border border-border bg-surface p-4">
+            <div key={p.id} className="flex flex-col gap-2 rounded-[var(--radius-lg)] border border-border bg-surface p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-ink">{p.name}</p>
+                  <p className="font-semibold text-ink">{p.name}</p>
                   <p className="text-xs text-ink-muted">
                     Rp {p.priceMonthly.toLocaleString("id-ID")}/bln · maks {p.maxStudents} siswa · maks {p.maxPlacements} placement
                   </p>
                 </div>
-                <Button variant="secondary" size="md" onClick={() => setEditingId(p.id)} className="px-3 text-xs">
-                  Ubah
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Tooltip content="Ubah nama, harga, atau kuota batas siswa/placement paket ini">
+                    <Button variant="secondary" size="md" onClick={() => setEditingId(p.id)} className="px-3 text-xs">
+                      Ubah
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Hapus paket langganan ini jika tidak ada tenant yang sedang menggunakannya">
+                    <Button
+                      variant="danger-outline"
+                      size="md"
+                      loading={deletingId === p.id}
+                      onClick={() => {
+                        if (confirm(`Apakah Anda yakin ingin menghapus paket "${p.name}"?`)) {
+                          void handleDelete(p.id);
+                        }
+                      }}
+                      className="px-3 text-xs"
+                    >
+                      Hapus
+                    </Button>
+                  </Tooltip>
+                </div>
               </div>
               <PlanFlagsRow planId={p.id} />
             </div>

@@ -97,7 +97,7 @@ export function RecapTable({ periodId, initialRows }: RecapTableProps) {
           className="h-[var(--tap-min)] w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 sm:w-64"
         />
         <div className="flex items-center gap-3">
-          <ExportButton periodId={periodId} />
+          <ExportButton periodId={periodId} rows={rows} />
           <FinalizeButton periodId={periodId} incompleteCount={incompleteCount} rows={rows} onFinalized={refresh} />
         </div>
       </div>

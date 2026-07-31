@@ -64,7 +64,7 @@ builder.Services.AddAntiforgery(options =>
 {
     options.Cookie.Name = "vok_antiforgery";
     options.Cookie.HttpOnly = true;
-    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.SameSite = SameSiteMode.Lax;
     options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
 });
 builder.Services.AddScoped<MagicLinkService>(); // VOK-H2-E3 §3
@@ -218,15 +218,15 @@ catch (Exception ex)
     app.Logger.LogWarning(ex, "Gagal ensure bucket MinIO saat startup - endpoint upload foto jurnal mungkin tak berfungsi sampai MinIO tersedia.");
 }
 
-// CLI hook VOK-H2-E1: `dotnet run --project src/Vokasia.Api -- seed demo` — 1 perintah dari clean
-// state (NFR-MNT-04), tanpa menjalankan web server (keluar setelah selesai).
-if (args is ["seed", "demo", ..])
+// CLI hook VOK-H2-E1: `dotnet run --project src/Vokasia.Api -- seed demo` / `seed reset`
+if (args is ["seed", ..])
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
     var sw = System.Diagnostics.Stopwatch.StartNew();
-    var result = await DemoSeeder.SeedDemoDataAsync(db, userManager);
+    var forceReset = args.Contains("reset") || args.Contains("--force");
+    var result = await DemoSeeder.SeedDemoDataAsync(db, userManager, forceReset: forceReset);
     sw.Stop();
     Console.WriteLine($"[seed demo] {result} ({sw.Elapsed.TotalSeconds:F1}s)");
     return;

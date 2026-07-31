@@ -72,12 +72,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             </p>
           )}
 
-          <Link
+          <a
             href={`/api/auth/login${nextParam}`}
-            className="mt-7 inline-flex h-[var(--tap-min)] w-full items-center justify-center whitespace-nowrap rounded-[var(--radius-md)] bg-primary px-6 text-base font-medium text-primary-ink shadow-sm outline-none transition-[color,background-color,border-color] duration-[var(--dur-fast)] hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:translate-y-px"
+            className="mt-7 inline-flex h-[var(--tap-min)] w-full items-center justify-center whitespace-nowrap rounded-[var(--radius-md)] bg-primary px-6 text-base font-semibold text-primary-ink shadow-sm outline-none transition-[color,background-color,border-color] duration-[var(--dur-fast)] hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:translate-y-px"
           >
-            Lanjut ke halaman masuk
-          </Link>
+            Masuk ke Dashboard Vokasia
+          </a>
 
           <p className="mt-4 text-xs leading-5 text-ink-muted">
             Kata sandi dipakai hanya untuk memeriksa akunmu saat masuk.

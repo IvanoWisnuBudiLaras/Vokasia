@@ -83,7 +83,7 @@ export function ApprovalCard({
       {expanded && (
         <div className="flex flex-col gap-2 border-t border-border pt-2 min-[24rem]:flex-row">
           <Button
-            variant="secondary"
+            variant="danger-outline"
             size="md"
             className="w-full whitespace-nowrap min-[24rem]:w-auto min-[24rem]:flex-1"
             onClick={onReject}

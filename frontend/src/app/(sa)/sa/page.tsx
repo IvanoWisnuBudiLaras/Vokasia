@@ -2,6 +2,7 @@ import { PageHeading } from "@/components/PageHeading";
 import { Card, ErrorState, Icon } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
 import type { HealthDto, KpiDto } from "@/lib/apiTypes";
+import { DashboardCharts } from "./DashboardCharts";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,8 @@ export default async function SuperAdminHomePage() {
         <Card title="Tingkat Isi Jurnal"><span className="text-2xl font-semibold text-ink">{kpi.journalFillRate.toFixed(1)}%</span></Card>
         <Card title="MRR"><span className="text-2xl font-semibold text-ink">Rp {kpi.mrr.toLocaleString("id-ID")}</span></Card>
       </div>
+
+      <DashboardCharts />
 
       <Card title="System Health">
         <HealthRow label="Queue Depth (RabbitMQ)" value={health.queueDepth} warnBelow={(v) => v > 100} />

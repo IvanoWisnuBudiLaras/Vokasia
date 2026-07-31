@@ -13,6 +13,7 @@ public record UpdatePeriodRequest(string Name, DateOnly StartDate, DateOnly EndD
 public record HolidayDto(DateOnly Date, string Label);
 
 public record StudentDto(Guid Id, string FullName, string? Nisn, Guid MajorId, string Classroom, Guid? UserId);
+public record SaStudentDto(Guid Id, Guid TenantId, string SchoolName, string FullName, string? Nisn, string MajorName, string Classroom);
 public record CreateStudentRequest(string FullName, string? Nisn, Guid MajorId, string Classroom);
 public record UpdateStudentRequest(string FullName, string? Nisn, Guid MajorId, string Classroom);
 public record ImportRowError(int Row, string Column, string Message);

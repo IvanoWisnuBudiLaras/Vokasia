@@ -135,7 +135,7 @@ export default async function BimbinganPage({
                     <Icon name="map-pin" size={16} /> Catat Kunjungan
                   </a>
                 </div>
-                <JournalReviewList placementId={selected.placementId} />
+                <JournalReviewList placementId={selected.placementId} studentId={selected.studentId} studentName={selected.studentName} />
               </>
             ) : (
               <EmptyState

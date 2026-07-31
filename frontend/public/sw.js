@@ -1,4 +1,4 @@
-const CACHE_NAME = "vokasia-offline-v2";
+const CACHE_NAME = "vokasia-offline-v3";
 const OFFLINE_URL = "/offline";
 const ICON_URLS = [
   "/icon.svg",
@@ -52,7 +52,14 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match(OFFLINE_URL)));
+    event.respondWith(
+      fetch(request).catch(async () => {
+        const cache = await caches.open(CACHE_NAME);
+        const cached = await cache.match(OFFLINE_URL);
+        if (cached) return cached;
+        return Response.redirect(`/offline?from=${encodeURIComponent(url.pathname)}`, 302);
+      }),
+    );
     return;
   }
 

@@ -82,7 +82,9 @@ async function handle(req: NextRequest, ctx: RouteContext): Promise<NextResponse
   }
 
   const { path } = await ctx.params;
-  const upstreamUrl = new URL(`/api/${path.join("/")}${req.nextUrl.search}`, apiBase());
+  const rawPath = path.join("/");
+  const targetPath = rawPath.startsWith("sa") ? `/${rawPath}` : `/api/${rawPath}`;
+  const upstreamUrl = new URL(`${targetPath}${req.nextUrl.search}`, apiBase());
   const contentType = req.headers.get("content-type");
   const hasBody = !["GET", "HEAD"].includes(req.method);
   const bodyBuffer = hasBody ? await req.arrayBuffer() : undefined;

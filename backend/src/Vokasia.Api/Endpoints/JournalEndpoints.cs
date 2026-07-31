@@ -67,11 +67,8 @@ public static class JournalEndpoints
 
         // --- §4 guru — TeacherPlus ---
         journals.MapPost("/{id:guid}/comments", AddTeacherComment).RequireAuthorization(RbacPolicies.TeacherPlus);
-        // VOK-H4-E2: baca jurnal+komentar per placement utk halaman "bimbingan" guru (dan drawer
-        // detail siswa dashboard W3 — TeacherPlus mencakup TenantAdmin/DeptHead juga, jadi 1
-        // endpoint melayani keduanya). Lihat doc-comment JournalWithCommentsDto (Dtos.cs) utk gap
-        // yang mendasari kenapa endpoint ini baru (ListJournals lama terkunci StudentSelf).
-        journals.MapGet("/for-teacher/{placementId:guid}", ListJournalsForTeacher).RequireAuthorization(RbacPolicies.TeacherPlus);
+        // VOK-H4-E2: baca jurnal+komentar per placement utk halaman bimbingan/mentor/drawer detail siswa
+        journals.MapGet("/for-teacher/{placementId:guid}", ListJournalsForTeacher).RequireAuthorization();
 
         var competencies = app.MapGroup("/api/competencies").WithTags("Journals").AddEndpointFilter<ValidationFilter>();
         competencies.MapGet("/", ListCompetencies).RequireAuthorization(RbacPolicies.TeacherPlus);
@@ -301,6 +298,16 @@ public static class JournalEndpoints
 
         var photo = new JournalPhoto { Id = Guid.NewGuid(), TenantId = placement.TenantId, JournalEntryId = id, ObjectKey = req.ObjectKey, Status = PhotoStatus.Pending };
         db.JournalPhotos.Add(photo);
+        db.AuditLogs.Add(new AuditLog
+        {
+            Id = Guid.NewGuid(),
+            TenantId = placement.TenantId,
+            ActorUserId = tenant.UserId ?? Guid.Empty,
+            Action = "PhotoUploaded",
+            Entity = nameof(JournalPhoto),
+            EntityId = photo.Id.ToString(),
+            MetaJson = JsonSerializer.Serialize(new { photo.ObjectKey, JournalEntryId = id }),
+        });
         db.OutboxMessages.Add(new OutboxMessage
         {
             Id = Guid.NewGuid(),
@@ -612,7 +619,11 @@ public static class JournalEndpoints
             return Results.NotFound();
         }
 
-        if (!TeacherPlacementScope.CanAccess(role, tenant.UserId.Value, placement.TeacherId))
+        var canAccess = role == UserRole.IndustryMentor
+            ? placement.MentorUserId == tenant.UserId.Value
+            : TeacherPlacementScope.CanAccess(role, tenant.UserId.Value, placement.TeacherId);
+
+        if (!canAccess)
         {
             return Results.Forbid();
         }

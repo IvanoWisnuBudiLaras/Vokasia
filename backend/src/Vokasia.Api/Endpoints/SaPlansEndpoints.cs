@@ -29,6 +29,7 @@ public static class SaPlansEndpoints
 
         group.MapPost("/", CreatePlan);
         group.MapPut("/{id:guid}", UpdatePlan);
+        group.MapDelete("/{id:guid}", DeletePlan);
         group.MapGet("/", ListPlans);
         group.MapPost("/{planId:guid}/flags", SetFeatureFlag);
 
@@ -148,6 +149,28 @@ public static class SaPlansEndpoints
     {
         var plans = await db.Plans.AsNoTracking().OrderBy(p => p.PriceMonthly).Select(p => ToDto(p)).ToListAsync(ct);
         return Results.Ok(plans);
+    }
+
+    private static async Task<IResult> DeletePlan(Guid id, VokasiaDbContext db, CancellationToken ct)
+    {
+        var plan = await db.Plans.FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (plan is null)
+        {
+            return Results.NotFound();
+        }
+
+        var isUsedByTenants = await db.Tenants.AsNoTracking().AnyAsync(t => t.PlanId == id, ct);
+        if (isUsedByTenants)
+        {
+            return Results.Conflict(new { message = "Paket plan ini sedang digunakan oleh tenant aktif, tidak dapat dihapus." });
+        }
+
+        var flags = await db.FeatureFlags.Where(f => f.PlanId == id).ToListAsync(ct);
+        db.FeatureFlags.RemoveRange(flags);
+        db.Plans.Remove(plan);
+        await db.SaveChangesAsync(ct);
+
+        return Results.NoContent();
     }
 
     private static PlanDto ToDto(Plan p) => new(p.Id, p.Name, p.PriceMonthly, p.MaxStudents, p.MaxPlacements);

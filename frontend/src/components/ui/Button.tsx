@@ -1,7 +1,7 @@
 import { cn } from "@/lib/cn";
 import type { ButtonHTMLAttributes } from "react";
 
-type Variant = "primary" | "secondary" | "danger";
+type Variant = "primary" | "secondary" | "danger" | "danger-outline";
 type Size = "md" | "lg";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -14,6 +14,7 @@ const variantClass: Record<Variant, string> = {
   primary: "bg-primary text-primary-ink shadow-sm hover:bg-primary/90 active:bg-primary/80",
   secondary: "border border-border bg-surface-muted text-ink hover:bg-surface hover:text-primary active:bg-primary-muted",
   danger: "bg-status-red text-primary-ink shadow-sm hover:bg-status-red/90 active:bg-status-red/80",
+  "danger-outline": "border border-status-red/40 bg-surface-muted text-status-red hover:bg-status-red hover:text-white hover:border-status-red active:bg-status-red/90 transition-colors font-medium",
 };
 
 // lg = target sentuh utama mobile (NFR-UX-02, tombol "KIRIM JURNAL" / "APPROVE").

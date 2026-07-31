@@ -1,9 +1,10 @@
 import { cn } from "@/lib/cn";
 import { PageHeading } from "@/components/PageHeading";
-import { EmptyState, ErrorState, Icon, StatusBadge } from "@/components/ui";
+import { EmptyState, ErrorState, Icon } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
 import type { JournalDto, Paged } from "@/lib/apiTypes";
 import { JournalEntryStatus } from "@/lib/apiTypes";
+import { JournalHistoryList } from "./JournalHistoryList";
 
 export const dynamic = "force-dynamic";
 
@@ -14,39 +15,7 @@ const TABS: { key: string; label: string; status: number | null }[] = [
   { key: "rejected", label: "Ditolak", status: JournalEntryStatus.Rejected },
 ];
 
-function badgeFor(status: number) {
-  if (status === JournalEntryStatus.Approved) return <StatusBadge status="green" label="Disetujui" />;
-  if (status === JournalEntryStatus.Rejected) return <StatusBadge status="red" label="Ditolak" />;
-  return <StatusBadge status="amber" label="Menunggu" />;
-}
-
-function JournalHistoryItem({ journal }: { journal: JournalDto }) {
-  const date = new Date(journal.submittedAt).toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-
-  return (
-    <li className="flex flex-col gap-1.5 rounded-[var(--radius-md)] border border-border bg-surface p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-ink-muted">{date}</span>
-        {badgeFor(journal.status)}
-      </div>
-      <p className="line-clamp-3 text-sm text-ink">{journal.text}</p>
-      {journal.status === JournalEntryStatus.Rejected && journal.mentorNote && (
-        <p className="text-xs text-status-red">Alasan: {journal.mentorNote}</p>
-      )}
-      {journal.photos.length > 0 && (
-        <p className="inline-flex items-center gap-1 text-xs text-ink-muted">
-          <Icon name="image" size={16} /> {journal.photos.length} foto
-        </p>
-      )}
-    </li>
-  );
-}
-
-/** VOK-H3-E2 §1 student/history/page.tsx + JournalHistoryItem — riwayat berfilter status via tab. */
+/** VOK-H3-E2 §1 student/history/page.tsx — riwayat berfilter status via tab & berpaginasi. */
 export default async function StudentHistoryPage({
   searchParams,
 }: {
@@ -59,7 +28,7 @@ export default async function StudentHistoryPage({
   let loadError = false;
 
   try {
-    const query = activeTab.status !== null ? `?status=${activeTab.status}&pageSize=50` : "?pageSize=50";
+    const query = activeTab.status !== null ? `?status=${activeTab.status}&pageSize=200` : "?pageSize=200";
     const paged = await fetcher<Paged<JournalDto>>(`/journals${query}`);
     items = paged.items;
   } catch (err) {
@@ -100,13 +69,7 @@ export default async function StudentHistoryPage({
         />
       )}
 
-      {items.length > 0 && (
-        <ul className="flex flex-col gap-2">
-          {items.map((j) => (
-            <JournalHistoryItem key={j.id} journal={j} />
-          ))}
-        </ul>
-      )}
+      {items.length > 0 && <JournalHistoryList items={items} />}
     </div>
   );
 }

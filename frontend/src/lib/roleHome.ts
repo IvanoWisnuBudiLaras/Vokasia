@@ -1,21 +1,34 @@
 import type { Role } from "./session";
 
 /** VOK-H2-E2 §lib/roleHome.ts — satu pemetaan role→home. Dipakai proxy.ts (redirect role salah) & login. */
-const HOME_BY_ROLE: Partial<Record<Role, "/sa" | "/app" | "/mentor" | "/student">> = {
+const HOME_BY_ROLE: Record<string, "/sa" | "/app" | "/mentor" | "/student"> = {
   SuperAdmin: "/sa",
   TenantAdmin: "/app",
   DeptHead: "/app",
   Teacher: "/app",
   IndustryMentor: "/mentor",
   Student: "/student",
-  // ParentViewer sengaja TIDAK dipetakan — belum ada dashboard terautentikasi utk role ini;
-  // akses portofolio/sertifikat lewat link publik /p/[slug] & /verify/[code] (lihat lib/guard.ts).
+
+  superadmin: "/sa",
+  tenantadmin: "/app",
+  depthead: "/app",
+  teacher: "/app",
+  industrymentor: "/mentor",
+  student: "/student",
+
+  "0": "/sa",
+  "1": "/app",
+  "2": "/app",
+  "3": "/app",
+  "4": "/mentor",
+  "5": "/student",
 };
 
 /**
  * roleHome(role) → '/sa'|'/app'|'/mentor'|'/student' bila role py dashboard; '/login' bila
- * tidak (ParentViewer, atau role masa depan yg belum dipetakan) — fallback aman, bukan crash.
+ * tidak — fallback aman.
  */
-export function roleHome(role: Role): "/sa" | "/app" | "/mentor" | "/student" | "/login" {
-  return HOME_BY_ROLE[role] ?? "/login";
+export function roleHome(role: Role | string): "/sa" | "/app" | "/mentor" | "/student" | "/login" {
+  if (!role) return "/login";
+  return HOME_BY_ROLE[role] ?? HOME_BY_ROLE[String(role).toLowerCase()] ?? "/login";
 }

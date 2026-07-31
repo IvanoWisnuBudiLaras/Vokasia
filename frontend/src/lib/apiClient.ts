@@ -65,6 +65,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const data = text.length > 0 ? JSON.parse(text) : undefined;
 
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      window.location.href = "/login?error=unauthenticated";
+    }
     throw new ApiError(res.status, data, extractMessage(res.status, data));
   }
 
@@ -75,9 +78,7 @@ export const apiClient = {
   get: <T>(path: string): Promise<T> => request<T>(path, { method: "GET" }),
   post: <T>(path: string, body?: unknown): Promise<T> =>
     request<T>(path, { method: "POST", body: body !== undefined ? JSON.stringify(body) : undefined }),
-  // VOK-H6-E2: PUT belum pernah dipanggil client component manapun sebelum ticket ini (UpdatePlan/
-  // UpdateTenant backend memakai MapPut) — ditambah di sini (bukan dipaksa lewat post()) supaya
-  // method HTTP yang benar-benar dikirim cocok dgn yang backend harapkan.
   put: <T>(path: string, body?: unknown): Promise<T> =>
     request<T>(path, { method: "PUT", body: body !== undefined ? JSON.stringify(body) : undefined }),
+  delete: <T>(path: string): Promise<T> => request<T>(path, { method: "DELETE" }),
 };

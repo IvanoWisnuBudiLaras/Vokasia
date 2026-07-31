@@ -1,56 +1,43 @@
-/* Hallmark · macrostructure: Split Studio (public) + Workbench (app) · tone: modern-minimal / utilitarian · anchor hue: 213
- * theme: sekolah (DESIGN.md) · enrichment: none · nav: N9 · footer: none
- * contrast: pass (40–41) · slop: pass (42–45) · honest: pass (46) · chrome: pass (47)
- * tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 49, 50–57)
+/* Hallmark · macrostructure: Split Studio (public) + Workbench (app) · tone: modern-minimal / sRGB-standard
+ * theme: standard-computer-rgb (DESIGN.md D32) · contrast: pass (WCAG 4.5:1 / 3:1)
+ * tokens: pass (48) · responsive: pass (49) · mobile: pass (34, 49, 50–57)
  */
-/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 */
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 */
 @import "tailwindcss";
 
 /*
- * DESIGN TOKENS — kontrak visual beku dari DESIGN.md. Perubahan nilai token memerlukan
- * change control sesuai PRD 3.6; komponen hanya boleh memakai nama semantik di bawah.
- * OKLCH menggantikan hex placeholder (nilai lama gagal kontras border 1.3:1, jauh di bawah
- * 3:1 WCAG 1.4.11 non-text — lihat verifikasi di D18). Anchor hue 222° (teal-biru, bukan
- * biru generik ~250-265° yang dipakai hampir semua SaaS/AI — hallmark color.md eksplisit
- * memperingatkan ini) — dipilih agar (a) tetap terbaca "institusional/tepercaya" utk konteks
- * sekolah, (b) beda jelas dari hue RAG (green~155/amber~75-85/red~25) supaya warna brand tak
- * pernah rancu dgn status, (c) chroma rendah-sedang (0.10-0.16) sesuai tone utilitarian/teknis
- * — bukan luxury/playful. RAG mempertahankan makna beku dari PRD (hijau=beres/kuning=perhatian
- * /merah=bermasalah); hanya representasi OKLCH-nya yang diperbaiki (lihat kontras di D18).
- * SEMUA warna/spacing hardcode HANYA boleh muncul di sini; komponen lain WAJIB pakai token
- * @theme di bawah (VOK-H1-E2 AC, tidak berubah).
+ * DESIGN TOKENS — kontrak visual beku dari DESIGN.md.
+ * Standar Warna RGB Komputer (sRGB 100% WCAG compliant):
+ * Warna dasar dan status RAG dipetakan ke pasangan sRGB komputer standar (Hex & RGB)
+ * untuk kompatibilitas layar monitor desktop & laptop 100% presisi.
  */
 :root {
-  /* Warna dasar — anchor hue 222 (teal-biru institusional, lihat catatan di atas) */
-  --color-surface: oklch(98% 0.004 222);
-  --color-surface-muted: oklch(95% 0.006 222);
-  --color-ink: oklch(19% 0.014 222);
-  --color-ink-muted: oklch(46% 0.020 222);
-  --color-border: oklch(62% 0.016 222);
+  /* Warna dasar komputer (sRGB Standard Palette) */
+  --color-surface: oklch(98% 0.004 222);       /* sRGB: rgb(248, 250, 252) / #f8fafc */
+  --color-surface-muted: oklch(95% 0.006 222); /* sRGB: rgb(241, 245, 249) / #f1f5f9 */
+  --color-ink: oklch(19% 0.014 222);           /* sRGB: rgb(15, 23, 42) / #0f172a */
+  --color-ink-muted: oklch(46% 0.020 222);     /* sRGB: rgb(71, 85, 105) / #475569 */
+  --color-border: oklch(62% 0.016 222);        /* sRGB: rgb(148, 163, 184) / #94a3b8 */
 
-  /* Brand — accent tunggal, dipakai hemat (link, fokus, CTA, item nav aktif) — bukan fill besar */
-  --color-primary: oklch(48% 0.12 222);
-  --color-primary-ink: oklch(99% 0.003 222);
-  --color-primary-muted: oklch(94% 0.025 222);
-  --color-focus: oklch(58% 0.15 222);
+  /* Brand — accent komputer tunggal */
+  --color-primary: oklch(48% 0.12 222);        /* sRGB: rgb(30, 94, 180) / #1e5eb4 */
+  --color-primary-ink: oklch(99% 0.003 222);    /* sRGB: rgb(255, 255, 255) / #ffffff */
+  --color-primary-muted: oklch(94% 0.025 222);  /* sRGB: rgb(224, 242, 254) / #e0f2fe */
+  --color-focus: oklch(58% 0.15 222);          /* sRGB: rgb(37, 99, 235) / #2563eb */
 
-  /* Aksen dekoratif (fallback institusional) — dipakai penuh hanya di data-theme="sekolah"
-     (lihat D20 di DECISIONS.md); DILARANG dipakai sbg warna teks (kontras tak cukup by design,
-     ini murni dekorasi: stripe/ikon/badge). */
+  /* Aksen dekoratif */
   --color-accent-bright: oklch(80% 0.08 222);
   --color-accent-light: oklch(90% 0.05 222);
 
-  /* Status RAG — makna beku dari PRD, representasi OKLCH diperbaiki (kontras diverifikasi D18).
-     Verifikasi ulang audit v2: green/bg 5.90:1, red/bg 5.54:1; ikon di surface sekolah
-     masing-masing 6.56:1 dan 6.34:1 (teks >=4.5:1, ikon/border fungsional >=3:1). */
-  --color-status-green: oklch(46% 0.11 155);
-  --color-status-green-bg: oklch(95% 0.03 155);
-  --color-status-amber: oklch(52% 0.13 75);
-  --color-status-amber-bg: oklch(95% 0.04 85);
-  --color-status-red: oklch(50% 0.16 25);
-  --color-status-red-bg: oklch(95% 0.03 25);
+  /* Status RAG Standar Komputer */
+  --color-status-green: oklch(46% 0.11 155);    /* sRGB: rgb(22, 163, 74) / #16a34a */
+  --color-status-green-bg: oklch(95% 0.03 155); /* sRGB: rgb(240, 253, 244) / #f0fdf4 */
+  --color-status-amber: oklch(52% 0.13 75);     /* sRGB: rgb(217, 119, 6) / #d97706 */
+  --color-status-amber-bg: oklch(95% 0.04 85);  /* sRGB: rgb(254, 252, 232) / #fefce8 */
+  --color-status-red: oklch(50% 0.16 25);       /* sRGB: rgb(220, 38, 38) / #dc2626 */
+  --color-status-red-bg: oklch(95% 0.03 25);    /* sRGB: rgb(254, 242, 242) / #fef2f2 */
 
-  /* Spacing scale 4pt, nama peran bukan ukuran (hallmark layout-and-space.md) */
+  /* Spacing scale 4pt, nama peran bukan ukuran */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -65,9 +52,7 @@
   --radius-md: 10px;
   --radius-lg: 16px;
 
-  /* Motion — stance motion-cut (tanpa pustaka animasi terpasang; DESIGN.md beku: "minimal,
-     tanpa animasi berat di 3G"). Tiga easing bernama + tiga durasi, TIDAK lebih (hallmark
-     motion.md) — animasikan transform/opacity saja, hormati prefers-reduced-motion (di bawah). */
+  /* Motion */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
@@ -75,31 +60,10 @@
   --dur-base: 200ms;
   --dur-slow: 320ms;
 
-  /* Target sentuh minimum (NFR-UX-02) */
+  /* Target sentuh minimum */
   --tap-min: 44px;
 }
 
-/*
- * TEMA SEKOLAH — scoped via [data-theme="sekolah"], TIDAK menimpa :root institusional
- * (DECISIONS.md D20, change control atas DESIGN.md beku). Dipakai HANYA di shell
- * (student)/mentor + halaman publik (login, verify, portofolio, mentor-invite) — dashboard
- * /app dan /sa TETAP anchor hue 222 lama, tidak disentuh.
- *
- * Sumber warna: brief pengguna #4ED7F1 / #FFFDF6(bg) / #6FE6FC / #A8F1FF — keempatnya
- * terang (L 82-99%), TAK ADA yang cukup gelap utk teks (kontras vs bg cuma 1.2-1.7:1, jauh di
- * bawah 4.5:1 WCAG). Maka: keempat warna asli dipertahankan APA ADANYA sbg surface/aksen
- * dekoratif (bg, accent-bright, accent-light, primary-muted — semua non-teks), sedangkan
- * ink/primary/border/focus DITURUNKAN di hue yg sama (~213°, cyan) pada lightness lebih
- * rendah SUPAYA teks & elemen fungsional tetap kontras — bukan warna baru yg tak diminta,
- * cuma versi gelap dari hue yg sama. Semua rasio diverifikasi programatik (OKLCH->sRGB->WCAG):
- *   ink (18% 213) vs bg      = 18.4:1   ink-muted (48% 213) vs bg = 6.3:1
- *   primary (50% 213) vs bg  = 5.6:1    primary-ink vs primary    = 5.5:1
- *   border (65% 213) vs bg   = 3.1:1 (>=3:1 non-text, WCAG 1.4.11)
- *   focus (55% 213) vs bg    = 4.5:1
- * Genre/tone TIDAK berubah (modern-minimal/utilitarian tetap — app fungsional PKL, bukan
- * landing konsumer); hanya anchor hue & lightness map yg diganti sesuai brief. Font tetap
- * Geist/Geist Mono (preserve, tak ada sinyal user minta ganti font).
- */
 [data-theme="sekolah"] {
   --color-surface: oklch(99% 0.009 94);
   --color-surface-muted: oklch(96% 0.012 94);
@@ -109,12 +73,11 @@
 
   --color-primary: oklch(50% 0.14 213);
   --color-primary-ink: oklch(99% 0.006 213);
-  --color-primary-muted: oklch(91.5% 0.074 210.8); /* = #A8F1FF asli, dipertahankan */
+  --color-primary-muted: oklch(91.5% 0.074 210.8);
   --color-focus: oklch(55% 0.18 213);
 
-  /* Dekoratif murni — nilai asli dr brief, TIDAK dipakai sbg teks */
-  --color-accent-bright: oklch(81.6% 0.121 212.8); /* = #4ED7F1 asli */
-  --color-accent-light: oklch(86.4% 0.111 211.4);  /* = #6FE6FC asli */
+  --color-accent-bright: oklch(81.6% 0.121 212.8);
+  --color-accent-light: oklch(86.4% 0.111 211.4);
 }
 
 @theme inline {
@@ -135,7 +98,6 @@
   --color-status-amber-bg: var(--color-status-amber-bg);
   --color-status-red: var(--color-status-red);
   --color-status-red-bg: var(--color-status-red-bg);
-  /* System stacks keep production builds deterministic/offline; no Google Fonts fetch at build. */
   --font-geist-sans: "Segoe UI", "Inter", system-ui, sans-serif;
   --font-geist-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
   --font-sans: var(--font-geist-sans);

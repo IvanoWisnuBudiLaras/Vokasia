@@ -23,6 +23,7 @@ public static class NotificationEndpoints
         group.MapGet("/", ListMyNotifications).RequireAuthorization();
         group.MapPost("/{id:guid}/read", MarkRead).RequireAuthorization();
         group.MapPost("/read-all", MarkAllRead).RequireAuthorization();
+        group.MapPost("/test-email", SendTestEmail).AllowAnonymous();
 
         return app;
     }
@@ -93,4 +94,26 @@ public static class NotificationEndpoints
 
         return Results.Ok(new { Updated = unread.Count });
     }
+
+    private static async Task<IResult> SendTestEmail(
+        [FromBody] SendTestEmailRequest request,
+        Vokasia.Infrastructure.Email.IEmailSender emailSender,
+        CancellationToken ct)
+    {
+        var toEmail = string.IsNullOrWhiteSpace(request.ToEmail) ? "ivanowisnubudilaras2008@gmail.com" : request.ToEmail;
+        var (subject, html, text) = Vokasia.Infrastructure.Email.EmailTemplateRenderer.JournalReminder("Ivano Wisnu Budi Laras", DateOnly.FromDateTime(DateTime.UtcNow));
+
+        var msg = new Vokasia.Infrastructure.Email.EmailMessage(
+            ToEmail: toEmail,
+            TemplateId: "TestEmail",
+            Subject: $"[Vokasia Platform] {subject}",
+            Html: html,
+            Text: text,
+            IdempotencyKey: Guid.NewGuid());
+
+        var sent = await emailSender.SendAsync(msg, ct);
+        return Results.Ok(new { Success = sent, Message = $"Email berhasil diproses ke {toEmail}", Details = msg });
+    }
+
+    public record SendTestEmailRequest(string? ToEmail);
 }

@@ -147,6 +147,7 @@ services:
     environment:
       API_INTERNAL_URL: http://api:8080
       REDIS_URL: redis://redis:6379 # VOK-H2-E3: BFF session store (Next.js, bukan Redis__Connection milik .NET)
+      OIDC_BFF_CLIENT_SECRET: ${OIDC_BFF_CLIENT_SECRET:-dev-only-secret-change-me}
     depends_on:
       api: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -155,11 +156,21 @@ services:
     # Pakai `bun` sendiri (sudah ada di image ini) drpd nambah paket via apt-get (menjaga image
     # tetap "slim" sesuai maksud tag-nya) utk memanggil endpoint via fetch bawaan bun/Node.
     healthcheck:
-      test: ["CMD", "bun", "-e", "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "0.0.0.0:80:80"
+    volumes:
+      - ./deploy/edge/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      api: { condition: service_healthy }
+      frontend: { condition: service_healthy }
 
 volumes:
   pg_data:

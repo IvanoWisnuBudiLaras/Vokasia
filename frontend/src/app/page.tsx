@@ -1,5 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/session";
+import { roleHome } from "@/lib/roleHome";
 
 const primaryLink =
   "inline-flex h-[var(--tap-min)] items-center justify-center whitespace-nowrap rounded-[var(--radius-md)] bg-primary px-6 text-base font-medium text-primary-ink shadow-sm outline-none transition-[color,background-color,border-color] duration-[var(--dur-fast)] hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:translate-y-px";
@@ -7,8 +10,12 @@ const primaryLink =
 const secondaryLink =
   "inline-flex h-[var(--tap-min)] items-center justify-center whitespace-nowrap rounded-[var(--radius-md)] border border-border bg-surface px-5 text-base font-medium text-ink outline-none transition-[color,background-color,border-color] duration-[var(--dur-fast)] hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:translate-y-px";
 
-/** Landing publik ringan: menjelaskan tugas produk tanpa aset berat atau klaim hasil palsu. */
-export default function LandingPage() {
+/** Landing publik ringan: jika pengguna sudah login, alihkan otomatis ke dashboard perannya. */
+export default async function LandingPage() {
+  const session = await getSession();
+  if (session) {
+    redirect(roleHome(session.role));
+  }
   return (
     <main data-theme="sekolah" className="flex flex-1 bg-surface">
       <section className="mx-auto flex w-full max-w-5xl flex-col justify-center px-5 pb-14 pt-10 sm:px-8 sm:pb-20 sm:pt-14 lg:pb-24 lg:pt-16">

@@ -9,3 +9,14 @@ export { ErrorState } from "./ErrorState";
 export { OfflineBanner } from "./OfflineBanner";
 export { Icon } from "./Icon";
 export type { IconName, IconProps, IconSize } from "./Icon";
+export { TableExportToolbar } from "./TableExportToolbar";
+export type { ColumnDef, TableExportToolbarProps } from "./TableExportToolbar";
+export { Tooltip } from "./Tooltip";
+export type { TooltipProps } from "./Tooltip";
+export { Pagination } from "./Pagination";
+export type { PaginationProps } from "./Pagination";
+export { StudentPortfolioModal } from "./StudentPortfolioModal";
+export type { StudentPortfolioModalProps } from "./StudentPortfolioModal";
+export { ImportStudentsModal } from "./ImportStudentsModal";
+export type { ImportStudentsModalProps } from "./ImportStudentsModal";
+

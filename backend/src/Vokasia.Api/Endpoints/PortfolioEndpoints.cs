@@ -33,6 +33,8 @@ public static class PortfolioEndpoints
         group.MapPost("/publish", PublishPortfolio);
         group.MapPost("/unpublish", UnpublishPortfolio);
 
+        app.MapGet("/api/portfolio/student/{studentId:guid}", GetStudentPortfolioForStaff).RequireAuthorization(RbacPolicies.TenantMember);
+
         // Publik BY DESIGN (siapa saja bisa lihat portofolio yang di-publish siswa) - rate limit
         // "public" (pola sama VerifyCertificate/MagicLinkEndpoints.Validate).
         app.MapGet("/p/{slug}", GetPublicPortfolio).RequireRateLimiting(VokasiaRateLimiting.PublicPolicy);
@@ -333,5 +335,34 @@ public static class PortfolioEndpoints
         {
             throw new InvalidOperationException($"PublicPortfolioDto mengandung field sensitif yang dilarang NFR-SEC-05: {string.Join(", ", offending)}");
         }
+    }
+
+    private static async Task<IResult> GetStudentPortfolioForStaff(Guid studentId, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
+    {
+        var student = await db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == studentId, ct);
+        if (student is null)
+        {
+            return Results.NotFound();
+        }
+
+        var portfolio = await db.Portfolios.AsNoTracking().FirstOrDefaultAsync(p => p.StudentId == student.Id, ct);
+        var verifiedCompetencies = await GetVerifiedCompetenciesAsync(db, student.Id, ct);
+
+        var sampleIds = ParseSampleIds(portfolio?.SampleJournalIdsCsv);
+        var samples = sampleIds.Count == 0
+            ? []
+            : await db.JournalEntries.AsNoTracking()
+                .Where(je => sampleIds.Contains(je.Id))
+                .Select(je => new PortfolioJournalSampleDto(je.Id, je.Text, je.SubmittedAt))
+                .ToListAsync(ct);
+
+        var certificate = await (
+            from p in db.Placements.AsNoTracking()
+            where p.StudentId == student.Id
+            join cert in db.Certificates.AsNoTracking() on p.Id equals cert.PlacementId
+            select new PortfolioCertificateDto(cert.CertCode, cert.IssuedAt)
+            ).FirstOrDefaultAsync(ct);
+
+        return Results.Ok(new PortfolioDto(portfolio?.Headline, verifiedCompetencies, samples, certificate, portfolio?.IsPublished ?? false, portfolio?.Slug));
     }
 }

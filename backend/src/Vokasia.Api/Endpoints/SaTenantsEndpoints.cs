@@ -31,6 +31,9 @@ public static class SaTenantsEndpoints
         group.MapPost("/{id:guid}/deactivate", DeactivateTenant);
         group.MapGet("/{id:guid}/staff", ListTenantStaff); // VOK-H6-E3 §1: sumber pemilihan target StartImpersonation di UI SA.
 
+        app.MapGet("/sa/students", ListAllStudents).WithTags("SaTenants")
+            .RequireAuthorization(RbacPolicies.SaOnly);
+
         return app;
     }
 
@@ -274,6 +277,51 @@ public static class SaTenantsEndpoints
         await db.SaveChangesAsync(ct);
         await sessionRevoker.RevokeUserSessionsAsync(tenantUserIds, ct);
         return Results.NoContent();
+    }
+
+    private static async Task<IResult> ListAllStudents(
+        VokasiaDbContext db,
+        CancellationToken ct,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null)
+    {
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize < 1 ? 20 : pageSize > 200 ? 200 : pageSize;
+
+        var query = db.Students.IgnoreQueryFilters().AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var q = search.Trim().ToLower();
+            query = query.Where(s => s.FullName.ToLower().Contains(q) || (s.Nisn != null && s.Nisn.Contains(q)) || s.Classroom.ToLower().Contains(q));
+        }
+
+        var total = await query.CountAsync(ct);
+
+        var tenantList = await db.Tenants.AsNoTracking().Select(t => new { t.Id, t.SchoolName }).ToListAsync(ct);
+        var tenants = tenantList.GroupBy(t => t.Id).ToDictionary(g => g.Key, g => g.First().SchoolName);
+
+        var majorList = await db.Majors.IgnoreQueryFilters().AsNoTracking().Select(m => new { m.Id, m.Name }).ToListAsync(ct);
+        var majors = majorList.GroupBy(m => m.Id).ToDictionary(g => g.Key, g => g.First().Name);
+
+        var items = await query
+            .OrderBy(s => s.FullName)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        var dtos = items.Select(s => new SaStudentDto(
+            s.Id,
+            s.TenantId,
+            tenants.GetValueOrDefault(s.TenantId, "Unknown"),
+            s.FullName,
+            s.Nisn,
+            majors.GetValueOrDefault(s.MajorId, "-"),
+            s.Classroom
+        )).ToList();
+
+        return Results.Ok(new Paged<SaStudentDto>(dtos, page, pageSize, total));
     }
 
     private static TenantDto ToDto(Tenant t) => new(t.Id, t.SchoolName, t.Npsn, t.City, t.Address, t.PlanId, t.IsActive, t.CreatedAt);

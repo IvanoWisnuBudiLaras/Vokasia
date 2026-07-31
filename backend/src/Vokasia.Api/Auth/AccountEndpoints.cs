@@ -26,6 +26,8 @@ public static class AccountEndpoints
     {
         app.MapGet("/account/login", GetLoginForm);
         app.MapGet("/account/continue", ContinueToFrontend);
+        app.MapGet("/account/logout", GetLogout);
+        app.MapPost("/account/logout", GetLogout);
         // VOK-H3-E3 §3: policy "login" (5/mnt, partisi IP+email) - INI permukaan password sungguhan
         // (lihat doc-comment VokasiaRateLimiting utk kenapa bukan /connect/token).
         app.MapPost("/account/login", PostLogin)
@@ -539,30 +541,29 @@ public static class AccountEndpoints
         var form = await req.ReadFormAsync(ct);
         var email = form["email"].ToString();
         var password = form["password"].ToString();
-        var returnUrl = GetSafeReturnUrl(form["returnUrl"].ToString());
+        var returnUrl = GetSafeReturnUrl(System.Net.WebUtility.HtmlDecode(form["returnUrl"].ToString()));
 
         var user = await userManager.FindByEmailAsync(email);
         var passwordOk = user is not null && await userManager.CheckPasswordAsync(user, password);
+        Console.WriteLine($"[POST LOGIN DEBUG] Email={email}, UserFound={user != null}, PasswordOk={passwordOk}, IsActive={user?.IsActive}");
 
         if (user is null || !user.IsActive || !passwordOk)
         {
             const string reason =
                 "Email atau kata sandi salah. Periksa kembali lalu coba masuk.";
             var redirectUrl = $"/account/login?returnUrl={Uri.EscapeDataString(returnUrl)}&error={Uri.EscapeDataString(reason)}";
+            Console.WriteLine($"[POST LOGIN DEBUG] FAILED. Redirecting to {redirectUrl}");
             return SeeOther(redirectUrl);
         }
 
-        // Sign-in eksplisit di scheme "Cookies" (CookieAuthenticationDefaults.AuthenticationScheme)
-        // — SAMA PERSIS dgn yang dibaca AuthorizationController.Authorize() via
-        // HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme).
-        // TIDAK pakai SignInManager.PasswordSignInAsync: scheme default SignInManager
-        // (IdentityConstants.ApplicationScheme = "Identity.Application") TIDAK terdaftar di
-        // IdentitySetup.cs (proyek ini pakai AddIdentityCore, bukan AddIdentity, dan cuma
         // mendaftar 1 scheme cookie bernama "Cookies") — pakai SignInManager di sini akan
         // gagal runtime ("no authentication handler registered for Identity.Application").
-        var identity = new ClaimsIdentity(CookieAuthenticationDefaults.AuthenticationScheme);
-        identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())); // dibaca UserManager.GetUserAsync
-        identity.AddClaim(new Claim(ClaimTypes.Name, user.UserName ?? email));
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.Name, user.UserName ?? email)
+        };
+        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
 
         await req.HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
 
@@ -598,7 +599,29 @@ public static class AccountEndpoints
             frontendUrl = new Uri("http://localhost:3000");
         }
 
-        return Results.Redirect(frontendUrl.ToString());
+        var targetUrl = new Uri(frontendUrl, "/api/auth/login");
+        return Results.Redirect(targetUrl.ToString());
+    }
+
+    private static async Task<IResult> GetLogout(
+        HttpContext context,
+        IConfiguration configuration)
+    {
+        await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+        var configuredUrl =
+            configuration["Frontend:PublicUrl"] ??
+            configuration["NEXT_PUBLIC_APP_URL"] ??
+            "http://localhost:3000";
+        if (!Uri.TryCreate(configuredUrl, UriKind.Absolute, out var frontendUrl) ||
+            (frontendUrl.Scheme != Uri.UriSchemeHttp &&
+             frontendUrl.Scheme != Uri.UriSchemeHttps))
+        {
+            frontendUrl = new Uri("http://localhost:3000");
+        }
+
+        var targetUrl = new Uri(frontendUrl, "/login");
+        return Results.Redirect(targetUrl.ToString());
     }
 
     /// <summary>
@@ -610,15 +633,5 @@ public static class AccountEndpoints
     /// di client mana pun (wajib GET ke Location, titik) — pas persis utk "form login selesai,
     /// lanjut ke halaman berikutnya".
     /// </summary>
-    private static IResult SeeOther(string location) => new SeeOtherResult(location);
-
-    private sealed class SeeOtherResult(string location) : IResult
-    {
-        public Task ExecuteAsync(HttpContext httpContext)
-        {
-            httpContext.Response.StatusCode = StatusCodes.Status303SeeOther;
-            httpContext.Response.Headers.Location = location;
-            return Task.CompletedTask;
-        }
-    }
+    private static IResult SeeOther(string location) => Results.Redirect(location);
 }

@@ -20,6 +20,16 @@ export interface PeriodSummary {
   status: "Draft" | "Active" | "Assessment" | "Closed";
 }
 
+export interface SaStudentDto {
+  id: string;
+  tenantId: string;
+  schoolName: string;
+  fullName: string;
+  nisn: string | null;
+  majorName: string;
+  classroom: string;
+}
+
 /**
  * VOK-H3-E2 — DTO jurnal (cermin Vokasia.Api/Endpoints/Dtos.cs enum-terkait). PENTING: backend
  * TIDAK mengonfigurasi JsonStringEnumConverter di mana pun (dikonfirmasi grep Program.cs/

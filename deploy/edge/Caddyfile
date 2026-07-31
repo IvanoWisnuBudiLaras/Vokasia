@@ -11,27 +11,15 @@
 # dengan domainmu dan HAPUS `tls internal` agar Caddy memakai ACME (Let's Encrypt) otomatis.
 
 {
-	# Jangan paksa redirect otomatis http->https saat memakai cert internal untuk localhost.
-	auto_https disable_redirects
+	auto_https off
 }
 
-{$EDGE_PUBLIC_HOST:localhost} {
-	# TLS: CA internal Caddy (self-signed) untuk localhost/staging. Browser akan memperingatkan
-	# sertifikat kecuali root CA Caddy dipercaya (`docker exec vokasia-caddy-1 caddy trust`).
-	tls internal
-
-	# --- Endpoint authorization-server (OpenIddict) → API ---
-	# HANYA path yang benar-benar disentuh BROWSER selama login hidup di sini. Sinkronkan daftar
-	# ini dengan endpoint OIDC server bila menambah alur baru.
+:80 {
 	@oidc path /connect/* /account/* /.well-known/openid-configuration /.well-known/oauth-authorization-server
 	handle @oidc {
 		reverse_proxy api:8080
 	}
 
-	# --- Selebihnya (halaman Next.js, BFF /api/auth/*, /api/proxy/*, aset statis) → frontend ---
-	# Endpoint REST backend (/api/journals, /sa/*, dst.) TIDAK dipetakan ke sini secara sengaja:
-	# browser tak pernah menyentuhnya langsung — BFF Next.js yang memanggilnya server-side lewat
-	# jaringan internal (API_INTERNAL_URL=http://api:8080).
 	handle {
 		reverse_proxy frontend:3000
 	}

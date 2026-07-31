@@ -9,6 +9,7 @@ const NAV: WorkspaceNavItem[] = [
   { href: "/sa", label: "Ringkasan", icon: "layout-dashboard" },
   { href: "/sa/tenants", label: "Tenant", icon: "building-2" },
   { href: "/sa/dudi", label: "DUDI", icon: "briefcase-business" },
+  { href: "/sa/students", label: "Siswa", icon: "graduation-cap" },
   { href: "/sa/plans", label: "Paket", icon: "package" },
   { href: "/sa/invoices", label: "Invoice", icon: "receipt" },
   { href: "/sa/audit", label: "Audit", icon: "list-checks" },

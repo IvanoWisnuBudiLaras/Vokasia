@@ -43,7 +43,8 @@ export async function fetcher<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   const apiBase = process.env.API_INTERNAL_URL ?? "http://localhost:5000";
-  const url = new URL(`/api${path}`, apiBase);
+  const targetPath = path.startsWith("/sa") || path.startsWith("/api") ? path : `/api${path}`;
+  const url = new URL(targetPath, apiBase);
 
   const doFetch = (accessToken: string) =>
     fetch(url, {
