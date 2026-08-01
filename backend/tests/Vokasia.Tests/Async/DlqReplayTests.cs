@@ -36,6 +36,7 @@ public class DlqReplayTests(AsyncTestFixture fixture)
     [Fact]
     public async Task ReplayFromDeadLetterQueue_AfterFixingCause_MessageIsProcessedSuccessfully()
     {
+        if (!fixture.IsDockerAvailable) return;
         var poisonId = Guid.NewGuid();
         PoisonTestConsumer.ShouldThrowFor[poisonId] = true;
 

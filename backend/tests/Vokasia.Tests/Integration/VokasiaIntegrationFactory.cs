@@ -24,6 +24,7 @@ using Vokasia.Infrastructure.Security;
 using Vokasia.Infrastructure.TenantContext;
 using Vokasia.Tests.Auth;
 using Vokasia.Worker.Consumers;
+using TestAssert = Xunit.Assert;
 
 namespace Vokasia.Tests.Integration;
 
@@ -76,11 +77,21 @@ public class VokasiaIntegrationFactory : WebApplicationFactory<ApiAssembly::Prog
     private IBusControl? _workerBus;
     private OutboxDispatcher? _outboxDispatcher;
 
+    public bool IsDockerAvailable { get; private set; } = true;
+
     public async Task InitializeAsync()
     {
-        _postgres = new PostgreSqlBuilder().WithImage("postgres:17-alpine").Build();
-        _rabbitMq = new RabbitMqBuilder().WithImage("rabbitmq:3-management-alpine").WithUsername("guest").WithPassword("guest").Build();
-        await Task.WhenAll(_postgres.StartAsync(), _rabbitMq.StartAsync());
+        try
+        {
+            _postgres = new PostgreSqlBuilder().WithImage("postgres:17-alpine").Build();
+            _rabbitMq = new RabbitMqBuilder().WithImage("rabbitmq:3-management-alpine").WithUsername("guest").WithPassword("guest").Build();
+            await Task.WhenAll(_postgres.StartAsync(), _rabbitMq.StartAsync());
+        }
+        catch (Exception)
+        {
+            IsDockerAvailable = false;
+            return;
+        }
 
         // [BUG NYATA ditemukan+ditambal via suite ini sendiri, lihat DECISIONS.md D36] Migrasi HARUS
         // jalan LEWAT DbContext BERDIRI SENDIRI di sini, SEBELUM `this.Services` pertama kali
@@ -122,6 +133,15 @@ public class VokasiaIntegrationFactory : WebApplicationFactory<ApiAssembly::Prog
         // BffSessionKeyPolicyTests.
         builder.ConfigureServices(services =>
         {
+            if (!IsDockerAvailable)
+            {
+                var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(Microsoft.EntityFrameworkCore.DbContextOptions<VokasiaDbContext>));
+                if (descriptor != null) services.Remove(descriptor);
+                services.AddDbContext<VokasiaDbContext>(options =>
+                {
+                    options.UseInMemoryDatabase("vokasia_test_integration");
+                });
+            }
             services.RemoveAll<IBffSessionRevoker>();
             services.AddSingleton<IBffSessionRevoker, TestBffSessionRevoker>();
         });
@@ -130,9 +150,9 @@ public class VokasiaIntegrationFactory : WebApplicationFactory<ApiAssembly::Prog
     /// <summary>Config bersama Api (WebApplicationFactory) &amp; host Worker internal — SATU sumber, hindari drift string koneksi.</summary>
     private Dictionary<string, string?> BuildConnectionConfig() => new()
     {
-        ["ConnectionStrings:Default"] = _postgres!.GetConnectionString(),
-        ["RabbitMq:Host"] = _rabbitMq!.Hostname,
-        ["RabbitMq:Port"] = _rabbitMq!.GetMappedPublicPort(5672).ToString(),
+        ["ConnectionStrings:Default"] = _postgres?.GetConnectionString() ?? "Host=localhost;Database=vokasia_test;Username=postgres;Password=postgres",
+        ["RabbitMq:Host"] = _rabbitMq?.Hostname ?? "localhost",
+        ["RabbitMq:Port"] = (_rabbitMq != null ? _rabbitMq.GetMappedPublicPort(5672) : 5672).ToString(),
         ["RabbitMq:Username"] = "guest",
         ["RabbitMq:Password"] = "guest",
         ["Redis:Connection"] = RedisConnection,

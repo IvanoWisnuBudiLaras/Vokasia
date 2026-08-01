@@ -56,6 +56,9 @@ function readPublishedSlug(body: ArrayBuffer): string | null {
 }
 
 async function forward(upstream: Response): Promise<NextResponse> {
+  if (upstream.status === 204 || upstream.status === 205 || upstream.status === 304) {
+    return new NextResponse(null, { status: upstream.status });
+  }
   const body = await upstream.arrayBuffer();
   return new NextResponse(body, {
     status: upstream.status,
@@ -211,6 +214,10 @@ async function handle(req: NextRequest, ctx: RouteContext): Promise<NextResponse
         );
       }
     }
+  }
+
+  if (upstream.status === 204 || upstream.status === 205 || upstream.status === 304) {
+    return new NextResponse(null, { status: upstream.status });
   }
 
   return new NextResponse(outBody, {

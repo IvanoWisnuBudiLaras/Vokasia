@@ -18,10 +18,11 @@ function decodeJwtPayload(jwt: string): Record<string, unknown> {
   return JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8"));
 }
 
-function cookieOpts(maxAgeSeconds: number) {
+function cookieOpts(maxAgeSeconds: number, appUrl: string) {
+  const isSecure = process.env.NODE_ENV === "production" && appUrl.startsWith("https://");
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecure,
     sameSite: "lax" as const,
     path: "/",
     maxAge: maxAgeSeconds,
@@ -39,11 +40,13 @@ export async function GET(req: Request) {
   const apiBase = process.env.API_INTERNAL_URL ?? "http://localhost:5000";
 
   if (oauthError || !code || !state) {
+    console.warn(`[BFF Callback] OAuth error or missing params: error=${oauthError}, code=${!!code}, state=${!!state}`);
     return NextResponse.redirect(new URL("/login?error=access_denied", appUrl));
   }
 
   const pkceRaw = await consumePkce(state);
   if (!pkceRaw) {
+    console.warn(`[BFF Callback] PKCE state consume failed or expired for state=${state}`);
     // state tak dikenal/kedaluwarsa/sudah dipakai -> tolak (anti CSRF & anti replay).
     return NextResponse.redirect(new URL("/login?error=unauthenticated", appUrl));
   }
@@ -64,6 +67,8 @@ export async function GET(req: Request) {
   });
 
   if (!tokenRes.ok) {
+    const errorText = await tokenRes.text().catch(() => "");
+    console.warn(`[BFF Callback] Token exchange failed with status ${tokenRes.status}: ${errorText}`);
     return NextResponse.redirect(new URL("/login?error=access_denied", appUrl));
   }
 
@@ -87,9 +92,9 @@ export async function GET(req: Request) {
   const res = NextResponse.redirect(new URL(dest === "/login" ? "/" : dest, appUrl));
 
   const maxAge = 60 * 60 * 24 * 14; // 14 hari, cermin refresh token lifetime.
-  res.cookies.set(SESS_COOKIE_NAME, encodeSessCookie(sessionId), cookieOpts(maxAge));
+  res.cookies.set(SESS_COOKIE_NAME, encodeSessCookie(sessionId), cookieOpts(maxAge, appUrl));
   // Cookie "lite" (VOK-H2-E2 lib/session.ts) — role/tenantId dibaca proxy.ts, TANPA token.
-  res.cookies.set(SESSION_COOKIE, await encodeSessionCookie(user), cookieOpts(maxAge));
+  res.cookies.set(SESSION_COOKIE, await encodeSessionCookie(user), cookieOpts(maxAge, appUrl));
 
   return res;
 }

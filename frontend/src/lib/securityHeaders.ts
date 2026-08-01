@@ -24,7 +24,7 @@ export function buildSecurityHeaders(isProduction: boolean): SecurityHeader[] {
     "manifest-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    `form-action 'self'${isProduction ? "" : " http://localhost:5000"}`,
     "frame-ancestors 'none'",
   ].join("; ");
 

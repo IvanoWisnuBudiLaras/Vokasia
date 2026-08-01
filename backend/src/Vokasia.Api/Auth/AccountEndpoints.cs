@@ -26,8 +26,8 @@ public static class AccountEndpoints
     {
         app.MapGet("/account/login", GetLoginForm);
         app.MapGet("/account/continue", ContinueToFrontend);
-        app.MapGet("/account/logout", GetLogout);
-        app.MapPost("/account/logout", GetLogout);
+        app.MapGet("/account/logout", GetLogout).DisableAntiforgery();
+        app.MapPost("/account/logout", GetLogout).DisableAntiforgery();
         // VOK-H3-E3 §3: policy "login" (5/mnt, partisi IP+email) - INI permukaan password sungguhan
         // (lihat doc-comment VokasiaRateLimiting utk kenapa bukan /connect/token).
         app.MapPost("/account/login", PostLogin)
@@ -41,8 +41,17 @@ public static class AccountEndpoints
         [FromQuery] string? returnUrl,
         [FromQuery] string? error)
     {
-        var safeReturnUrl = System.Net.WebUtility.HtmlEncode(
-            GetSafeReturnUrl(returnUrl));
+        var rawReturnUrl = GetSafeReturnUrl(returnUrl);
+        if (context.User.Identity?.IsAuthenticated == true)
+        {
+            if (rawReturnUrl == SafeFallbackReturnUrl)
+            {
+                var config = context.RequestServices.GetRequiredService<IConfiguration>();
+                return ContinueToFrontend(config);
+            }
+            return SeeOther(rawReturnUrl);
+        }
+        var safeReturnUrl = System.Net.WebUtility.HtmlEncode(rawReturnUrl);
         var cspNonce = System.Net.WebUtility.HtmlEncode(
             SecurityHeadersMiddleware.GetCspNonce(context));
         var hasError = !string.IsNullOrWhiteSpace(error);
@@ -567,6 +576,12 @@ public static class AccountEndpoints
 
         await req.HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
 
+        if (returnUrl == SafeFallbackReturnUrl)
+        {
+            var config = req.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
+            return ContinueToFrontend(config);
+        }
+
         return SeeOther(returnUrl);
     }
 
@@ -600,7 +615,7 @@ public static class AccountEndpoints
         }
 
         var targetUrl = new Uri(frontendUrl, "/api/auth/login");
-        return Results.Redirect(targetUrl.ToString());
+        return SeeOther(targetUrl.ToString());
     }
 
     private static async Task<IResult> GetLogout(
@@ -608,6 +623,11 @@ public static class AccountEndpoints
         IConfiguration configuration)
     {
         await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        var cookieOpts = new CookieOptions { Path = "/", HttpOnly = true, SameSite = SameSiteMode.Lax };
+        context.Response.Cookies.Delete(CookieAuthenticationDefaults.AuthenticationScheme, cookieOpts);
+        context.Response.Cookies.Delete(".AspNetCore.Cookies", cookieOpts);
+        context.Response.Cookies.Delete(".AspNetCore.Identity.Application", cookieOpts);
+        context.Response.Cookies.Delete("Cookies", cookieOpts);
 
         var configuredUrl =
             configuration["Frontend:PublicUrl"] ??
@@ -621,7 +641,7 @@ public static class AccountEndpoints
         }
 
         var targetUrl = new Uri(frontendUrl, "/login");
-        return Results.Redirect(targetUrl.ToString());
+        return SeeOther(targetUrl.ToString());
     }
 
     /// <summary>
@@ -633,5 +653,15 @@ public static class AccountEndpoints
     /// di client mana pun (wajib GET ke Location, titik) — pas persis utk "form login selesai,
     /// lanjut ke halaman berikutnya".
     /// </summary>
-    private static IResult SeeOther(string location) => Results.Redirect(location);
+    private static IResult SeeOther(string location) => new SeeOtherResult(location);
+
+    private sealed class SeeOtherResult(string location) : IResult
+    {
+        public Task ExecuteAsync(HttpContext httpContext)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status303SeeOther;
+            httpContext.Response.Headers.Location = location;
+            return Task.CompletedTask;
+        }
+    }
 }

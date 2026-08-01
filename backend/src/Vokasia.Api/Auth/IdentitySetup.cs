@@ -49,8 +49,10 @@ public static class IdentitySetup
             .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
             {
                 options.LoginPath = "/account/login"; // form login sederhana H1; UI penuh H2-E2.
+                options.LogoutPath = "/account/logout";
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SameSite = SameSiteMode.Lax;
+                options.Cookie.Path = "/";
             });
 
         return services;

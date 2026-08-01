@@ -87,11 +87,24 @@ public static class VokasiaRateLimiting
                 {
                     retryAfterSeconds = (int)Math.Ceiling(retryAfter.TotalSeconds);
                 }
+                if (retryAfterSeconds <= 0) retryAfterSeconds = 60;
 
                 context.HttpContext.Response.Headers.RetryAfter = retryAfterSeconds.ToString();
-                await context.HttpContext.Response.WriteAsJsonAsync(
-                    new { code = "rate-limit-exceeded", message = "Terlalu banyak percobaan. Coba lagi nanti." },
-                    ct);
+
+                var acceptHeader = context.HttpContext.Request.Headers.Accept.ToString();
+                var isHtmlRequest = acceptHeader.Contains("text/html", StringComparison.OrdinalIgnoreCase);
+
+                if (isHtmlRequest)
+                {
+                    context.HttpContext.Response.ContentType = "text/html; charset=utf-8";
+                    await context.HttpContext.Response.WriteAsync(RenderRateLimitHtml(retryAfterSeconds), ct);
+                }
+                else
+                {
+                    await context.HttpContext.Response.WriteAsJsonAsync(
+                        new { code = "rate-limit-exceeded", message = "Terlalu banyak percobaan. Coba lagi nanti." },
+                        ct);
+                }
             };
 
             options.AddPolicy(LoginPolicy, httpContext =>
@@ -131,5 +144,146 @@ public static class VokasiaRateLimiting
         });
 
         return services;
+    }
+
+    private static string RenderRateLimitHtml(int retryAfterSeconds)
+    {
+        return $$"""
+            <!doctype html>
+            <html lang="id">
+            <head>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+              <meta name="color-scheme" content="light" />
+              <title>Akses Dibatasi — Vokasia</title>
+              <style>
+                :root {
+                  --color-surface: oklch(99% 0.009 94);
+                  --color-surface-muted: oklch(96% 0.012 94);
+                  --color-ink: oklch(18% 0.03 213);
+                  --color-ink-muted: oklch(48% 0.03 213);
+                  --color-border: oklch(65% 0.06 213);
+                  --color-primary: oklch(50% 0.14 213);
+                  --color-primary-hover: oklch(45% 0.14 213);
+                  --color-primary-ink: oklch(99% 0.006 213);
+                  --color-status-red: oklch(50% 0.16 25);
+                  --color-status-red-bg: oklch(95% 0.03 25);
+                  --font-display: "Geist", "Segoe UI", sans-serif;
+                  --font-body: "Geist", "Segoe UI", sans-serif;
+                  --radius-lg: 16px;
+                  --radius-md: 10px;
+                  --tap-min: 44px;
+                }
+                * { box-sizing: border-box; }
+                body {
+                  margin: 0;
+                  padding: 20px;
+                  font-family: var(--font-body);
+                  background: var(--color-surface-muted);
+                  color: var(--color-ink);
+                  display: flex;
+                  min-height: 100vh;
+                  align-items: center;
+                  justify-content: center;
+                }
+                .card {
+                  background: var(--color-surface);
+                  border: 1px solid var(--color-border);
+                  border-radius: var(--radius-lg);
+                  padding: 32px;
+                  max-width: 440px;
+                  width: 100%;
+                  box-shadow: 0 4px 12px oklch(18% 0.03 213 / 0.08);
+                  text-align: center;
+                }
+                .icon-wrapper {
+                  display: inline-flex;
+                  align-items: center;
+                  justify-content: center;
+                  width: 56px;
+                  height: 56px;
+                  border-radius: 50%;
+                  background: var(--color-status-red-bg);
+                  color: var(--color-status-red);
+                  margin-bottom: 20px;
+                  font-size: 28px;
+                }
+                h1 { font-size: 22px; font-weight: 700; margin: 0 0 10px 0; color: var(--color-ink); }
+                p { font-size: 14px; color: var(--color-ink-muted); line-height: 1.6; margin: 0 0 20px 0; }
+                .timer-box {
+                  background: var(--color-status-red-bg);
+                  border: 1px solid oklch(50% 0.16 25 / 0.3);
+                  border-radius: var(--radius-md);
+                  padding: 16px;
+                  margin-bottom: 24px;
+                }
+                .timer-val {
+                  font-size: 36px;
+                  font-weight: 800;
+                  color: var(--color-status-red);
+                  font-family: monospace;
+                }
+                .timer-label {
+                  font-size: 12px;
+                  font-weight: 600;
+                  color: var(--color-status-red);
+                  margin-top: 4px;
+                  text-transform: uppercase;
+                  letter-spacing: 0.05em;
+                }
+                .btn {
+                  display: inline-flex;
+                  min-height: var(--tap-min);
+                  width: 100%;
+                  align-items: center;
+                  justify-content: center;
+                  background: var(--color-primary);
+                  color: var(--color-primary-ink);
+                  border-radius: var(--radius-md);
+                  font-weight: 600;
+                  text-decoration: none;
+                  border: none;
+                  font-size: 15px;
+                  transition: background 120ms ease;
+                }
+                .btn:hover { background: var(--color-primary-hover); }
+                .btn[disabled] { opacity: 0.5; pointer-events: none; }
+              </style>
+            </head>
+            <body data-theme="sekolah">
+              <main class="card">
+                <div class="icon-wrapper">⚠️</div>
+                <h1>Akses Dibatasi Sementara</h1>
+                <p>Demi keamanan sistem (Design for Failure Rate Limiting), percobaan masuk dibatasi. Silakan tunggu hingga hitungan mundur selesai sebelum mencoba kembali.</p>
+
+                <div class="timer-box">
+                  <div class="timer-val" id="countdown">{{retryAfterSeconds}}s</div>
+                  <div class="timer-label" id="status-label">Menunggu Pemulihan Akses</div>
+                </div>
+
+                <a href="/account/login" id="retry-btn" class="btn" disabled>Coba Masuk Kembali</a>
+              </main>
+              <script>
+                (() => {
+                  let seconds = {{retryAfterSeconds}};
+                  const cd = document.getElementById("countdown");
+                  const label = document.getElementById("status-label");
+                  const btn = document.getElementById("retry-btn");
+                  const timer = setInterval(() => {
+                    seconds--;
+                    if (seconds <= 0) {
+                      clearInterval(timer);
+                      if (cd) cd.textContent = "0s";
+                      if (label) label.textContent = "Akses Siap Digunakan";
+                      if (btn) btn.removeAttribute("disabled");
+                    } else {
+                      if (cd) cd.textContent = seconds + "s";
+                    }
+                  }, 1000);
+                })();
+              </script>
+            </body>
+            </html>
+            """;
     }
 }

@@ -10,9 +10,9 @@ public class UpdatePortfolioValidator : AbstractValidator<UpdatePortfolioRequest
     {
         RuleFor(x => x.Headline).MaximumLength(120).WithMessage("Headline maksimal 120 karakter.");
         RuleFor(x => x.SampleJournalIds)
-            .Must(ids => ids is { Count: <= 6 })
+            .Must(ids => ids == null || ids.Count <= 6)
             .WithMessage("Maksimal 6 sampel jurnal.")
-            .Must(ids => ids is null || ids.Distinct().Count() == ids.Count)
+            .Must(ids => ids == null || ids.Distinct().Count() == ids.Count)
             .WithMessage("SampleJournalIds tidak boleh berisi duplikat.");
     }
 }

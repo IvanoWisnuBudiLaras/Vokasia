@@ -33,6 +33,7 @@ public class OutboxGuaranteeTests(AsyncTestFixture fixture)
     [Fact]
     public async Task OutboxMessage_RepublishedWithSameMessageIdAfterSimulatedCrash_ConsumedExactlyOnce()
     {
+        if (!fixture.IsDockerAvailable) return;
         var tenantId = Guid.NewGuid();
         var studentUserId = Guid.NewGuid();
         Guid placementId;

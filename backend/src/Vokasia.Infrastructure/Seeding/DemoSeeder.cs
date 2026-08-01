@@ -246,9 +246,8 @@ public static class DemoSeeder
                     MajorId = faker.PickRandom(majors).Id,
                     Classroom = faker.PickRandom("XII TKJ 1", "XII RPL 1", "XII AKL 1"),
                 };
-                students.Add(student);
-
-                await CreateDemoUserAsync(userManager, tenant.Id, stEmail, stName, UserRole.Student, ct);
+                var stUser = await CreateDemoUserAsync(userManager, tenant.Id, stEmail, stName, UserRole.Student, ct);
+                student.UserId = stUser.Id;
             }
             db.Students.AddRange(students);
             await db.SaveChangesAsync(ct);

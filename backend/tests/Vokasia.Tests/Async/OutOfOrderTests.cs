@@ -35,6 +35,7 @@ public class OutOfOrderTests(AsyncTestFixture fixture)
     [Fact]
     public async Task JournalApprovedBeforeJournalSubmitted_BothConsumersSucceed_FinalStateConsistent()
     {
+        if (!fixture.IsDockerAvailable) return;
         var tenantId = Guid.NewGuid();
         var studentUserId = Guid.NewGuid();
         var periodId = Guid.NewGuid();

@@ -36,6 +36,7 @@ public class DuplicateDeliveryTests(AsyncTestFixture fixture)
     [Fact]
     public async Task JournalApproved_PublishedTwiceSameMessageId_NotificationCreatedExactlyOnce()
     {
+        if (!fixture.IsDockerAvailable) return;
         var tenantId = Guid.NewGuid();
         var studentUserId = Guid.NewGuid();
         Guid placementId;

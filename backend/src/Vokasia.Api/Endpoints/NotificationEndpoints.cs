@@ -100,20 +100,41 @@ public static class NotificationEndpoints
         Vokasia.Infrastructure.Email.IEmailSender emailSender,
         CancellationToken ct)
     {
-        var toEmail = string.IsNullOrWhiteSpace(request.ToEmail) ? "ivanowisnubudilaras2008@gmail.com" : request.ToEmail;
-        var (subject, html, text) = Vokasia.Infrastructure.Email.EmailTemplateRenderer.JournalReminder("Ivano Wisnu Budi Laras", DateOnly.FromDateTime(DateTime.UtcNow));
+        var type = (request.Type ?? "reminder").ToLowerInvariant();
+        var toEmail = string.IsNullOrWhiteSpace(request.ToEmail)
+            ? (type is "ghosting" or "alert" or "guru" ? "masteralvano@gmail.com" : "mr.alvano11@gmail.com")
+            : request.ToEmail;
+
+        var (subject, html, text) = type switch
+        {
+            "magic-link" or "mentor" or "invite" =>
+                Vokasia.Infrastructure.Email.EmailTemplateRenderer.MentorInvite(
+                    "Ivano Wisnu Budi Laras",
+                    "PT Telkom Indonesia (Persero) Tbk",
+                    DateTimeOffset.UtcNow.AddDays(7)),
+            "ghosting" or "alert" or "guru" =>
+                Vokasia.Infrastructure.Email.EmailTemplateRenderer.GhostingAlert(
+                    "Ivano Wisnu Budi Laras",
+                    "PT Telkom Indonesia (Persero) Tbk",
+                    3,
+                    "http://localhost:3000/app/bimbingan"),
+            _ =>
+                Vokasia.Infrastructure.Email.EmailTemplateRenderer.JournalReminder(
+                    "Ivano Wisnu Budi Laras",
+                    DateOnly.FromDateTime(DateTime.UtcNow))
+        };
 
         var msg = new Vokasia.Infrastructure.Email.EmailMessage(
             ToEmail: toEmail,
-            TemplateId: "TestEmail",
+            TemplateId: type,
             Subject: $"[Vokasia Platform] {subject}",
             Html: html,
             Text: text,
             IdempotencyKey: Guid.NewGuid());
 
         var sent = await emailSender.SendAsync(msg, ct);
-        return Results.Ok(new { Success = sent, Message = $"Email berhasil diproses ke {toEmail}", Details = msg });
+        return Results.Ok(new { Success = sent, Type = type, TargetEmail = toEmail, Subject = subject, Details = msg });
     }
 
-    public record SendTestEmailRequest(string? ToEmail);
+    public record SendTestEmailRequest(string? ToEmail, string? Type);
 }

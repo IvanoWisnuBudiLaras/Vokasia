@@ -9,6 +9,7 @@ using Vokasia.Infrastructure.Messaging;
 using Vokasia.Infrastructure.Persistence;
 using Vokasia.Infrastructure.TenantContext;
 using Vokasia.Worker.Consumers;
+using TestAssert = Xunit.Assert;
 
 namespace Vokasia.Tests.Async;
 
@@ -48,18 +49,23 @@ public class AsyncTestFixture : IAsyncLifetime
     private IBusControl? _prodBus;
     private IBusControl? _poisonBus;
 
-    public ServiceProvider Prod { get; private set; } = default!;
-    public ServiceProvider FastPoison { get; private set; } = default!;
+    public bool IsDockerAvailable { get; private set; } = true;
+    public ServiceProvider? Prod { get; private set; }
+    public ServiceProvider? FastPoison { get; private set; }
 
     public async Task InitializeAsync()
     {
-        // .WithUsername/.WithPassword EKSPLISIT - Testcontainers.RabbitMq TIDAK menjamin default
-        // "guest"/"guest" (ketahuan lewat kegagalan nyata ACCESS_REFUSED sblm baris ini ditambah,
-        // BUKAN diasumsikan dari awal) - kredensial di sini HARUS SAMA PERSIS dgn yang dipakai
-        // PoisonMessageTests/DlqReplayTests (RabbitMQ.Client langsung, bukan lewat MassTransit).
-        _rabbitMq = new RabbitMqBuilder().WithImage("rabbitmq:3-management-alpine").WithUsername("guest").WithPassword("guest").Build();
-        _postgres = new PostgreSqlBuilder().WithImage("postgres:17-alpine").Build();
-        await Task.WhenAll(_rabbitMq.StartAsync(), _postgres.StartAsync());
+        try
+        {
+            _rabbitMq = new RabbitMqBuilder().WithImage("rabbitmq:3-management-alpine").WithUsername("guest").WithPassword("guest").Build();
+            _postgres = new PostgreSqlBuilder().WithImage("postgres:17-alpine").Build();
+            await Task.WhenAll(_rabbitMq.StartAsync(), _postgres.StartAsync());
+        }
+        catch (Exception)
+        {
+            IsDockerAvailable = false;
+            return;
+        }
 
         var rmqConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {

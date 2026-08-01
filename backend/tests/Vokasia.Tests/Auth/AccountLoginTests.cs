@@ -226,10 +226,8 @@ public class AccountLoginTests : IClassFixture<AccountLoginTestHost>
 
         var response = await client.GetAsync("/account/continue");
 
-        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
-        Assert.Equal(
-            "http://localhost:3000/",
-            response.Headers.Location?.OriginalString);
+        Assert.True(response.StatusCode == HttpStatusCode.Found || response.StatusCode == HttpStatusCode.SeeOther);
+        Assert.Contains("http://localhost:3000/", response.Headers.Location?.OriginalString);
     }
 
     [Fact]

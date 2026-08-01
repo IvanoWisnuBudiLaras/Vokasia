@@ -95,15 +95,16 @@ public static class PortfolioEndpoints
             return Results.Forbid();
         }
 
+        var sampleIds = req.SampleJournalIds ?? [];
         var ownPlacementIds = await db.Placements.AsNoTracking().Where(p => p.StudentId == student.Id).Select(p => p.Id).ToListAsync(ct);
-        var validApprovedIds = req.SampleJournalIds.Count == 0
+        var validApprovedIds = sampleIds.Count == 0
             ? []
             : await db.JournalEntries.AsNoTracking()
-                .Where(je => req.SampleJournalIds.Contains(je.Id) && je.Status == JournalEntryStatus.Approved && ownPlacementIds.Contains(je.PlacementId))
+                .Where(je => sampleIds.Contains(je.Id) && je.Status == JournalEntryStatus.Approved && ownPlacementIds.Contains(je.PlacementId))
                 .Select(je => je.Id)
                 .ToListAsync(ct);
 
-        var rejected = req.SampleJournalIds.Except(validApprovedIds).ToList();
+        var rejected = sampleIds.Except(validApprovedIds).ToList();
         if (rejected.Count > 0)
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>

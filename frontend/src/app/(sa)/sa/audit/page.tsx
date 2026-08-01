@@ -1,6 +1,7 @@
 import { ErrorState, Icon } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
 import type { AuditDto, Paged } from "@/lib/apiTypes";
+import { AuditExportToolbar } from "./AuditExportToolbar";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +82,13 @@ export default async function SaAuditPage({ searchParams }: { searchParams: Prom
 
       {!loadError && data && (
         <>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs text-ink-muted">
+              Menampilkan {data.items.length} dari total {data.totalCount} entri log
+            </span>
+            <AuditExportToolbar logs={data.items} />
+          </div>
+
           <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-border">
             <table className="w-full text-left text-sm">
               <thead className="bg-surface-muted">

@@ -29,6 +29,12 @@ export function StudentsTable({ initialStudents, totalCount }: StudentsTableProp
 
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
+  const tenantOptions = Array.from(
+    new Map(
+      initialStudents.map((s) => [s.tenantId, { id: s.tenantId, name: s.schoolName }])
+    ).values()
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -114,6 +120,7 @@ export function StudentsTable({ initialStudents, totalCount }: StudentsTableProp
       <ImportStudentsModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
+        tenants={tenantOptions}
       />
     </div>
   );

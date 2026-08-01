@@ -54,10 +54,13 @@ public sealed class CertificatePdfDocument(CertificateData data) : IDocument
                     $"pada {data.PeriodLabel} ({data.StartDate:d MMMM yyyy} - {data.EndDate:d MMMM yyyy})" +
                     (data.FinalScore.HasValue ? $" dengan nilai akhir {data.FinalScore:0.00}." : "."));
 
-                col.Item().PaddingVertical(24);
+                col.Item().PaddingVertical(16);
                 col.Item().AlignCenter().Text($"Kode Verifikasi: {data.CertCode}").FontSize(14).Bold();
+
+                var qrSvg = QrCodeSvgGenerator.GenerateSvg(data.VerifyUrl, 100);
+                col.Item().PaddingVertical(8).AlignCenter().Width(100).Height(100).Svg(qrSvg);
+
                 col.Item().AlignCenter().Text($"Verifikasi keaslian di: {data.VerifyUrl}").FontSize(11);
-                // [CAKUPAN] QR code gambar TIDAK dirender - lihat doc-comment kelas.
             });
 
             page.Footer().AlignCenter().Text($"Diterbitkan otomatis oleh Vokasia — {DateOnly.FromDateTime(DateTime.UtcNow):d MMMM yyyy}").FontSize(9);

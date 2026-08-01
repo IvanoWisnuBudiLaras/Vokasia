@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui";
 import { publicFetcher } from "@/lib/publicFetcher";
 import { publicPortfolioCacheTag } from "@/lib/publicPortfolioCache";
 import type { PublicPortfolioDto } from "@/lib/apiTypes";
+import { AtsCvExportButton } from "./AtsCvExportButton";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -50,10 +51,14 @@ export default async function PublicPortfolioPage({ params }: PageProps) {
             <Icon name="arrow-left" size={16} />
             Beranda
           </Link>
-          <span className="flex items-center gap-2 text-xs text-ink-muted">
-            <Image src="/icon.svg" alt="" width={24} height={24} />
-            Portofolio Vokasia
-          </span>
+
+          <div className="flex items-center gap-3">
+            <AtsCvExportButton studentName={portfolio.studentName} />
+            <span className="hidden items-center gap-2 text-xs text-ink-muted sm:flex">
+              <Image src="/icon.svg" alt="" width={24} height={24} />
+              Portofolio Vokasia
+            </span>
+          </div>
         </nav>
 
         <header className="min-w-0">

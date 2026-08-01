@@ -32,13 +32,16 @@ export async function POST() {
     }
   }
 
-  const apiPublicBase = getRuntimeUrl("API_PUBLIC_URL", "http://localhost:5000");
-  const res = NextResponse.redirect(new URL("/account/logout", apiPublicBase), { status: 303 });
+  const appUrl = getRuntimeUrl("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
+  const apiPublicUrl = getRuntimeUrl("API_PUBLIC_URL", "http://localhost:5000");
 
+  const res = NextResponse.redirect(new URL("/account/logout", apiPublicUrl), { status: 303 });
+
+  const isSecure = process.env.NODE_ENV === "production" && appUrl.startsWith("https://");
   const clearOptions = {
     path: "/",
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecure,
     sameSite: "lax" as const,
     maxAge: 0,
     expires: new Date(0),
@@ -46,15 +49,9 @@ export async function POST() {
 
   res.cookies.set(SESS_COOKIE_NAME, "", clearOptions);
   res.cookies.set(SESSION_COOKIE, "", clearOptions);
-  res.cookies.set("Cookies", "", clearOptions);
   res.cookies.set(".AspNetCore.Cookies", "", clearOptions);
   res.cookies.set(".AspNetCore.Identity.Application", "", clearOptions);
-  res.cookies.set("vok_antiforgery", "", clearOptions);
-
-  res.cookies.delete({ name: SESS_COOKIE_NAME, path: "/" });
-  res.cookies.delete({ name: SESSION_COOKIE, path: "/" });
-  res.cookies.delete({ name: ".AspNetCore.Cookies", path: "/" });
-  res.cookies.delete({ name: ".AspNetCore.Identity.Application", path: "/" });
+  res.cookies.set("Cookies", "", clearOptions);
 
   return res;
 }
