@@ -183,6 +183,29 @@ public class ValidationBoundaryTests
         Assert.Contains(result.Errors, e => e.PropertyName == "SizeBytes");
     }
 
+    [Fact]
+    public void PaymentProofUploadRequestValidator_Pdf_IsValid()
+    {
+        var validator = new PaymentProofUploadRequestValidator();
+        var req = new PaymentProofUploadRequest("bukti.pdf", "application/pdf", 10_000_000);
+
+        var result = validator.Validate(req);
+
+        Assert.True(result.IsValid, string.Join("; ", result.Errors.Select(e => e.ErrorMessage)));
+    }
+
+    [Fact]
+    public void PaymentProofUploadRequestValidator_OverTenMegabytes_IsInvalid()
+    {
+        var validator = new PaymentProofUploadRequestValidator();
+        var req = new PaymentProofUploadRequest("bukti.pdf", "application/pdf", 10_000_001);
+
+        var result = validator.Validate(req);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.PropertyName == "SizeBytes");
+    }
+
     // ---------- RejectJournalValidator: Reason 5-300 kar ----------
 
     [Theory]

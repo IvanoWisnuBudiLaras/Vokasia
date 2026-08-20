@@ -1,6 +1,7 @@
 "use client";
 
-import { Button, Icon } from "@/components/ui";
+import { Icon } from "@/components/ui";
+import { MaterialButton } from "@/components/ui/MaterialButton";
 import { cn } from "@/lib/cn";
 import type { JournalDto } from "@/lib/apiTypes";
 
@@ -82,24 +83,21 @@ export function ApprovalCard({
 
       {expanded && (
         <div className="flex flex-col gap-2 border-t border-border pt-2 min-[24rem]:flex-row">
-          <Button
-            variant="danger-outline"
-            size="md"
-            className="w-full whitespace-nowrap min-[24rem]:w-auto min-[24rem]:flex-1"
+          <MaterialButton
+            className="w-full whitespace-nowrap border-status-red text-status-red min-[24rem]:w-auto min-[24rem]:flex-1"
             onClick={onReject}
             disabled={busy}
           >
-            <Icon name="x" size={16} /> Tolak Jurnal
-          </Button>
-          <Button
-            size="md"
-            className="w-full whitespace-nowrap min-[24rem]:w-auto min-[24rem]:flex-1"
+            <Icon name="x" size={16} /> Tolak dan kirim alasan
+          </MaterialButton>
+          <MaterialButton
+            className="w-full whitespace-nowrap bg-primary text-primary-ink min-[24rem]:w-auto min-[24rem]:flex-1"
             onClick={onApprove}
             disabled={busy}
-            loading={busy}
+            aria-busy={busy}
           >
-            <Icon name="check" size={16} /> Setujui Jurnal
-          </Button>
+            <Icon name="check" size={16} /> Setujui jurnal
+          </MaterialButton>
         </div>
       )}
     </div>

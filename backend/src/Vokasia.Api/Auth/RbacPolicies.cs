@@ -34,9 +34,11 @@ public static class RbacPolicies
             .AddPolicy(StudentSelf, p => p
                 .RequireClaim("role", nameof(UserRole.Student))
                 .RequireAssertion(HasValidTenantId))
-            // TenantMember: staff sekolah dengan tenant_id GUID valid. Presence saja tidak cukup:
-            // claim malformed membuat ambient null dan menonaktifkan filter tenant.
-            .AddPolicy(TenantMember, p => p.RequireAssertion(HasValidTenantId))
+            // TenantMember is school staff only. Students also carry tenant_id, but must use
+            // StudentSelf so roster/tenant-wide endpoints cannot be reached by students.
+            .AddPolicy(TenantMember, p => p
+                .RequireClaim("role", nameof(UserRole.TenantAdmin), nameof(UserRole.DeptHead), nameof(UserRole.Teacher))
+                .RequireAssertion(HasValidTenantId))
             .AddPolicy(MentorOwnPlacement, p => p
                 .RequireClaim("role", nameof(UserRole.IndustryMentor))
                 .AddRequirements(new PlacementScopeRequirement()));

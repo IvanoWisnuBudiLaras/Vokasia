@@ -35,6 +35,7 @@ services:
       # The issuer is a browser-visible HTTPS origin in production. Do not inherit the
       # development .env value (http://localhost:5000).
       OpenIddict__Issuer: ${API_PUBLIC_URL}
+      Cors__AllowedOrigins__0: ${FRONTEND_PUBLIC_URL}
       DataProtection__KeysPath: /var/lib/vokasia/keys
       DataProtection__CertificatePath: /run/secrets/openiddict/dataprotection.pfx
       DataProtection__CertificatePassword: ${DATAPROTECTION_CERTIFICATE_PASSWORD}
@@ -52,6 +53,8 @@ services:
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      NEXT_PUBLIC_APP_URL: ${FRONTEND_PUBLIC_URL}
+      Frontend__PublicUrl: ${FRONTEND_PUBLIC_URL}
 
   frontend:
     # Keep the frontend private to the host; TLS termination belongs to the reverse proxy.
@@ -61,6 +64,7 @@ services:
     environment:
       API_PUBLIC_URL: ${API_PUBLIC_URL}
       NEXT_PUBLIC_APP_URL: ${FRONTEND_PUBLIC_URL}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL}
 
   # OPTIONAL self-contained TLS edge (enable with `--profile edge`). Terminates HTTPS and
   # reverse-proxies frontend + OpenIddict under ONE origin, so the browser login round-trip
@@ -68,7 +72,9 @@ services:
   # you may instead keep this disabled and run your own host-level Nginx/Caddy — the loopback
   # port bindings above support both models. See deploy/edge/Caddyfile.
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: ./deploy/edge
+      dockerfile: Dockerfile
     profiles: ["edge"]
     restart: unless-stopped
     depends_on:
@@ -81,7 +87,6 @@ services:
       - "443:443"
       - "80:80"
     volumes:
-      - ./deploy/edge/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
 

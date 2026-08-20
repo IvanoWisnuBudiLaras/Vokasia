@@ -192,6 +192,7 @@ export function PhotoUploader({ max, photos, setPhotos, disabled, uploadUrlPath 
         type="file"
         accept="image/jpeg,image/png,image/webp"
         multiple
+        aria-label="Tambah foto jurnal"
         className="hidden"
         onChange={(e) => handlePick(e.target.files)}
       />

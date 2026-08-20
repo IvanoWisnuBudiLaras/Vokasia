@@ -179,6 +179,7 @@ public class RbacPolicyTests : IClassFixture<VokasiaApiFactory>
     [InlineData(nameof(UserRole.Teacher), RbacPolicies.TeacherPlus)]
     [InlineData(nameof(UserRole.Student), RbacPolicies.StudentSelf)]
     [InlineData(nameof(UserRole.Teacher), RbacPolicies.TenantMember)]
+    [InlineData(nameof(UserRole.Student), RbacPolicies.TenantMember)]
     public async Task TenantPolicies_MalformedTenantClaim_IsForbidden(
         string role,
         string policy)
@@ -205,6 +206,7 @@ public class RbacPolicyTests : IClassFixture<VokasiaApiFactory>
     [InlineData(nameof(UserRole.Teacher), RbacPolicies.TeacherPlus)]
     [InlineData(nameof(UserRole.Student), RbacPolicies.StudentSelf)]
     [InlineData(nameof(UserRole.Teacher), RbacPolicies.TenantMember)]
+    [InlineData(nameof(UserRole.Student), RbacPolicies.TenantMember)]
     public async Task TenantPolicies_MissingTenantClaim_IsForbidden(
         string role,
         string policy)

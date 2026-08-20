@@ -576,11 +576,6 @@ public static class AccountEndpoints
 
         await req.HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
 
-        if (returnUrl == SafeFallbackReturnUrl)
-        {
-            var config = req.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
-            return ContinueToFrontend(config);
-        }
 
         return SeeOther(returnUrl);
     }

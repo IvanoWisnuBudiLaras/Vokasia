@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using OpenIddict.Validation.AspNetCore;
+using Vokasia.Infrastructure;
 using Vokasia.Infrastructure.Identity;
 using Vokasia.Infrastructure.Persistence;
 
@@ -15,19 +16,8 @@ public static class IdentitySetup
 {
     public static IServiceCollection AddVokasiaIdentity(this IServiceCollection services)
     {
-        services.AddIdentityCore<AppUser>(opt =>
-            {
-                opt.Password.RequiredLength = 8;
-                opt.Password.RequireNonAlphanumeric = false;
-                opt.Lockout.MaxFailedAccessAttempts = 5;
-                opt.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
-                opt.User.RequireUniqueEmail = true;
-            })
-            .AddRoles<AppRole>()
-            .AddSignInManager<SignInManager<AppUser>>()
-            .AddEntityFrameworkStores<VokasiaDbContext>()
-            .AddDefaultTokenProviders();
-
+        services.AddVokasiaIdentityCore()
+            .AddSignInManager<SignInManager<AppUser>>();
         services.AddScoped<VokasiaClaimsFactory>();
 
         // GAP ditemukan+ditambal sesi VOK-H2-E3 (DECISIONS.md D17): default scheme di sini SEBELUMNYA

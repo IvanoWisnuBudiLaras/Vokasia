@@ -24,7 +24,7 @@ public class GradeRecapPdfDocumentTests
         {
             new("Ahmad Fauzi", "PT Contoh Sejahtera", 85.00m, 90.00m, 87.00m, "Final"),
             new("Siti Aminah", "CV Berkah Jaya", 80.00m, null, null, "Draft"),
-            new("Budi Santoso", "PT Contoh Sejahtera", null, null, null, "BelumDinilai"),
+            new("Siswa Contoh 003", "PT Contoh Teknologi Nusantara", null, null, null, "BelumDinilai"),
         };
 
         var bytes = new GradeRecapPdfDocument("Periode Ganjil 2026", rows).GeneratePdf();

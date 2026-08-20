@@ -14,96 +14,40 @@ export function ProblemStudentList({ items, onSelect }: ProblemStudentListProps)
   const [actionAlert, setActionAlert] = useState<string | null>(null);
 
   if (items.length === 0) {
-    return (
-      <EmptyState
-        icon={<Icon name="check" size={32} />}
-        title="Tidak ada siswa bermasalah"
-        description="Semua siswa berstatus hijau hari ini — jurnal terisi sesuai jadwal."
-      />
-    );
+    return <EmptyState icon={<Icon name="check" size={32} />} title="Tidak ada siswa bermasalah" description="Semua siswa berstatus hijau hari ini — jurnal terisi sesuai jadwal." />;
   }
 
   const sorted = [...items].sort((a, b) => b.rag - a.rag);
-
-  const handleResolve = (e: React.MouseEvent, id: string, name: string) => {
-    e.stopPropagation();
-    setResolvedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+  function toggleResolved(event: React.MouseEvent, student: DashboardFlaggedStudentDto) {
+    event.stopPropagation();
+    setResolvedIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(student.studentId)) next.delete(student.studentId); else next.add(student.studentId);
       return next;
     });
-    setActionAlert(`Status intervensi untuk ${name} berhasil diperbarui.`);
+    setActionAlert(`Tindak lanjut ${student.name} diperbarui.`);
     setTimeout(() => setActionAlert(null), 3000);
-  };
-
-  const handleSendWarning = (e: React.MouseEvent, name: string) => {
-    e.stopPropagation();
-    setActionAlert(`📢 Peringatan resmi via Email & WA telah dikirimkan ke siswa ${name} dan Guru Pembimbing.`);
-    setTimeout(() => setActionAlert(null), 4000);
-  };
+  }
 
   return (
     <div className="flex flex-col gap-3">
-      {actionAlert && (
-        <div className="rounded-[var(--radius-md)] border border-primary/30 bg-primary/10 p-3 text-xs font-semibold text-primary animate-fade-in flex items-center justify-between">
-          <span>{actionAlert}</span>
-          <button onClick={() => setActionAlert(null)} className="text-primary hover:opacity-70 font-bold">✕</button>
-        </div>
-      )}
-
+      {actionAlert && <p role="status" className="border border-primary/30 bg-primary/10 p-3 text-sm font-medium text-primary">{actionAlert}</p>}
       <ul className="flex flex-col gap-2">
         {sorted.map((student) => {
-          const isResolved = resolvedIds.has(student.studentId);
+          const resolved = resolvedIds.has(student.studentId);
           return (
             <li key={student.studentId}>
-              <div
-                onClick={() => onSelect(student)}
-                className={
-                  "flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-md)] border border-border bg-surface p-3.5 text-left cursor-pointer outline-none " +
-                  "transition-[color,background-color,border-color] hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus " +
-                  (isResolved ? "opacity-75 bg-surface-muted/60" : "")
-                }
-              >
-                <div className="flex flex-col gap-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-ink">{student.name}</span>
-                    {isResolved && (
-                      <span className="rounded-full bg-status-green-bg px-2 py-0.5 text-[10px] font-bold text-status-green border border-status-green/30">
-                        ✓ Sedang Diproses
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-xs text-ink-muted">{student.companyName}</span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <span className="hidden text-xs text-ink-muted md:inline">{student.reason}</span>
-                  <StatusBadge
-                    status={isResolved ? "green" : ragToBadgeStatus(student.rag)}
-                    label={isResolved ? "Diproses" : student.rag === RagStatus.Red ? "Merah" : "Kuning"}
-                  />
-
-                  {/* Intervention Workflow Action Buttons */}
-                  <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      title="Kirim peringatan email & WA"
-                      onClick={(e) => handleSendWarning(e, student.name)}
-                      className="inline-flex h-8 items-center gap-1 rounded-[var(--radius-md)] border border-status-amber/40 bg-status-amber-bg px-2.5 text-xs font-semibold text-status-amber hover:bg-status-amber/20 transition-colors"
-                    >
-                      ⚠️ Peringatkan
-                    </button>
-
-                    <button
-                      type="button"
-                      title={isResolved ? "Tandai belum ditindaklanjuti" : "Tandai sedang diproses"}
-                      onClick={(e) => handleResolve(e, student.studentId, student.name)}
-                      className="inline-flex h-8 items-center gap-1 rounded-[var(--radius-md)] border border-primary/40 bg-primary/10 px-2.5 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
-                    >
-                      {isResolved ? "↩ Buka Lagi" : "✓ Tandai Diproses"}
-                    </button>
-                  </div>
+              <div className={`flex flex-wrap items-center justify-between gap-3 border border-border bg-surface p-3 ${resolved ? "opacity-75" : ""}`}>
+                <button type="button" onClick={() => onSelect(student)} className="min-h-11 min-w-0 flex-1 text-left outline-none focus-visible:outline-2 focus-visible:outline-focus">
+                  <span className="block text-sm font-semibold text-ink">{student.name}</span>
+                  <span className="block text-xs text-ink-muted">{student.companyName}</span>
+                  <span className="mt-1 block text-xs text-ink-muted">{student.reason}</span>
+                </button>
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={resolved ? "green" : ragToBadgeStatus(student.rag)} label={resolved ? "Diproses" : student.rag === RagStatus.Red ? "Merah" : "Kuning"} />
+                  <button type="button" onClick={(event) => toggleResolved(event, student)} className="min-h-11 border border-primary px-3 text-xs font-semibold text-primary focus-visible:outline-2 focus-visible:outline-focus">
+                    {resolved ? "Buka lagi" : "Tandai diproses"}
+                  </button>
                 </div>
               </div>
             </li>

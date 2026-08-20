@@ -66,9 +66,8 @@ public class SaTenantProvisioningTests
             Assert.Equal(100, rubric.Aspects.Sum(a => a.Weight));
         }
 
-        // Ambil TempPassword dari OutboxMessage{TenantAdminInvited} (satu-satunya tempat tersedia -
+        // Confirm the invitation outbox contains no plaintext password.
         // endpoint TIDAK PERNAH mengembalikannya di response, by design keamanan).
-        string tempPassword = null!;
         using (var scope = _factory.CreateDbScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
@@ -77,29 +76,25 @@ public class SaTenantProvisioningTests
                 .FirstOrDefaultAsync();
             Assert.NotNull(outbox);
             var payload = JsonSerializer.Deserialize<JsonElement>(outbox!.PayloadJson);
-            tempPassword = payload.GetProperty("TempPassword").GetString()!;
+            Assert.False(payload.TryGetProperty("TempPassword", out _));
         }
-        Assert.False(string.IsNullOrWhiteSpace(tempPassword));
+        await PollUntil.SucceedsAsync(async () =>
+        {
+            using var scope = _factory.CreateDbScope();
+            var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
+            Assert.True(await db.Set<Microsoft.AspNetCore.Identity.IdentityUserToken<Guid>>().AnyAsync(t => t.Name == "StaffInvitation"));
+        }, timeout: TimeSpan.FromSeconds(15));
 
         // AC: "admin baru bisa login" — POST /account/login LANGSUNG (bukan dance code+PKCE penuh,
         // cukup buktikan password sementara sungguhan valid): 303 SeeOther ke returnUrl (BUKAN
         // redirect balik ke /account/login?error= yang jadi perilaku pada password salah).
         var anon = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        var loginResp = await AuthTestHelpers.PostLoginFormAsync(anon, new Dictionary<string, string>
-        {
-            ["email"] = adminEmail,
-            ["password"] = tempPassword,
-            ["returnUrl"] = "/",
-        });
-        Assert.Equal(HttpStatusCode.SeeOther, loginResp.StatusCode);
-        Assert.DoesNotContain("account/login", loginResp.Headers.Location!.ToString());
-
         // Email undangan sungguhan terkirim (TenantAdminInvitedConsumer + IdempotentEmailSender -> SentEmail).
         await PollUntil.SucceedsAsync(async () =>
         {
             using var scope = _factory.CreateDbScope();
             var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
-            var sent = await db.SentEmails.AsNoTracking().AnyAsync(e => e.ToEmail == adminEmail && e.TemplateId == "TenantAdminInvite");
+            var sent = await db.SentEmails.AsNoTracking().AnyAsync(e => e.ToEmail == adminEmail && e.TemplateId == "StaffInvitation");
             Assert.True(sent);
         }, timeout: TimeSpan.FromSeconds(15));
     }

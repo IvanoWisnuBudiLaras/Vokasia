@@ -27,7 +27,8 @@
     <PackageReference Include="Minio" Version="7.0.0" />
     <!-- VOK-H4-E3 §2: SmtpEmailSender - MailKit disebut eksplisit oleh ticket (bukan pilihan bebas
          sesi ini), dipakai jalur non-Development (lihat DependencyInjection.cs). -->
-    <PackageReference Include="MailKit" Version="4.9.0" />
+    <PackageReference Include="MailKit" Version="4.16.0" />
+    <PackageReference Include="MimeKit" Version="4.16.0" />
   </ItemGroup>
 
   <PropertyGroup>

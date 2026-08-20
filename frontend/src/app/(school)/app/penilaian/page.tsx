@@ -1,6 +1,7 @@
 import { EmptyState, ErrorState, Icon } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
 import { getSession } from "@/lib/session";
+import { mapWithConcurrency } from "@/lib/mapWithConcurrency";
 import { PeriodStatusNum, type AssessmentDto, type Paged, type PeriodSummary, type PlacementDto, type StudentDto } from "@/lib/apiTypes";
 import { TeacherScoreEditor } from "./TeacherScoreEditor";
 
@@ -46,8 +47,10 @@ export default async function PenilaianPage({
       ]);
       const studentById = new Map(studentsRes.items.map((s) => [s.id, s]));
 
-      roster = await Promise.all(
-        placementsRes.items.map(async (p) => {
+      roster = await mapWithConcurrency(
+        placementsRes.items,
+        5,
+        async (p) => {
           const assessment = await fetcher<AssessmentDto>(`/placements/${p.id}/assessment`);
           return {
             placementId: p.id,
@@ -56,7 +59,7 @@ export default async function PenilaianPage({
             teacherDone: assessment.teacherDone,
             isFinal: assessment.isFinal,
           };
-        })
+        }
       );
     }
   } catch (err) {

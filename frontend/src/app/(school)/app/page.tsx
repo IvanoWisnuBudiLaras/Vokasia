@@ -51,9 +51,9 @@ export default async function SchoolDashboardPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeading
-        eyebrow="MONITORING PKL"
-        title={session ? `Halo, ${session.name}` : "Dashboard sekolah"}
-        description="Pantau jurnal, approval mentor, kunjungan, dan siswa yang butuh tindak lanjut."
+        eyebrow={session?.role === "Teacher" ? "TINDAKAN GURU" : "OPERASI SEKOLAH"}
+        title={session?.role === "Teacher" ? "Siapa yang membutuhkan perhatian?" : "Operasi PKL sekolah"}
+        description={session?.role === "Teacher" ? "Mulai dari siswa merah, lalu kuning; buka riwayat untuk menentukan tindakan berikutnya." : "Atur periode, pantau siswa, dan lanjutkan proses penilaian PKL."}
         action={!periodsError ? <PeriodSelector periods={periods} value={selectedPeriodId ?? ""} /> : undefined}
       />
 
@@ -73,14 +73,21 @@ export default async function SchoolDashboardPage({
 
       {dashboard && (
         <>
-          <KpiCards
-            journalTodayPct={dashboard.journalTodayPct}
-            pendingApprovals={dashboard.pendingApprovals}
-            lateVisits={dashboard.lateVisits}
-            flaggedCount={dashboard.flagged.length}
-          />
+          {session?.role === "Teacher" ? (
+            <div className="border-l-4 border-status-red bg-surface-muted p-4 text-sm">
+              <strong className="text-ink">Urutan triase:</strong> {dashboard.flagged.filter((item) => item.rag === 2).length} merah, {dashboard.flagged.filter((item) => item.rag === 1).length} kuning.
+              <span className="ml-1 text-ink-muted">Pilih siswa untuk melihat jurnal dan tindak lanjut.</span>
+            </div>
+          ) : (
+            <KpiCards
+              journalTodayPct={dashboard.journalTodayPct}
+              pendingApprovals={dashboard.pendingApprovals}
+              lateVisits={dashboard.lateVisits}
+              flaggedCount={dashboard.flagged.length}
+            />
+          )}
 
-          <div className="flex flex-col gap-2">
+          <div id="siswa-bermasalah" className="flex flex-col gap-2">
             <h2 className="text-sm font-semibold text-ink">Siswa Bermasalah</h2>
             {selectedPeriodId && <DashboardBody flagged={dashboard.flagged} periodId={selectedPeriodId} />}
           </div>

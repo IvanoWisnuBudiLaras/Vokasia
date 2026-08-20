@@ -1,7 +1,10 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Minio;
+using Minio.DataModel.Args;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Storage;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
@@ -27,6 +30,7 @@ public static class BillingEndpoints
             .RequireAuthorization(RbacPolicies.TenantAdminOnly)
             .AddEndpointFilter<ValidationFilter>();
         tenantGroup.MapGet("/", ListMyInvoices);
+        tenantGroup.MapPost("/{id:guid}/payment-proof/upload-url", GetPaymentProofUploadUrl);
         tenantGroup.MapPost("/{id:guid}/payment-proof", UploadPaymentProof);
 
         return app;
@@ -87,7 +91,35 @@ public static class BillingEndpoints
         return Results.Ok(items);
     }
 
-    /// <summary>AC: "bukti transfer via presigned (FR-BIL-02); status ProofUploaded." objectKey diasumsikan sudah diupload klien lewat presigned PUT URL (pola sama Visit.SignatureKey/PhotoKey — endpoint ini hanya mencatat referensinya, bukan menerima file mentah).</summary>
+    private static async Task<IResult> GetPaymentProofUploadUrl(
+        Guid id, PaymentProofUploadRequest req, VokasiaDbContext db, ITenantContext tenant,
+        IBrowserObjectStorageSigner storageSigner,
+        IConfiguration config, CancellationToken ct)
+    {
+        if (!tenant.TenantId.HasValue)
+        {
+            return Results.Forbid();
+        }
+        if (req.ContentType is not ("image/jpeg" or "image/png" or "application/pdf") || req.SizeBytes is < 1 or > 10_000_000)
+        {
+            return Results.BadRequest(new { message = "Bukti harus JPG, PNG, atau PDF dan maksimal 10 MB." });
+        }
+        var invoice = await db.Invoices.AsNoTracking().FirstOrDefaultAsync(i => i.Id == id && i.TenantId == tenant.TenantId, ct);
+        if (invoice is null)
+        {
+            return Results.NotFound();
+        }
+        var extension = req.ContentType switch { "image/jpeg" => "jpg", "image/png" => "png", _ => "pdf" };
+        var objectKey = $"tenant/{tenant.TenantId}/invoices/{id}/{Guid.NewGuid():N}.{extension}";
+        var expirySeconds = 300;
+        var url = await storageSigner.PresignedPutObjectAsync(new PresignedPutObjectArgs()
+            .WithBucket(config["Minio:Bucket"] ?? "vokasia-journal")
+            .WithObject(objectKey)
+            .WithExpiry(expirySeconds));
+        return Results.Ok(new PresignedUploadDto(url, objectKey, expirySeconds));
+    }
+
+    /// <summary>Attach only a backend-generated, tenant-scoped object key after the presigned upload succeeds.</summary>
     private static async Task<IResult> UploadPaymentProof(Guid id, UploadPaymentProofRequest req, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
     {
         if (!tenant.TenantId.HasValue)

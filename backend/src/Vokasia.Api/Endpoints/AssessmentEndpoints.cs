@@ -115,6 +115,12 @@ public static class AssessmentEndpoints
             return Results.NotFound();
         }
 
+        // TeacherPlus authenticates the role; it does not establish row ownership.
+        if (tenant.Role == nameof(UserRole.Teacher) && placement.TeacherId != tenant.UserId.Value)
+        {
+            return Results.Forbid();
+        }
+
         return await SubmitScoresAsync(db, placement, req, ScoredBy.Teacher, tenant.UserId.Value, aspect => !IsMentorSide(aspect.Kind), ct);
     }
 
@@ -193,6 +199,13 @@ public static class AssessmentEndpoints
         {
             var authResult = await authService.AuthorizeAsync(user, placement, RbacPolicies.MentorOwnPlacement);
             if (!authResult.Succeeded)
+            {
+                return Results.Forbid();
+            }
+        }
+        else if (tenant.Role == nameof(UserRole.Student))
+        {
+            if (!tenant.UserId.HasValue || !await db.Students.AnyAsync(s => s.Id == placement.StudentId && s.UserId == tenant.UserId, ct))
             {
                 return Results.Forbid();
             }

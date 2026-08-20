@@ -1,5 +1,5 @@
 import { PageHeading } from "@/components/PageHeading";
-import { Card, ErrorState, Icon } from "@/components/ui";
+import { ErrorState, Icon } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
 import type { HealthDto, KpiDto } from "@/lib/apiTypes";
 import { DashboardCharts } from "./DashboardCharts";
@@ -44,30 +44,30 @@ export default async function SuperAdminHomePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeading
-        eyebrow="OPERASI PLATFORM"
-        title="Dashboard platform"
-        description="Pantau kesehatan layanan dan indikator lintas seluruh tenant Vokasia."
-      />
+      <PageHeading eyebrow="OPERASI PLATFORM" title="Apa yang perlu ditindaklanjuti?" description="Mulai dari tenant, penagihan, perusahaan, lalu audit dan kesehatan layanan." />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Card title="Tenant Aktif"><span className="text-2xl font-semibold text-ink">{kpi.activeTenants}</span></Card>
-        <Card title="Siswa Aktif"><span className="text-2xl font-semibold text-ink">{kpi.activeStudents}</span></Card>
-        <Card title="Jurnal Hari Ini"><span className="text-2xl font-semibold text-ink">{kpi.journalsToday}</span></Card>
-        <Card title="Tingkat Isi Jurnal"><span className="text-2xl font-semibold text-ink">{kpi.journalFillRate.toFixed(1)}%</span></Card>
-        <Card title="MRR"><span className="text-2xl font-semibold text-ink">Rp {kpi.mrr.toLocaleString("id-ID")}</span></Card>
-      </div>
+      <section aria-labelledby="platform-snapshot" className="border-y border-border py-3">
+        <h2 id="platform-snapshot" className="mb-3 text-sm font-semibold text-ink">Snapshot platform</h2>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm md:grid-cols-5">
+          <div><dt className="text-ink-muted">Tenant aktif</dt><dd className="font-semibold tabular-nums text-ink">{kpi.activeTenants}</dd></div>
+          <div><dt className="text-ink-muted">Siswa aktif</dt><dd className="font-semibold tabular-nums text-ink">{kpi.activeStudents}</dd></div>
+          <div><dt className="text-ink-muted">Jurnal hari ini</dt><dd className="font-semibold tabular-nums text-ink">{kpi.journalsToday}</dd></div>
+          <div><dt className="text-ink-muted">Isi jurnal</dt><dd className="font-semibold tabular-nums text-ink">{kpi.journalFillRate.toFixed(1)}%</dd></div>
+          <div><dt className="text-ink-muted">MRR</dt><dd className="font-semibold tabular-nums text-ink">Rp {kpi.mrr.toLocaleString("id-ID")}</dd></div>
+        </dl>
+      </section>
 
       <DashboardCharts />
 
-      <Card title="System Health">
+      <section aria-labelledby="system-health" className="border-y border-border py-3">
+        <h2 id="system-health" className="mb-2 text-sm font-semibold text-ink">System health</h2>
         <HealthRow label="Queue Depth (RabbitMQ)" value={health.queueDepth} warnBelow={(v) => v > 100} />
         <HealthRow label="Dead-letter (fault queue)" value={health.dlqCount} warnBelow={(v) => v > 0} />
         <HealthRow label="Failed Jobs (Hangfire)" value={health.failedJobs} warnBelow={(v) => v > 0} />
         <HealthRow label="Outbox Belum Terpublish" value={health.outboxUnpublished} warnBelow={(v) => v > 50} />
         <HealthRow label="API p95 (ms)" value={health.apiP95Ms} />
         <HealthRow label="Disk Terpakai (%)" value={health.diskPct} warnBelow={(v) => v > 80} />
-      </Card>
+      </section>
     </div>
   );
 }

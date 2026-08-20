@@ -15,8 +15,7 @@ using Vokasia.Worker.Export;
 namespace Vokasia.Worker.Consumers;
 
 /// <summary>
-/// VOK-H5-E1 §5 — GenerateCertificatePdf(placementId): QuestPDF (identitas+durasi+nilai, QR
-/// SENGAJA belum ada - lihat doc-comment CertificatePdfDocument), CertCode 12 kar acak
+/// VOK-H5-E1 §5 — GenerateCertificatePdf(placementId): QuestPDF (identitas+durasi+nilai+QR), CertCode 12 kar acak
 /// (CertCodeGenerator, retry loop kalau tabrakan - astronomically rare tapi ditangani, bukan
 /// diasumsikan tak pernah terjadi), simpan MinIO + baris Certificate.
 ///
@@ -75,7 +74,7 @@ public class CertificateGeneratorConsumer(
         }
 
         var certCode = await GenerateUniqueCertCodeAsync(ct);
-        var publicUrl = config["Frontend:PublicUrl"] ?? "http://localhost:3000";
+        var publicUrl = config["Frontend:PublicUrl"] ?? config["NEXT_PUBLIC_APP_URL"] ?? "http://localhost:3000";
         var verifyUrl = $"{publicUrl.TrimEnd('/')}/verify/{certCode}";
 
         var pdfData = new CertificateData(info.FullName, info.SchoolName, info.CompanyName, info.Name, info.StartDate, info.EndDate, info.FinalScore, certCode, verifyUrl);

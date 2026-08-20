@@ -3,6 +3,7 @@ using Minio;
 using Minio.DataModel.Args;
 using Vokasia.Api.Auth;
 using Vokasia.Api.RateLimiting;
+using Vokasia.Api.Storage;
 using Vokasia.Domain.Common;
 using Vokasia.Infrastructure.Persistence;
 
@@ -29,7 +30,7 @@ public static class CertificateEndpoints
         return app;
     }
 
-    private static async Task<IResult> GetCertificate(Guid placementId, ITenantContext tenant, VokasiaDbContext db, IMinioClient minio, IConfiguration config, CancellationToken ct)
+    private static async Task<IResult> GetCertificate(Guid placementId, ITenantContext tenant, VokasiaDbContext db, IBrowserObjectStorageSigner storageSigner, IConfiguration config, CancellationToken ct)
     {
         if (!tenant.UserId.HasValue)
         {
@@ -59,7 +60,7 @@ public static class CertificateEndpoints
         }
 
         var bucket = config[BucketConfigKey] ?? DefaultBucket;
-        var url = await minio.PresignedGetObjectAsync(new PresignedGetObjectArgs()
+        var url = await storageSigner.PresignedGetObjectAsync(new PresignedGetObjectArgs()
             .WithBucket(bucket)
             .WithObject(certificate.PdfKey)
             .WithExpiry(PresignedExpirySeconds));

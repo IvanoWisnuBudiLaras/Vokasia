@@ -87,8 +87,9 @@ public class VokasiaIntegrationFactory : WebApplicationFactory<ApiAssembly::Prog
             _rabbitMq = new RabbitMqBuilder().WithImage("rabbitmq:3-management-alpine").WithUsername("guest").WithPassword("guest").Build();
             await Task.WhenAll(_postgres.StartAsync(), _rabbitMq.StartAsync());
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Console.WriteLine($"Testcontainers failed to start: {ex}");
             IsDockerAvailable = false;
             return;
         }
@@ -135,8 +136,12 @@ public class VokasiaIntegrationFactory : WebApplicationFactory<ApiAssembly::Prog
         {
             if (!IsDockerAvailable)
             {
-                var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(Microsoft.EntityFrameworkCore.DbContextOptions<VokasiaDbContext>));
-                if (descriptor != null) services.Remove(descriptor);
+                var descriptors = services.Where(d =>
+                    d.ServiceType == typeof(Microsoft.EntityFrameworkCore.DbContextOptions<VokasiaDbContext>) ||
+                    d.ServiceType == typeof(Microsoft.EntityFrameworkCore.DbContextOptions) ||
+                    d.ServiceType == typeof(IDbContextOptionsConfiguration<VokasiaDbContext>)).ToList();
+                foreach (var d in descriptors) services.Remove(d);
+
                 services.AddDbContext<VokasiaDbContext>(options =>
                 {
                     options.UseInMemoryDatabase("vokasia_test_integration");
@@ -191,6 +196,10 @@ public class VokasiaIntegrationFactory : WebApplicationFactory<ApiAssembly::Prog
         // palsu (bukan null) supaya rantai IEmailSender jatuh ke DevLogEmailSender (log murni, TIDAK
         // pernah benar2 kirim SMTP keluar dari lingkungan test).
         services.AddVokasiaInfrastructure(config, new FakeDevelopmentEnvironment());
+        // VOK-H6-E1 §1: TenantAdminInvitedConsumer memakai UserManager<AppUser> — sama seperti
+        // Vokasia.Worker/Program.cs, daftarkan core Identity (AddVokasiaIdentityCore) di host
+        // Worker uji; tanpa ini consumer R-FAULT "Unable to resolve service for type UserManager<AppUser>".
+        services.AddVokasiaIdentityCore();
 
         // AssessmentCronJobs/JournalCronJobs: TANPA Hangfire di sini (cron "dipicu manual" via
         // TriggerOpenAssessmentPhaseAsync/TriggerEnqueueCertificateBatchAsync, AC ticket - lihat

@@ -1,4 +1,5 @@
 using Bogus;
+using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Vokasia.Domain.Common;
@@ -8,13 +9,14 @@ using Vokasia.Infrastructure.Persistence;
 
 namespace Vokasia.Infrastructure.Seeding;
 
-public record SeedOptions(int Tenants = 3, int Companies = 10, int StudentsPerTenant = 30, int Days = 60);
+public record SeedOptions(int Tenants = 3, int Companies = 100, int StudentsPerTenant = 300, int Days = 90);
 
 /// <summary>
 /// DemoSeeder: data demo realistis Indonesia, 1 perintah, idempoten & pendukung reset data bersih.
 /// </summary>
 public static class DemoSeeder
 {
+    private const string CertificateScenarioName = "DEMO-CERTIFICATE";
     private const string MarkerNpsn = "20101001"; // NPSN SMKN 1 Jakarta — dipakai marker idempotensi.
 
     public static async Task<string> SeedDemoDataAsync(VokasiaDbContext db, UserManager<AppUser> userManager, SeedOptions? opt = null, bool forceReset = false, CancellationToken ct = default)
@@ -77,9 +79,8 @@ public static class DemoSeeder
         }
 
         // 1. Seed SuperAdmin Accounts (Global platform admins)
-        await CreateDemoUserAsync(userManager, null, "ifogram2024@gmail.com", "Ifogram SuperAdmin", UserRole.SuperAdmin, ct);
         await CreateDemoUserAsync(userManager, null, "superadmin@vokasia.id", "Super Admin Vokasia", UserRole.SuperAdmin, ct);
-        await CreateDemoUserAsync(userManager, null, "superadmin@gmail.com", "Super Admin Vokasia (Backup)", UserRole.SuperAdmin, ct);
+        await CreateDemoUserAsync(userManager, null, "superadmin.backup@vokasia.example", "Super Admin Vokasia (Backup)", UserRole.SuperAdmin, ct);
 
         // 2. Seed Subscription Plans for SaaS MRR Calculations
         var planStarter = new Plan { Id = Guid.NewGuid(), Name = "Starter SMK", PriceMonthly = 499000m, MaxStudents = 200, MaxPlacements = 200 };
@@ -89,20 +90,9 @@ public static class DemoSeeder
         await db.SaveChangesAsync(ct);
 
         // 3. Seed Realistic DUDI Companies
-        var realCompanies = new[]
-        {
-            ("PT Telkom Indonesia (Persero) Tbk", "Teknologi", "Kota Bandung", "Alvano Mentor DUDI", "mr.alvano11@gmail.com"),
-            ("PT Astra International Tbk", "Otomotif", "Kota Jakarta Pusat", "Agus Prasetyo", "mentor.agus@astra.co.id"),
-            ("PT Bank Central Asia Tbk", "Perbankan", "Kota Jakarta Pusat", "Rina Kartika", "mentor.rina@bca.co.id"),
-            ("PT Indosat Ooredoo Hutchison Tbk", "Telekomunikasi", "Kota Jakarta Selatan", "Doni Kusuma", "mentor.doni@indosat.com"),
-            ("PT Tokopedia", "E-Commerce", "Kota Jakarta Selatan", "Hendra Kurniawan", "mentor.hendra@tokopedia.com"),
-            ("PT GoTo Gojek Tokopedia Tbk", "Teknologi", "Kota Jakarta Selatan", "Suryo Saputra", "mentor.suryo@goto.com"),
-            ("PT XL Axiata Tbk", "Telekomunikasi", "Kota Jakarta Selatan", "Anita Wijaya", "mentor.anita@xl.co.id"),
-            ("PT PLN (Persero)", "Energi", "Kota Surabaya", "Tri Haryanto", "mentor.tri@pln.co.id"),
-            ("PT Kalbe Farma Tbk", "Kesehatan", "Kota Jakarta Timur", "Dr. Ratna Juwita", "mentor.ratna@kalbe.co.id"),
-            ("PT Kereta Api Indonesia (Persero)", "Transportasi", "Kota Bandung", "Dedi Sukmana", "mentor.dedi@kai.id")
-        };
-
+        var realCompanies = Enumerable.Range(1, 100)
+            .Select(i => ($"PT Contoh Teknologi {i:D3}", "Teknologi", "Kota Contoh", $"Mentor DUDI Contoh {i:D3}", $"mentor{i:D3}@dudi.example"))
+            .ToArray();
         var companies = new List<Company>();
         var mentors = new List<AppUser>();
 
@@ -120,7 +110,8 @@ public static class DemoSeeder
             };
             companies.Add(company);
 
-            var mentorUser = await CreateDemoUserAsync(userManager, null, mentorEmail, mentorName, UserRole.IndustryMentor, ct);
+            var mentorIndex = mentors.Count + 1;
+            var mentorUser = await CreateDemoUserAsync(userManager, null, $"mentor{mentorIndex:D3}@dudi.example", mentorName, UserRole.IndustryMentor, ct);
             mentors.Add(mentorUser);
         }
         db.Companies.AddRange(companies);
@@ -129,9 +120,9 @@ public static class DemoSeeder
         // 4. Seed School Tenants (Realistic Indonesian SMK)
         var tenantProfiles = new[]
         {
-            (Name: "SMK Negeri 1 Jakarta", Npsn: "20101001", City: "Kota Jakarta Pusat", Region: "DKI Jakarta", AdminEmail: "mastergemerz2008@gmail.com", DeptHeadEmail: "head.tkj@smkn1jakarta.sch.id", TeacherEmail: "masteralvano@gmail.com", PlanId: planPro.Id),
-            (Name: "SMK Negeri 2 Bandung", Npsn: "20202002", City: "Kota Bandung", Region: "Jawa Barat", AdminEmail: "admin@smkn2bandung.sch.id", DeptHeadEmail: "head.rpl@smkn2bandung.sch.id", TeacherEmail: "guru.dewi@gmail.com", PlanId: planPro.Id),
-            (Name: "SMK Negeri 5 Surabaya", Npsn: "20303003", City: "Kota Surabaya", Region: "Jawa Timur", AdminEmail: "admin@smkn5surabaya.sch.id", DeptHeadEmail: "head.dkv@smkn5surabaya.sch.id", TeacherEmail: "guru.fajar@gmail.com", PlanId: planStarter.Id)
+            (Name: "SMK Contoh 1", Npsn: "20101001", City: "Kota Jakarta Pusat", Region: "DKI Jakarta", AdminEmail: "admin01@smkcontoh.example", DeptHeadEmail: "kepala01@smkcontoh.example", TeacherEmail: "guru01@smkcontoh.example", PlanId: planPro.Id),
+            (Name: "SMK Contoh 2", Npsn: "20202002", City: "Kota Bandung", Region: "Jawa Barat", AdminEmail: "admin02@smkcontoh.example", DeptHeadEmail: "kepala02@smkcontoh.example", TeacherEmail: "guru02@smkcontoh.example", PlanId: planPro.Id),
+            (Name: "SMK Contoh 3", Npsn: "20303003", City: "Kota Surabaya", Region: "Jawa Timur", AdminEmail: "admin03@smkcontoh.example", DeptHeadEmail: "kepala03@smkcontoh.example", TeacherEmail: "guru03@smkcontoh.example", PlanId: planStarter.Id)
         };
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -139,45 +130,14 @@ public static class DemoSeeder
         var totalPlacements = 0;
         var totalJournalEntries = 0;
 
-        var indonesianStudents = new[]
-        {
-            ("Ivano Wisnu Budi Laras", "ivanowisnubudilaras2008@gmail.com"),
-            ("Ahmad Rizky Pratama", "ahmad.rizky@gmail.com"),
-            ("Budi Santoso", "budi.santoso@gmail.com"),
-            ("Siti Nurhaliza", "siti.nurhaliza@gmail.com"),
-            ("Dewi Maharani", "dewi.maharani@gmail.com"),
-            ("Fajar Hidayat", "fajar.hidayat@gmail.com"),
-            ("Rizky Ramadhan", "rizky.ramadhan@gmail.com"),
-            ("Nabila Putri Pratama", "nabila.putri@gmail.com"),
-            ("Dimas Anggara", "dimas.anggara@gmail.com"),
-            ("Eka Prasetya", "eka.prasetya@gmail.com"),
-            ("Fitriani Rahmawati", "fitriani.rahma@gmail.com"),
-            ("Hendra Wijaya", "hendra.wijaya@gmail.com"),
-            ("Indah Permatasari", "indah.permatasari@gmail.com"),
-            ("Joko Susilo", "joko.susilo@gmail.com"),
-            ("Kurniawan Dwi Saputra", "kurniawan.dwi@gmail.com"),
-            ("Lestari Anggraini", "lestari.anggraini@gmail.com"),
-            ("Muhammad Iqbal", "muhammad.iqbal@gmail.com"),
-            ("Nurul Hidayah", "nurul.hidayah@gmail.com"),
-            ("Oki Setiawan", "oki.setiawan@gmail.com"),
-            ("Putri Utami", "putri.utami@gmail.com"),
-            ("Rahmat Hidayat", "rahmat.hidayat@gmail.com"),
-            ("Sari Indah", "sari.indah@gmail.com"),
-            ("Taufik Hidayat", "taufik.hidayat@gmail.com"),
-            ("Utami Dewi", "utami.dewi@gmail.com"),
-            ("Vina Panduwinata", "vina.pandu@gmail.com"),
-            ("Wahyu Setiawan", "wahyu.setiawan@gmail.com"),
-            ("Yulia Rahma", "yulia.rahma@gmail.com"),
-            ("Zainal Abidin", "zainal.abidin@gmail.com"),
-            ("Aditya Pratama", "aditya.pratama@gmail.com"),
-            ("Bayu Skak", "bayu.skak@gmail.com"),
-            ("Cinta Laura", "cinta.laura@gmail.com")
-        };
-
+        var indonesianStudents = Enumerable.Range(1, opt.StudentsPerTenant)
+            .Select(i => ($"Siswa Contoh {i:D3}", $"siswa{i:D3}@smkcontoh.example"))
+            .ToArray();
         var faker = new Faker("id_ID");
 
-        foreach (var profile in tenantProfiles)
+        for (var profileIndex = 0; profileIndex < tenantProfiles.Length; profileIndex++)
         {
+            var profile = tenantProfiles[profileIndex];
             var tenant = new Tenant
             {
                 Id = Guid.NewGuid(),
@@ -216,6 +176,17 @@ public static class DemoSeeder
                 Status = PeriodStatus.Active,
             };
             db.Periods.Add(period);
+            var demoRubric = new RubricTemplate
+            {
+                Id = Guid.NewGuid(), TenantId = tenant.Id, Name = "Rubrik Demo PKL", IsDefault = true,
+                Aspects =
+                [
+                    new RubricAspect { Id = Guid.NewGuid(), Name = "Teknis", Kind = RubricAspectKind.Teknis, Weight = 60 },
+                    new RubricAspect { Id = Guid.NewGuid(), Name = "Softskill", Kind = RubricAspectKind.Softskill, Weight = 30 },
+                    new RubricAspect { Id = Guid.NewGuid(), Name = "Kehadiran", Kind = RubricAspectKind.Kehadiran, Weight = 10 },
+                ],
+            };
+            db.RubricTemplates.Add(demoRubric);
 
             for (var d = periodStart; d <= today; d = d.AddDays(1))
             {
@@ -234,7 +205,12 @@ public static class DemoSeeder
             var students = new List<Student>();
             for (var i = 0; i < indonesianStudents.Length; i++)
             {
-                var (stName, stEmail) = indonesianStudents[i];
+                var (baseName, _) = indonesianStudents[i];
+                var isCertificateScenario = profileIndex == 0 && i == 4;
+                var stName = isCertificateScenario ? CertificateScenarioName : baseName;
+                var stEmail = isCertificateScenario
+                    ? "demo-certificate@smkcontoh.example"
+                    : $"siswa{profileIndex + 1:D2}-{i + 1:D3}@smkcontoh.example";
                 var studentId = Guid.NewGuid();
 
                 var student = new Student
@@ -248,6 +224,7 @@ public static class DemoSeeder
                 };
                 var stUser = await CreateDemoUserAsync(userManager, tenant.Id, stEmail, stName, UserRole.Student, ct);
                 student.UserId = stUser.Id;
+                students.Add(student);
             }
             db.Students.AddRange(students);
             await db.SaveChangesAsync(ct);
@@ -305,7 +282,14 @@ public static class DemoSeeder
                     };
 
                     JournalEntry? entry = null;
-                    if (faker.Random.Double() > 0.05)
+                    var recentWorkingDays = Enumerable.Range(0, 5)
+                        .Select(offset => today.AddDays(-offset))
+                        .Where(date => date.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
+                        .ToArray();
+                    var forcedMissing = (i == 1 && recentWorkingDays.Contains(d)) || (i == 2 && d == recentWorkingDays[0]);
+                    var forcedHealthy = i == 0;
+                    var forcedRejected = i == 3 && d >= periodStart && d <= periodStart.AddDays(1);
+                    if (!forcedMissing && (forcedHealthy || forcedRejected || faker.Random.Double() > 0.05))
                     {
                         entry = new JournalEntry
                         {
@@ -314,7 +298,8 @@ public static class DemoSeeder
                             SlotId = slot.Id,
                             PlacementId = placement.Id,
                             Text = $"Mengikuti kegiatan pengerjaan tugas harian di {company.Name}. Melakukan pemeliharaan jaringan dan dokumentasi.",
-                            Status = JournalEntryStatus.Approved,
+                            Status = forcedRejected ? JournalEntryStatus.Rejected : JournalEntryStatus.Approved,
+                            MentorNote = forcedRejected ? "Lengkapi langkah kerja dan bukti kegiatan sebelum kirim ulang." : null,
                             SubmittedAt = new DateTimeOffset(d.ToDateTime(TimeOnly.FromTimeSpan(TimeSpan.FromHours(16))), TimeSpan.Zero),
                             ApprovedAt = new DateTimeOffset(d.ToDateTime(TimeOnly.FromTimeSpan(TimeSpan.FromHours(18))), TimeSpan.Zero)
                         };
@@ -348,6 +333,34 @@ public static class DemoSeeder
 
             db.Placements.AddRange(placements);
             db.StudentDailyStatuses.AddRange(ragList);
+            if (placements.Count > 4)
+            {
+                var certificatePlacement = placements[4];
+                certificatePlacement.Status = PlacementStatus.Completed;
+                period.Status = PeriodStatus.Assessment;
+                var certificateAssessment = new Assessment
+                {
+                    Id = Guid.NewGuid(), TenantId = tenant.Id, PlacementId = certificatePlacement.Id,
+                    RubricTemplateId = demoRubric.Id, FinalScore = 88m, IsFinal = true,
+                    FinalizedAt = new DateTimeOffset(DateTime.UtcNow.Date.AddDays(-1).AddHours(12), TimeSpan.Zero),
+                };
+                db.Assessments.Add(certificateAssessment);
+                foreach (var aspect in demoRubric.Aspects)
+                {
+                    db.AssessmentScores.Add(new AssessmentScore
+                    {
+                        Id = Guid.NewGuid(), AssessmentId = certificateAssessment.Id, RubricAspectId = aspect.Id,
+                        ScoredBy = aspect.Kind is RubricAspectKind.Teknis or RubricAspectKind.Kehadiran ? ScoredBy.Mentor : ScoredBy.Teacher,
+                        ScoredByUserId = aspect.Kind is RubricAspectKind.Teknis or RubricAspectKind.Kehadiran ? mentors[4].Id : teacherUser.Id,
+                        Value = 88m,
+                    });
+                }
+                db.OutboxMessages.Add(new OutboxMessage
+                {
+                    Id = Guid.NewGuid(), Type = "CertificateRequested",
+                    PayloadJson = JsonSerializer.Serialize(new { PlacementId = certificatePlacement.Id, TenantId = tenant.Id }),
+                });
+            }
             await db.SaveChangesAsync(ct);
             totalPlacements += placements.Count;
         }
@@ -365,7 +378,7 @@ public static class DemoSeeder
         });
         await db.SaveChangesAsync(ct);
 
-        return $"RESET & SEED REAL SUCCESSFUL: 2 SuperAdmin (`superadmin@vokasia.id`, `superadmin@gmail.com`), {tenantProfiles.Length} Sekolah (SMKN 1 JKT, SMKN 2 BDG, SMKN 5 SBY), {totalPlacements} Siswa Indonesia (@gmail.com), {realCompanies.Length} DUDI (Telkom, Astra, BCA, Indosat, Tokopedia, PLN), {totalJournalEntries} Jurnal Terisi.";
+        return $"RESET & SEED DEMO SUCCESSFUL: {tenantProfiles.Length} fictional schools, {totalPlacements} students, {realCompanies.Length} DUDI, {totalJournalEntries} journal entries.";
     }
 
     private static async Task<AppUser> CreateDemoUserAsync(UserManager<AppUser> userManager, Guid? tenantId, string email, string fullName, UserRole role, CancellationToken ct)
@@ -395,4 +408,3 @@ public static class DemoSeeder
         return user;
     }
 }
-

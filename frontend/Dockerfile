@@ -1,4 +1,6 @@
 FROM oven/bun:1 AS build
+ARG MINIO_PUBLIC_URL
+ENV MINIO_PUBLIC_URL=$MINIO_PUBLIC_URL
 WORKDIR /app
 COPY package.json bun.lock* bun.lockb* ./
 RUN bun install --frozen-lockfile || bun install

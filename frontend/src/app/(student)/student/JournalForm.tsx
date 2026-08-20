@@ -34,6 +34,7 @@ export function JournalForm({ slot, competencies, draftScope, rejectedReason, on
   const [error, setError] = useState<string | null>(null);
   const [draftReady, setDraftReady] = useState(!draftScope);
   const [draftRestored, setDraftRestored] = useState(false);
+  const [offline, setOffline] = useState(false);
 
   const draftKey = draftScope ? journalDraftKey(draftScope, slot.id) : null;
 
@@ -65,6 +66,14 @@ export function JournalForm({ slot, competencies, draftScope, rejectedReason, on
   }, [competencies, draftKey]);
 
   useEffect(() => {
+    const update = () => setOffline(!navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); };
+  }, []);
+
+  useEffect(() => {
     if (!draftReady || !draftKey) return;
 
     try {
@@ -81,7 +90,7 @@ export function JournalForm({ slot, competencies, draftScope, rejectedReason, on
 
   const stillUploading = photos.some((p) => p.status === "uploading");
   const hasFailedPhoto = photos.some((p) => p.status === "error");
-  const canSubmit = text.trim().length > 0 && !submitting && !stillUploading;
+  const canSubmit = text.trim().length > 0 && !submitting && !stillUploading && !offline;
 
   async function handleSubmit() {
     setError(null);
@@ -142,6 +151,8 @@ export function JournalForm({ slot, competencies, draftScope, rejectedReason, on
         </div>
       )}
 
+      {offline && <p role="status" className="border border-status-amber/40 bg-status-amber-bg p-3 text-sm text-status-amber">Anda sedang offline. Draf tetap tersimpan di sesi browser; sambungkan internet untuk mengirim jurnal.</p>}
+
       <div
         role="status"
         aria-live="polite"
@@ -177,7 +188,7 @@ export function JournalForm({ slot, competencies, draftScope, rejectedReason, on
       {error && <p role="alert" className="rounded-[var(--radius-md)] border border-status-red/30 bg-status-red-bg p-3 text-sm font-medium text-status-red">{error}</p>}
 
       <Button size="lg" className="w-full" onClick={handleSubmit} loading={submitting} disabled={!canSubmit}>
-        Kirim Jurnal
+        Kirim untuk ditinjau
       </Button>
     </div>
   );

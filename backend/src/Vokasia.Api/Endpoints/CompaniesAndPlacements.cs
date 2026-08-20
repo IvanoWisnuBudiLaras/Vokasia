@@ -21,14 +21,15 @@ public static class CompaniesAndPlacementsEndpoints
         var companies = app.MapGroup("/api/companies").WithTags("Companies").AddEndpointFilter<ValidationFilter>();
         companies.MapPost("/link/{companyId:guid}", LinkCompanyToTenant).RequireAuthorization(RbacPolicies.TenantAdminOnly);
         companies.MapPost("/propose", ProposeCompany).RequireAuthorization(RbacPolicies.TenantAdminOnly);
+        companies.MapGet("/", ListTenantCompanies).RequireAuthorization(RbacPolicies.TenantMember);
         companies.MapPost("/{companyId:guid}/periods/{periodId:guid}/slots", SetCompanySlots).RequireAuthorization(RbacPolicies.DeptHeadPlus);
 
         var placements = app.MapGroup("/api/placements").WithTags("Placements").AddEndpointFilter<ValidationFilter>();
         placements.MapPost("/", CreatePlacement).RequireAuthorization(RbacPolicies.DeptHeadPlus);
         placements.MapPost("/bulk", BulkCreatePlacements).RequireAuthorization(RbacPolicies.DeptHeadPlus);
         placements.MapPut("/{id:guid}/teacher/{teacherId:guid}", AssignTeacher).RequireAuthorization(RbacPolicies.DeptHeadPlus);
-        placements.MapGet("/", ListPlacements).RequireAuthorization(RbacPolicies.TenantMember);
-        placements.MapGet("/{id:guid}", GetPlacement).RequireAuthorization(RbacPolicies.TenantMember);
+        placements.MapGet("/", ListPlacements).RequireAuthorization();
+        placements.MapGet("/{id:guid}", GetPlacement).RequireAuthorization();
 
         return app;
     }
@@ -54,6 +55,15 @@ public static class CompaniesAndPlacementsEndpoints
         }
 
         return Results.NoContent();
+    }
+
+    private static async Task<IResult> ListTenantCompanies(VokasiaDbContext db, CancellationToken ct)
+    {
+        var rows = await (from link in db.TenantCompanies.AsNoTracking()
+                          join company in db.Companies.AsNoTracking() on link.CompanyId equals company.Id
+                          orderby company.Name
+                          select company).ToListAsync(ct);
+        return Results.Ok(rows.Select(ToDto).ToList());
     }
 
     private static async Task<IResult> ProposeCompany(ProposeCompanyRequest req, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
@@ -353,12 +363,29 @@ public static class CompaniesAndPlacementsEndpoints
     }
 
     private static async Task<IResult> ListPlacements(
-        VokasiaDbContext db, CancellationToken ct,
+        VokasiaDbContext db, ITenantContext tenant, CancellationToken ct,
         [FromQuery] Guid periodId, [FromQuery] Guid? companyId = null, [FromQuery] PlacementStatus? status = null,
         [FromQuery] Guid? teacherId = null, [FromQuery] Guid? studentId = null,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
+        if (!tenant.UserId.HasValue || (tenant.Role != nameof(UserRole.Student) && !tenant.TenantId.HasValue))
+        {
+            return Results.Forbid();
+        }
+
         var query = db.Placements.AsNoTracking().Where(p => p.PeriodId == periodId);
+        if (tenant.Role == nameof(UserRole.Student))
+        {
+            query = query.Where(p => db.Students.Any(s => s.Id == p.StudentId && s.UserId == tenant.UserId));
+        }
+        else if (tenant.Role == nameof(UserRole.Teacher))
+        {
+            query = query.Where(p => p.TeacherId == tenant.UserId);
+        }
+        else if (tenant.Role == nameof(UserRole.IndustryMentor))
+        {
+            query = query.Where(p => p.MentorUserId == tenant.UserId);
+        }
         if (companyId.HasValue)
         {
             query = query.Where(p => p.CompanyId == companyId.Value);
@@ -399,9 +426,22 @@ public static class CompaniesAndPlacementsEndpoints
         return Results.Ok(new Paged<PlacementDto>(items, page, pageSize, total));
     }
 
-    private static async Task<IResult> GetPlacement(Guid id, VokasiaDbContext db, CancellationToken ct)
+    private static async Task<IResult> GetPlacement(Guid id, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
     {
         var placement = await db.Placements.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (placement is not null && tenant.Role == nameof(UserRole.Student) &&
+            (!tenant.UserId.HasValue || !await db.Students.AnyAsync(s => s.Id == placement.StudentId && s.UserId == tenant.UserId, ct)))
+        {
+            return Results.NotFound();
+        }
+        if (placement is not null && tenant.Role == nameof(UserRole.Teacher) && placement.TeacherId != tenant.UserId)
+        {
+            return Results.NotFound();
+        }
+        if (placement is not null && tenant.Role == nameof(UserRole.IndustryMentor) && placement.MentorUserId != tenant.UserId)
+        {
+            return Results.NotFound();
+        }
         return placement is null ? Results.NotFound() : Results.Ok(ToDto(placement));
     }
 

@@ -15,6 +15,7 @@ public record HolidayDto(DateOnly Date, string Label);
 public record StudentDto(Guid Id, string FullName, string? Nisn, Guid MajorId, string Classroom, Guid? UserId);
 public record SaStudentDto(Guid Id, Guid TenantId, string SchoolName, string FullName, string? Nisn, string MajorName, string Classroom);
 public record CreateStudentRequest(string FullName, string? Nisn, Guid MajorId, string Classroom);
+public record MajorOptionDto(Guid Id, string Name);
 public record UpdateStudentRequest(string FullName, string? Nisn, Guid MajorId, string Classroom);
 public record ImportRowError(int Row, string Column, string Message);
 public record ImportResultDto(int Imported, List<ImportRowError> Errors);
@@ -36,6 +37,7 @@ public record PlacementDto(Guid Id, Guid StudentId, Guid CompanyId, Guid PeriodI
 public record BulkResult(List<Guid> SuccessIds, List<ImportRowError> Errors);
 
 public record InviteUserRequest(string Email, string FullName, UserRole Role);
+public record SetInvitationPasswordRequest(string Password);
 public record SchoolUserDto(Guid Id, string Email, string FullName, UserRole Role, bool IsActive);
 
 // VOK-H3-E1: jurnal siswa/mentor/guru.
@@ -57,6 +59,7 @@ public record TodayJournalDto(
 public record SubmitJournalRequest(Guid SlotId, string Text, List<Guid> CompetencyIds, List<Guid>? PhotoIds);
 
 public record UploadRequest(string FileName, string ContentType, long SizeBytes);
+public record PaymentProofUploadRequest(string FileName, string ContentType, long SizeBytes);
 public record PresignedUploadDto(string UploadUrl, string ObjectKey, int ExpiresIn);
 public record AttachPhotoRequest(string ObjectKey);
 

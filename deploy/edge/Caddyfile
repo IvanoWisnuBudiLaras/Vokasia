@@ -6,15 +6,13 @@
 # proxy itu, sehingga `docker compose ... --profile edge up` langsung memberi HTTPS yang dapat
 # diuji end-to-end di mesin lokal tanpa proxy host terpisah.
 #
-# CATATAN: ini DITULIS tetapi BELUM diuji oleh auditor (sandbox tak punya Docker). Verifikasi
-# langkah-langkahnya ada di runbook (chat / AUDIT). Untuk domain nyata: ganti `{$EDGE_PUBLIC_HOST}`
-# dengan domainmu dan HAPUS `tls internal` agar Caddy memakai ACME (Let's Encrypt) otomatis.
+# Caddy owns TLS in the edge profile. EDGE_PUBLIC_HOST must be a real DNS name in production;
+# localhost is only suitable for a local development certificate.
 
 {
-	auto_https off
 }
 
-:80 {
+{$EDGE_PUBLIC_HOST} {
 	@oidc path /connect/* /account/* /.well-known/openid-configuration /.well-known/oauth-authorization-server
 	handle @oidc {
 		reverse_proxy api:8080

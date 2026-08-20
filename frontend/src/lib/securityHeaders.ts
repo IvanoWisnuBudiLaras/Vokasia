@@ -12,19 +12,21 @@ export interface SecurityHeader {
  * browser uploads and public thumbnails use runtime presigned MinIO URLs whose host is selected by
  * the backend and cannot safely be hard-coded into the frontend build.
  */
-export function buildSecurityHeaders(isProduction: boolean): SecurityHeader[] {
+export function buildSecurityHeaders(isProduction: boolean, storageOrigin?: string): SecurityHeader[] {
+  const directBrowserOrigins = storageOrigin ? ` ${storageOrigin.replace(/\/$/, "")}` : "";
+  const iconifyApiOrigins = " https://api.iconify.design https://api.simplesvg.com https://api.unisvg.com";
   const contentSecurityPolicy = [
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline'${isProduction ? "" : " 'unsafe-eval'"}`,
     "style-src 'self' 'unsafe-inline'",
-    `img-src 'self' blob: data: https:${isProduction ? "" : " http:"}`,
+    `img-src 'self' blob: data:${directBrowserOrigins}`,
     "font-src 'self' data:",
-    `connect-src 'self' https:${isProduction ? "" : " http:"}`,
+    `connect-src 'self'${iconifyApiOrigins}${directBrowserOrigins}${!isProduction ? " http://localhost:9000" : ""}`,
     "worker-src 'self' blob:",
     "manifest-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
-    `form-action 'self'${isProduction ? "" : " http://localhost:5000"}`,
+    "form-action 'self'",
     "frame-ancestors 'none'",
   ].join("; ");
 
@@ -36,7 +38,7 @@ export function buildSecurityHeaders(isProduction: boolean): SecurityHeader[] {
     },
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "X-Frame-Options", value: "DENY" },
-    { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+    { key: "Referrer-Policy", value: "no-referrer" },
   ];
 
   if (isProduction) {

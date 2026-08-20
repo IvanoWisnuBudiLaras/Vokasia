@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button, Icon, StatusBadge } from "@/components/ui";
 import { apiClient } from "@/lib/apiClient";
+import Link from "next/link";
 import {
   JournalEntryStatus,
   ragToBadgeStatus,
@@ -16,6 +17,16 @@ export interface StudentDetailDrawerProps {
   student: DashboardFlaggedStudentDto | null;
   periodId: string;
   onClose: () => void;
+}
+
+export function StudentDetailActions({ placementId }: { placementId: string }) {
+  return (
+    <nav aria-label="Tindakan siswa" className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-3">
+      <Link href={`/app/bimbingan/${placementId}`} className="min-h-11 border border-primary px-3 py-3 text-center text-xs font-medium text-primary focus-visible:outline-2 focus-visible:outline-focus">Lihat jurnal &amp; beri komentar</Link>
+      <Link href={`/app/bimbingan/${placementId}/kunjungan`} className="min-h-11 border border-border px-3 py-3 text-center text-xs font-medium text-ink focus-visible:outline-2 focus-visible:outline-focus">Catat kunjungan</Link>
+      <Link href={`/app/penilaian?placementId=${placementId}`} className="min-h-11 border border-border px-3 py-3 text-center text-xs font-medium text-ink focus-visible:outline-2 focus-visible:outline-focus">Isi penilaian</Link>
+    </nav>
+  );
 }
 
 function statusLabel(status: number): string {
@@ -36,6 +47,7 @@ export function StudentDetailDrawer({ student, periodId, onClose }: StudentDetai
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [entries, setEntries] = useState<JournalWithCommentsDto[]>([]);
+  const [placementId, setPlacementId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!student) return;
@@ -45,6 +57,7 @@ export function StudentDetailDrawer({ student, periodId, onClose }: StudentDetai
     setLoading(true);
     setError(false);
     setEntries([]);
+    setPlacementId(null);
 
     const fetchDetail = async () => {
       try {
@@ -56,6 +69,7 @@ export function StudentDetailDrawer({ student, periodId, onClose }: StudentDetai
           if (!cancelled) setError(true);
           return;
         }
+        if (!cancelled) setPlacementId(placement.id);
         const journals = await apiClient.get<JournalWithCommentsDto[]>(`/journals/for-teacher/${placement.id}`);
         if (!cancelled) setEntries(journals.slice(0, 5));
       } catch {
@@ -100,6 +114,8 @@ export function StudentDetailDrawer({ student, periodId, onClose }: StudentDetai
           />
           <span className="text-sm text-ink-muted">{student.reason}</span>
         </div>
+
+        {placementId && <StudentDetailActions placementId={placementId} />}
 
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold text-ink">Riwayat Jurnal Terakhir</h3>

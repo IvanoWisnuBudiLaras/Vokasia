@@ -78,6 +78,7 @@ export function TenantsTable({ initialTenants, plans }: TenantsTableProps) {
   const [planFilter, setPlanFilter] = useState<string>("");
   const [activeFilter, setActiveFilter] = useState<string>("");
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [creationStatus, setCreationStatus] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [impersonatingTenantId, setImpersonatingTenantId] = useState<string | null>(null);
   const [editingTenantId, setEditingTenantId] = useState<string | null>(null);
@@ -116,7 +117,14 @@ export function TenantsTable({ initialTenants, plans }: TenantsTableProps) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-ink">Tenants</h1>
         {!wizardOpen && (
-          <Button variant="primary" size="md" onClick={() => setWizardOpen(true)}>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => {
+              setCreationStatus(null);
+              setWizardOpen(true);
+            }}
+          >
             + Tenant Baru
           </Button>
         )}
@@ -128,9 +136,17 @@ export function TenantsTable({ initialTenants, plans }: TenantsTableProps) {
           onCancel={() => setWizardOpen(false)}
           onCreated={() => {
             setWizardOpen(false);
+            setCreationStatus("Undangan admin sudah dikirim. Admin akan mengatur kata sandi melalui tautan satu kali.");
             void refresh();
           }}
         />
+      )}
+
+      {creationStatus && (
+        <div role="status" className="border-l-4 border-status-green bg-status-green-bg p-4 text-sm text-ink">
+          <strong className="block">Tenant berhasil dibuat.</strong>
+          <span>{creationStatus}</span>
+        </div>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">

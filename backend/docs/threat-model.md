@@ -42,4 +42,4 @@ Acuan review security sepanjang sprint (SOUL.md, AGENTS.md §non-negotiable). Se
 - PKCE + lifetime token: **implemented** (`OpenIddictSetup.cs`), test lihat `Vokasia.Tests/Auth/`.
 - Tenant filter: **stub aktif** (query filter mekanis hidup, `ITenantContext` masih diisi manual — middleware nyata H2-E3). Tidak ada gap keamanan baru dari stub ini karena belum ada endpoint publik yang membaca lintas tenant di H1.
 - Rate limit, FluentValidation, EXIF-strip, impersonation audit: **belum dikerjakan** — dijadwalkan H2-E3/H3-E3/H4-E1/H6-E3 sesuai TICKETS.md. Bukan gap baru, sesuai rencana sprint.
-- Dependency scan: 1 kerentanan known (`Microsoft.OpenApi` 2.1.0, GHSA-v5pm-xwqc-g5wc) — dipin sengaja karena versi terpatch 3.x bentrok source-generator `Microsoft.AspNetCore.OpenApi` 10.0.10 (dicatat di csproj). Waived sementara; scan penuh H6-E3.
+- Dependency scan remediation: `Microsoft.OpenApi` is pinned to patched compatible 2.7.5; MailKit/MimeKit are aligned at 4.16.0; SSH.NET is explicitly overridden to 2026.0.0 for the test-container graph. The authoritative vulnerability scan remains a developer-machine verification gate.

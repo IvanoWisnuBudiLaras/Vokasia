@@ -25,6 +25,10 @@
          jadi dependensi TRANSITIF lewat MassTransit.RabbitMQ (Worker->Infrastructure), direferensi
          eksplisit di sini supaya versi jelas & tak diam-diam berubah ikut upstream. -->
     <PackageReference Include="RabbitMQ.Client" Version="7.2.1" />
+    <!-- Explicit safe floor for SSH.NET pulled transitively by Testcontainers. -->
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
+    <!-- Independent QR decoder for the exact PNG representation embedded by CertificatePdfDocument. -->
+    <PackageReference Include="ZXing.Net.Bindings.ImageSharp.V3" Version="0.16.18" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>

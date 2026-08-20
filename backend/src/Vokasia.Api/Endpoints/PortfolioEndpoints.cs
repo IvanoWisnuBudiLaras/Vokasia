@@ -5,6 +5,7 @@ using Minio;
 using Minio.DataModel.Args;
 using Vokasia.Api.Auth;
 using Vokasia.Api.RateLimiting;
+using Vokasia.Api.Storage;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
@@ -207,7 +208,7 @@ public static class PortfolioEndpoints
     /// — TANPA kontak/NISN (ditegakkan struktural: query di bawah TIDAK PERNAH select Student.Nisn
     /// ataupun kolom kontak apa pun ke PublicPortfolioDto).
     /// </summary>
-    private static async Task<IResult> GetPublicPortfolio(string slug, VokasiaDbContext db, IMinioClient minio, IConfiguration config, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> GetPublicPortfolio(string slug, VokasiaDbContext db, IBrowserObjectStorageSigner storageSigner, IConfiguration config, HttpContext http, CancellationToken ct)
     {
         var portfolio = await db.Portfolios.AsNoTracking().FirstOrDefaultAsync(p => p.Slug == slug && p.IsPublished, ct);
         if (portfolio is null)
@@ -253,7 +254,7 @@ public static class PortfolioEndpoints
                 continue;
             }
 
-            thumbUrls.Add(await minio.PresignedGetObjectAsync(new PresignedGetObjectArgs().WithBucket(bucket).WithObject(key).WithExpiry(PresignedExpirySeconds)));
+            thumbUrls.Add(await storageSigner.PresignedGetObjectAsync(new PresignedGetObjectArgs().WithBucket(bucket).WithObject(key).WithExpiry(PresignedExpirySeconds)));
         }
 
         var hasCertificate = await db.Certificates.AsNoTracking().Join(db.Placements.AsNoTracking(), c => c.PlacementId, p => p.Id, (c, p) => p.StudentId).AnyAsync(sid => sid == student.Id, ct);

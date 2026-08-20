@@ -1,3 +1,4 @@
+
 namespace Vokasia.Domain.Entities;
 
 /// <summary>Notifikasi in-app (bell FE). Email dikirim terpisah oleh consumer H4-E3.</summary>

@@ -6,6 +6,7 @@ using Minio;
 using Minio.DataModel.Args;
 using Vokasia.Api.Auth;
 using Vokasia.Api.Security;
+using Vokasia.Api.Storage;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
@@ -234,7 +235,7 @@ public static class JournalEndpoints
         return Results.Ok(ToDto(entry, photos, req.CompetencyIds.Distinct().ToList()));
     }
 
-    private static async Task<IResult> GetPresignedUploadUrl(UploadRequest req, IMinioClient minio, ITenantContext tenant, IConfiguration config, CancellationToken ct)
+    private static async Task<IResult> GetPresignedUploadUrl(UploadRequest req, IBrowserObjectStorageSigner storageSigner, ITenantContext tenant, IConfiguration config, CancellationToken ct)
     {
         // VOK-H3-E3 §2: ContentType whitelist + ukuran<=5MB SEKARANG ditegakkan UploadRequestValidator
         // (Validation/UploadRequestValidator.cs, sumber batas sama persis: AllowedContentTypes/
@@ -259,7 +260,7 @@ public static class JournalEndpoints
             .WithBucket(bucket)
             .WithObject(objectKey)
             .WithExpiry(expirySeconds);
-        var url = await minio.PresignedPutObjectAsync(args);
+        var url = await storageSigner.PresignedPutObjectAsync(args);
 
         return Results.Ok(new PresignedUploadDto(url, objectKey, expirySeconds));
     }

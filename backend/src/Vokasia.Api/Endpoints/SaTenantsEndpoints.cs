@@ -116,9 +116,6 @@ public static class SaTenantsEndpoints
 
         await db.SaveChangesAsync(ct);
 
-        // Password sementara acak — pola SAMA dgn SchoolUsersEndpoints.InviteSchoolUser (H2-E1),
-        // kini benar2 terkirim lewat email (TenantAdminInvitedConsumer) krn infra email sudah ada (H4-E3).
-        var tempPassword = $"Tmp-{Guid.NewGuid():N}Aa1!";
         var adminUser = new AppUser
         {
             UserName = req.AdminEmail,
@@ -127,7 +124,7 @@ public static class SaTenantsEndpoints
             TenantId = tenant.Id,
             Role = UserRole.TenantAdmin,
         };
-        var createResult = await userManager.CreateAsync(adminUser, tempPassword);
+        var createResult = await userManager.CreateAsync(adminUser);
         if (!createResult.Succeeded)
         {
             await tx.RollbackAsync(ct);
@@ -141,7 +138,7 @@ public static class SaTenantsEndpoints
         {
             Id = Guid.NewGuid(),
             Type = "TenantAdminInvited",
-            PayloadJson = JsonSerializer.Serialize(new { TenantId = tenant.Id, UserId = adminUser.Id, Email = req.AdminEmail, FullName = req.AdminName, TempPassword = tempPassword }),
+            PayloadJson = JsonSerializer.Serialize(new { TenantId = tenant.Id, UserId = adminUser.Id, Email = req.AdminEmail, FullName = req.AdminName }),
         });
 
         db.AuditLogs.Add(new AuditLog

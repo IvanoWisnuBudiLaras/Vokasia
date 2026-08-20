@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
+using Vokasia.Infrastructure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -55,8 +57,18 @@ public static class DependencyInjection
         // `env` opsional (default null -> anggap BUKAN Development) supaya caller lama (test yang
         // belum sempat diupdate) tetap compile - tapi Api/Worker Program.cs SELALU mengirim IHostEnvironment
         // nyata (lihat pemanggilan masing-masing).
+        // PonyTail: dynamically use SmtpEmailSender if Smtp:Host is configured, otherwise fallback to DevLog in Dev.
         var isDevelopment = env?.IsDevelopment() ?? false;
-        if (isDevelopment)
+        var useSmtp = !string.IsNullOrWhiteSpace(config["Smtp:Host"]);
+        if (useSmtp)
+        {
+            services.AddScoped<SmtpEmailSender>();
+            services.AddScoped<IEmailSender>(sp => new IdempotentEmailSender(
+                sp.GetRequiredService<VokasiaDbContext>(),
+                sp.GetRequiredService<SmtpEmailSender>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<IdempotentEmailSender>>()));
+        }
+        else if (isDevelopment)
         {
             services.AddScoped<DevLogEmailSender>();
             services.AddScoped<IEmailSender>(sp => new IdempotentEmailSender(
@@ -75,4 +87,20 @@ public static class DependencyInjection
 
         return services;
     }
+    public static IdentityBuilder AddVokasiaIdentityCore(this IServiceCollection services)
+    {
+        services.AddDataProtection();
+        return services.AddIdentityCore<AppUser>(opt =>
+            {
+                opt.Password.RequiredLength = 8;
+                opt.Password.RequireNonAlphanumeric = false;
+                opt.Lockout.MaxFailedAccessAttempts = 5;
+                opt.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+                opt.User.RequireUniqueEmail = true;
+            })
+            .AddRoles<AppRole>()
+            .AddEntityFrameworkStores<VokasiaDbContext>()
+            .AddDefaultTokenProviders();
+    }
+
 }

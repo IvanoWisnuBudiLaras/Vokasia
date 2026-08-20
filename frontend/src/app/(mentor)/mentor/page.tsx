@@ -1,7 +1,6 @@
 import { PageHeading } from "@/components/PageHeading";
 import { ErrorState } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
-import { getSession } from "@/lib/session";
 import type { PendingGroupDto } from "@/lib/apiTypes";
 import { ApprovalList } from "./ApprovalList";
 
@@ -19,15 +18,14 @@ async function loadPending(): Promise<{ groups: PendingGroupDto[]; error: boolea
 
 /** VOK-H3-E2 §2 mentor/page.tsx — daftar GetPendingApprovals grup per siswa, header hitung total. */
 export default async function MentorHomePage() {
-  const session = await getSession();
   const { groups, error } = await loadPending();
   const total = groups.reduce((sum, g) => sum + g.entries.length, 0);
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeading
-        eyebrow="TINDAKAN MENTOR"
-        title={session ? `Halo, ${session.name}` : "Approval mingguan"}
+        eyebrow="ANTRIAN TINJAUAN"
+        title="Apa yang perlu saya tinjau?"
         description={total === 0 ? "Tidak ada jurnal yang menunggu persetujuan." : `${total} jurnal menunggu persetujuan Anda.`}
       />
 

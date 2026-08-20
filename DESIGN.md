@@ -78,6 +78,64 @@ Prinsip (adaptasi `copy.md` hallmark ke konteks aplikasi fungsional, bukan landi
 - **Empty state 3 baris:** (1) apa yang kosong, (2) kenapa itu penting, (3) satu tombol aksi. Contoh: "Belum ada siswa terdaftar. Data siswa dipakai utk penempatan PKL & jurnal harian. [Tambah siswa]"
 - **Konsisten satu istilah.** Pilih "Hapus" ATAU "Buang" — bukan campur. Sudah ada di kode: "Keluar" (logout), "Masuk" (login) — pertahankan, jangan ganti jadi "Logout"/"Sign in" di tempat lain.
 - **Dilarang basa-basi marketing** — "Rasakan kemudahan...", "Solusi terbaik utk...", tanda seru di error, humor di alur gagal (lupa password, akun dikunci).
+
+## UI Constitution — release recovery
+
+### 1. Product Interaction Principles
+
+Operational screens answer the user's next action, preserve context, and expose recovery when an action fails.
+
+### 2. Persona Interaction Grammar
+
+Student is task-first; Mentor queue-first; Teacher exception-first; TenantAdmin operations-first; SuperAdmin platform-first.
+
+### 3. Material 3 Foundation
+
+Use `@material/web` per-component for suitable buttons, fields, menus, dialogs, progress, and selection primitives. React/Next remains responsible for domain composition.
+
+### 4. Design Tokens
+
+`frontend/src/app/globals.css` remains the source of truth for color, type, spacing, radius, focus, and motion tokens. New UI must consume those tokens.
+
+### 5. Component Ownership
+
+Material primitives own generic interaction. Vokasia domain components own `JournalTask`, `ApprovalQueue`, `PlacementRow`, `RagIndicator`, `InvoiceProof`, and `AssessmentForm` behavior.
+
+### 6. Iconography
+
+Use bundled Iconify Material Symbols Rounded icons only. Every icon has semantic purpose; icon-only controls have accessible names.
+
+### 7. Responsive Rules
+
+Student and Mentor support 360px minimum, 44px touch targets, no horizontal scroll, visible focus, and reduced motion.
+
+### 8. Workflow Patterns
+
+Collections use tables/lists; forms use structured sections; one primary CTA is explicit; dangerous actions require confirmation; errors include recovery.
+
+### 9. Data Density Rules
+
+Desktop operational screens favor dense lists and meaningful filters. Avoid decorative whitespace and vanity statistics.
+
+### 10. State Model
+
+Every async screen defines loading, empty, error, success, and offline behavior where applicable.
+
+### 11. Accessibility
+
+Keyboard navigation, semantic labels, focus visibility, contrast, 44px targets, and reduced motion are acceptance criteria—not polish tasks.
+
+### 12. Copy & Terminology
+
+Use simple Indonesian and concrete verbs. Never use generic `OK`, `Submit`, or `Continue` when the action can be named.
+
+### 13. Anti-AI-Slop Rules
+
+No giant app hero, decorative gradients, glassmorphism, arbitrary blur, nested cards, shadow everywhere, automatic KPI-card grids, metadata pills everywhere, mixed icon families, emoji UI icons, or meaningless illustrations.
+
+### 14. Visual Acceptance Checklist
+
+Review at 320/360/375/414/768px; verify no horizontal scroll, no clipped labels, stable accessible selectors, semantic icons, actionable empty/error states, and persona-specific information hierarchy.
 - Placeholder data uji **eksplisit palsu** ("Siswa Contoh", bukan nama asli siapa pun) — tak pernah metrik/testimoni karangan (hallmark: *"no fabricated content"*).
 
 ## Aturan pemakaian

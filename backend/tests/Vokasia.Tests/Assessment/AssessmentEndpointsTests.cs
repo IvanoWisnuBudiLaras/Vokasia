@@ -25,18 +25,18 @@ public class AssessmentEndpointsTests : IClassFixture<VokasiaApiFactory>
     private readonly VokasiaApiFactory _factory;
     public AssessmentEndpointsTests(VokasiaApiFactory factory) => _factory = factory;
 
-    private async Task<HttpClient> AuthClientAsync(UserRole role, Guid? tenantId, string emailPrefix)
+    private async Task<(HttpClient Client, Guid UserId)> AuthClientAsync(UserRole role, Guid? tenantId, string emailPrefix)
     {
         var user = await AuthTestHelpers.SeedUserAsync(_factory, emailPrefix, role, tenantId);
         var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var (accessToken, _) = await AuthTestHelpers.LoginAndExchangeAsync(client, user.Email!);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        return client;
+        return (client, user.Id);
     }
 
     private sealed record Fixture(Guid TenantId, Guid PlacementId, Guid TeknisId, Guid SoftskillId, Guid KehadiranId, Guid MentorUserId);
 
-    private async Task<Fixture> SeedFixtureAsync(Guid tenantId, Guid mentorUserId)
+    private async Task<Fixture> SeedFixtureAsync(Guid tenantId, Guid mentorUserId, Guid? teacherUserId = null)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
@@ -50,7 +50,7 @@ public class AssessmentEndpointsTests : IClassFixture<VokasiaApiFactory>
         var period = new Period { Id = Guid.NewGuid(), TenantId = tenantId, Name = "Periode Uji", StartDate = new DateOnly(2026, 1, 1), EndDate = new DateOnly(2026, 12, 31), ClassLevels = "XII", Status = PeriodStatus.Active };
         var company = new Company { Id = Guid.NewGuid(), Name = "PT Uji Nilai" };
         var student = new Student { Id = Guid.NewGuid(), TenantId = tenantId, FullName = "Siswa Uji Nilai", MajorId = Guid.NewGuid(), Classroom = "XII A" };
-        var placement = new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = student.Id, CompanyId = company.Id, PeriodId = period.Id, TeacherId = Guid.NewGuid(), MentorUserId = mentorUserId, Status = PlacementStatus.Active };
+        var placement = new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = student.Id, CompanyId = company.Id, PeriodId = period.Id, TeacherId = teacherUserId ?? Guid.NewGuid(), MentorUserId = mentorUserId, Status = PlacementStatus.Active };
 
         db.RubricTemplates.Add(rubric);
         db.Periods.Add(period);
@@ -66,7 +66,7 @@ public class AssessmentEndpointsTests : IClassFixture<VokasiaApiFactory>
     /// test batch-mode supaya `IsDefault` tenant tetap tunggal (2x SeedFixtureAsync pd tenant sama
     /// akan bikin 2 baris IsDefault=true, ResolveRubricAsync jadi ambigu - PROMPT-D-style ditemukan
     /// saat test batch gagal krn salah rubric ke-resolve).</summary>
-    private async Task<Fixture> SeedSecondPlacementSameRubricAsync(Fixture existing, Guid mentorUserId)
+    private async Task<Fixture> SeedSecondPlacementSameRubricAsync(Fixture existing, Guid mentorUserId, Guid? teacherUserId = null)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
@@ -74,7 +74,7 @@ public class AssessmentEndpointsTests : IClassFixture<VokasiaApiFactory>
         var companyId = await db.Placements.Where(p => p.Id == existing.PlacementId).Select(p => p.CompanyId).FirstAsync();
 
         var student = new Student { Id = Guid.NewGuid(), TenantId = existing.TenantId, FullName = "Siswa Uji Nilai Kedua", MajorId = Guid.NewGuid(), Classroom = "XII B" };
-        var placement = new Placement { Id = Guid.NewGuid(), TenantId = existing.TenantId, StudentId = student.Id, CompanyId = companyId, PeriodId = periodId, TeacherId = Guid.NewGuid(), MentorUserId = mentorUserId, Status = PlacementStatus.Active };
+        var placement = new Placement { Id = Guid.NewGuid(), TenantId = existing.TenantId, StudentId = student.Id, CompanyId = companyId, PeriodId = periodId, TeacherId = teacherUserId ?? Guid.NewGuid(), MentorUserId = mentorUserId, Status = PlacementStatus.Active };
         db.Students.Add(student);
         db.Placements.Add(placement);
         await db.SaveChangesAsync();
@@ -149,8 +149,8 @@ public class AssessmentEndpointsTests : IClassFixture<VokasiaApiFactory>
     {
         var tenantId = Guid.NewGuid();
         var mentor = await AuthTestHelpers.SeedUserAsync(_factory, "assess-teacher-mentorstub", UserRole.IndustryMentor, null);
-        var teacherClient = await AuthClientAsync(UserRole.Teacher, tenantId, "assess-teacher-ok");
-        var fx = await SeedFixtureAsync(tenantId, mentor.Id);
+        var (teacherClient, teacherUserId) = await AuthClientAsync(UserRole.Teacher, tenantId, "assess-teacher-ok");
+        var fx = await SeedFixtureAsync(tenantId, mentor.Id, teacherUserId);
 
         var resp = await teacherClient.PostAsJsonAsync($"/api/placements/{fx.PlacementId}/assessment/teacher-scores", new object[]
         {
@@ -168,7 +168,7 @@ public class AssessmentEndpointsTests : IClassFixture<VokasiaApiFactory>
     {
         var tenantId = Guid.NewGuid();
         var mentor = await AuthTestHelpers.SeedUserAsync(_factory, "assess-get-shell-mentor", UserRole.IndustryMentor, null);
-        var adminClient = await AuthClientAsync(UserRole.TenantAdmin, tenantId, "assess-get-shell-admin");
+        var (adminClient, _) = await AuthClientAsync(UserRole.TenantAdmin, tenantId, "assess-get-shell-admin");
         var fx = await SeedFixtureAsync(tenantId, mentor.Id);
 
         var resp = await adminClient.GetAsync($"/api/placements/{fx.PlacementId}/assessment");
@@ -189,10 +189,10 @@ public class AssessmentEndpointsTests : IClassFixture<VokasiaApiFactory>
         var mentorClient = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var (mentorToken, _) = await AuthTestHelpers.LoginAndExchangeAsync(mentorClient, mentor.Email!);
         mentorClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", mentorToken);
-        var teacherClient = await AuthClientAsync(UserRole.Teacher, tenantId, "assess-finalize-ok-teacher");
-        var adminClient = await AuthClientAsync(UserRole.TenantAdmin, tenantId, "assess-finalize-ok-admin");
+        var (teacherClient, teacherUserId) = await AuthClientAsync(UserRole.Teacher, tenantId, "assess-finalize-ok-teacher");
+        var (adminClient, _) = await AuthClientAsync(UserRole.TenantAdmin, tenantId, "assess-finalize-ok-admin");
 
-        var fx = await SeedFixtureAsync(tenantId, mentor.Id);
+        var fx = await SeedFixtureAsync(tenantId, mentor.Id, teacherUserId);
 
         await mentorClient.PostAsJsonAsync($"/api/placements/{fx.PlacementId}/assessment/mentor-scores", new object[]
         {
@@ -244,7 +244,7 @@ public class AssessmentEndpointsTests : IClassFixture<VokasiaApiFactory>
         var mentorClient = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var (mentorToken, _) = await AuthTestHelpers.LoginAndExchangeAsync(mentorClient, mentor.Email!);
         mentorClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", mentorToken);
-        var adminClient = await AuthClientAsync(UserRole.TenantAdmin, tenantId, "assess-finalize-incomplete-admin");
+        var (adminClient, _) = await AuthClientAsync(UserRole.TenantAdmin, tenantId, "assess-finalize-incomplete-admin");
 
         var fx = await SeedFixtureAsync(tenantId, mentor.Id);
 
@@ -271,11 +271,11 @@ public class AssessmentEndpointsTests : IClassFixture<VokasiaApiFactory>
         var tenantId = Guid.NewGuid();
         var mentorA = await AuthTestHelpers.SeedUserAsync(_factory, "assess-batch-mentorA", UserRole.IndustryMentor, null);
         var mentorB = await AuthTestHelpers.SeedUserAsync(_factory, "assess-batch-mentorB", UserRole.IndustryMentor, null);
-        var teacherClient = await AuthClientAsync(UserRole.Teacher, tenantId, "assess-batch-teacher");
-        var adminClient = await AuthClientAsync(UserRole.TenantAdmin, tenantId, "assess-batch-admin");
+        var (teacherClient, teacherUserId) = await AuthClientAsync(UserRole.Teacher, tenantId, "assess-batch-teacher");
+        var (adminClient, _) = await AuthClientAsync(UserRole.TenantAdmin, tenantId, "assess-batch-admin");
 
-        var fxA = await SeedFixtureAsync(tenantId, mentorA.Id); // akan lengkap.
-        var fxB = await SeedSecondPlacementSameRubricAsync(fxA, mentorB.Id); // sengaja TIDAK lengkap.
+        var fxA = await SeedFixtureAsync(tenantId, mentorA.Id, teacherUserId); // akan lengkap.
+        var fxB = await SeedSecondPlacementSameRubricAsync(fxA, mentorB.Id, teacherUserId); // sengaja TIDAK lengkap.
 
         var mentorAClient = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var (tokenA, _) = await AuthTestHelpers.LoginAndExchangeAsync(mentorAClient, mentorA.Email!);
@@ -387,7 +387,7 @@ public class AssessmentEndpointsTests : IClassFixture<VokasiaApiFactory>
     [Fact]
     public async Task ListMentorAssessmentPlacements_TeacherRole_Forbidden()
     {
-        var client = await AuthClientAsync(UserRole.Teacher, Guid.NewGuid(), "queue-teacher-forbidden");
+        var (client, _) = await AuthClientAsync(UserRole.Teacher, Guid.NewGuid(), "queue-teacher-forbidden");
 
         var resp = await client.GetAsync("/api/mentors/assessment-queue");
 

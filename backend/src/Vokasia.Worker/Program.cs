@@ -1,11 +1,13 @@
 using Hangfire;
 using Hangfire.PostgreSql;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Vokasia.Infrastructure;
 using Vokasia.Infrastructure.Messaging;
+using Vokasia.Infrastructure.Persistence;
 using Vokasia.Worker;
 using Vokasia.Worker.Consumers;
 using Vokasia.Worker.Health;
@@ -37,6 +39,13 @@ var builder = Host.CreateApplicationBuilder(args);
 // VokasiaDbContext otomatis "mati", cron LINTAS SEMUA TENANT by design (lihat doc-comment
 // JournalCronJobs).
 builder.Services.AddVokasiaInfrastructure(builder.Configuration, builder.Environment);
+
+// VOK-H6-E1 §1: TenantAdminInvitedConsumer memakai UserManager<AppUser> (FindByIdAsync +
+// SetAuthenticationTokenAsync utk invitation token) — AddVokasiaInfrastructure TIDAK
+// mendaftarkan Identity (lihat doc-comment DependencyInjection.cs), jadi Worker wajib
+// mendaftarkan core Identity sendiri; API memakainya via AddVokasiaIdentity (IdentitySetup.cs)
+// yang juga memanggil AddVokasiaIdentityCore (satu sumber opsi, tanpa dobel-registrasi).
+builder.Services.AddVokasiaIdentityCore();
 
 // Readiness worker mencakup dependency yang benar-benar diperlukan. MassTransit menambahkan
 // check RabbitMQ ber-tag "ready" sendiri; tiga check di bawah melengkapi Postgres, Redis, MinIO.
@@ -119,6 +128,32 @@ builder.Services.AddHostedService<OutboxDispatcher>();
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();
+
+if (args is ["--generate-next-e2e-invoices"])
+{
+    if (!builder.Environment.IsDevelopment() ||
+        !builder.Configuration.GetValue<bool>("E2E_FIXTURES_ENABLED"))
+    {
+        throw new InvalidOperationException(
+            "Fixture invoice E2E hanya boleh dibuat di Development dengan E2E_FIXTURES_ENABLED=true.");
+    }
+
+    await using var scope = host.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
+    var latestPeriod = await db.Invoices
+        .Select(invoice => (DateOnly?)invoice.PeriodMonth)
+        .MaxAsync();
+    var nextPeriod = (latestPeriod ?? new DateOnly(
+        DateTime.UtcNow.Year,
+        DateTime.UtcNow.Month,
+        1)).AddMonths(1);
+
+    await scope.ServiceProvider
+        .GetRequiredService<BillingCronJobs>()
+        .GenerateMonthlyInvoices(nextPeriod);
+    return;
+}
+
 var readinessMarker = host.Services.GetRequiredService<WorkerReadinessMarker>();
 readinessMarker.Clear();
 host.Services.GetRequiredService<IHostApplicationLifetime>()

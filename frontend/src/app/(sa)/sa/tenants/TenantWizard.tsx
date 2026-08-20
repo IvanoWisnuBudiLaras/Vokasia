@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Input } from "@/components/ui";
+import { Input } from "@/components/ui";
+import { MaterialButton } from "@/components/ui/MaterialButton";
 import { apiClient, ApiError } from "@/lib/apiClient";
 import type { PlanDto, TenantDto } from "@/lib/apiTypes";
 
@@ -31,6 +32,7 @@ export function TenantWizard({ plans, onCreated, onCancel }: TenantWizardProps) 
   const [adminEmail, setAdminEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [invitationSent, setInvitationSent] = useState(false);
 
   const step1Valid = schoolName.trim().length > 0 && city.trim().length > 0;
   const step2Valid = planId.length > 0;
@@ -48,6 +50,7 @@ export function TenantWizard({ plans, onCreated, onCancel }: TenantWizardProps) 
         adminName,
         planId,
       });
+      setInvitationSent(true);
       onCreated();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Gagal membuat tenant. Coba lagi.");
@@ -60,19 +63,26 @@ export function TenantWizard({ plans, onCreated, onCancel }: TenantWizardProps) 
     <div className="flex flex-col gap-4 rounded-[var(--radius-lg)] border border-border bg-surface-muted p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-ink">Tenant Baru — Langkah {step}/3</h2>
-        <Button variant="secondary" size="md" onClick={onCancel} disabled={submitting}>
+        <MaterialButton type="button" className="border-border bg-surface text-ink" onClick={onCancel} disabled={submitting}>
           Batal
-        </Button>
+        </MaterialButton>
       </div>
+
+      {invitationSent && (
+        <div role="status" className="border-l-4 border-status-green bg-status-green-bg p-4 text-sm text-ink">
+          <strong className="block">Tenant berhasil dibuat.</strong>
+          <span>Undangan admin sudah dikirim. Admin akan mengatur kata sandi melalui tautan satu kali.</span>
+        </div>
+      )}
 
       {step === 1 && (
         <div className="flex flex-col gap-3">
           <Input label="Nama Sekolah" value={schoolName} onChange={(e) => setSchoolName(e.target.value)} placeholder="SMK Negeri 1 Contoh" />
           <Input label="NPSN (opsional)" value={npsn} onChange={(e) => setNpsn(e.target.value)} />
           <Input label="Kota" value={city} onChange={(e) => setCity(e.target.value)} />
-          <Button variant="primary" size="md" disabled={!step1Valid} onClick={() => setStep(2)} className="self-end">
+          <MaterialButton type="button" disabled={!step1Valid} onClick={() => setStep(2)} className="self-end border-primary bg-primary text-on-primary disabled:opacity-50">
             Lanjut: Pilih Plan
-          </Button>
+          </MaterialButton>
         </div>
       )}
 
@@ -94,12 +104,12 @@ export function TenantWizard({ plans, onCreated, onCancel }: TenantWizardProps) 
             </select>
           </label>
           <div className="flex justify-between">
-            <Button variant="secondary" size="md" onClick={() => setStep(1)}>
+            <MaterialButton type="button" className="border-border bg-surface text-ink" onClick={() => setStep(1)}>
               Kembali
-            </Button>
-            <Button variant="primary" size="md" disabled={!step2Valid} onClick={() => setStep(3)}>
+            </MaterialButton>
+            <MaterialButton type="button" disabled={!step2Valid} onClick={() => setStep(3)} className="border-primary bg-primary text-on-primary disabled:opacity-50">
               Lanjut: Admin Pertama
-            </Button>
+            </MaterialButton>
           </div>
         </div>
       )}
@@ -110,12 +120,12 @@ export function TenantWizard({ plans, onCreated, onCancel }: TenantWizardProps) 
           <Input label="Email Admin" type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@sekolah.sch.id" />
           {error && <p className="text-sm text-status-red">{error}</p>}
           <div className="flex justify-between">
-            <Button variant="secondary" size="md" onClick={() => setStep(2)} disabled={submitting}>
+            <MaterialButton type="button" className="border-border bg-surface text-ink" onClick={() => setStep(2)} disabled={submitting}>
               Kembali
-            </Button>
-            <Button variant="primary" size="md" loading={submitting} disabled={!step3Valid} onClick={handleSubmit}>
-              Buat Tenant
-            </Button>
+            </MaterialButton>
+            <MaterialButton type="button" disabled={!step3Valid || submitting} onClick={handleSubmit} className="border-primary bg-primary text-on-primary disabled:opacity-50">
+              {submitting ? "Membuat tenant…" : "Buat tenant dan kirim undangan"}
+            </MaterialButton>
           </div>
         </div>
       )}

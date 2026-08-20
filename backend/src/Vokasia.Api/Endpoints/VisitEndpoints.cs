@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Minio;
 using Minio.DataModel.Args;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Storage;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
@@ -132,7 +133,7 @@ public static class VisitEndpoints
     }
 
     private static async Task<IResult> GetVisitPhotoUploadUrl(
-        Guid placementId, UploadRequest req, IMinioClient minio, ITenantContext tenant, IConfiguration config, VokasiaDbContext db, CancellationToken ct)
+        Guid placementId, UploadRequest req, IBrowserObjectStorageSigner storageSigner, ITenantContext tenant, IConfiguration config, VokasiaDbContext db, CancellationToken ct)
     {
         if (!tenant.TenantId.HasValue)
         {
@@ -156,7 +157,7 @@ public static class VisitEndpoints
         var objectKey = $"tenant/{tenant.TenantId}/visit-photo/{Guid.NewGuid():N}.{extension}";
         const int expirySeconds = 300;
 
-        var url = await minio.PresignedPutObjectAsync(new PresignedPutObjectArgs()
+        var url = await storageSigner.PresignedPutObjectAsync(new PresignedPutObjectArgs()
             .WithBucket(bucket)
             .WithObject(objectKey)
             .WithExpiry(expirySeconds));

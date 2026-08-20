@@ -8,11 +8,13 @@ using Microsoft.AspNetCore.HttpOverrides;
 using System.Text.Json;
 using Minio;
 using Minio.DataModel.Args;
+using Microsoft.EntityFrameworkCore;
 using Vokasia.Api.Auth;
 using Vokasia.Api.Auth.MagicLink;
 using Vokasia.Api.Endpoints;
 using Vokasia.Api.Middleware;
 using Vokasia.Api.RateLimiting;
+using Vokasia.Api.Storage;
 using Vokasia.Infrastructure;
 using Vokasia.Infrastructure.Identity;
 using Vokasia.Infrastructure.Persistence;
@@ -53,6 +55,7 @@ else if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
 
 builder.Services.AddOpenApi();
 builder.Services.AddVokasiaInfrastructure(builder.Configuration, builder.Environment);
+builder.Services.AddSingleton<IBrowserObjectStorageSigner, BrowserObjectStorageSigner>();
 
 // Identity (SignInManager, UserManager, cookie scheme, claims factory) — satu titik di IdentitySetup.cs (VOK-H1-E3).
 builder.Services.AddVokasiaIdentity();
@@ -60,6 +63,18 @@ builder.Services.AddVokasiaIdentity();
 builder.Services.AddVokasiaOpenIddict(builder.Configuration, builder.Environment);
 builder.Services.AddVokasiaRbacPolicies(); // AddAuthorizationBuilder() di dalamnya – jangan tambah AddAuthorization() lagi.
 builder.Services.AddControllers();
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ??
+    (developmentLikeEnvironment ? ["http://localhost:3000"] : []);
+if (!developmentLikeEnvironment && corsOrigins.Any(string.IsNullOrWhiteSpace))
+{
+    throw new InvalidOperationException("Cors:AllowedOrigins wajib berisi origin production yang eksplisit.");
+}
+builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
+{
+    policy.WithOrigins(corsOrigins.Where(origin => !string.IsNullOrWhiteSpace(origin)).ToArray())
+        .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+        .WithHeaders("Content-Type", "Authorization", "Accept");
+}));
 builder.Services.AddAntiforgery(options =>
 {
     options.Cookie.Name = "vok_antiforgery";
@@ -116,6 +131,7 @@ app.UseMiddleware<Vokasia.Api.Middleware.SecurityHeadersMiddleware>(); // nosnif
 
 app.UseHttpsRedirection();
 app.UseRouting();
+app.UseCors("Frontend");
 app.UseStatusCodePages(async statusContext =>
 {
     var context = statusContext.HttpContext;
@@ -188,6 +204,18 @@ if (args is ["seed", "demo", ..] && !app.Environment.IsDevelopment() && !app.Env
 }
 
 // Seed client OAuth BFF — idempoten, aman tiap startup (VOK-H1-E3).
+// VOK-H8: Apply pending EF migrations BEFORE seeding - Postgres volume yg sudah ada dari
+// build sebelumnya (sebelum gate ini dipasang) mungkin belum punya OpenIddictScopes/OutboxMessages
+// dst. MigrateAsync idempoten (no-op kalau skema sudah up-to-date).
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
+    if (db.Database.IsRelational())
+    {
+        await db.Database.MigrateAsync();
+    }
+}
+
 await OpenIddictSetup.SeedOAuthClientsAsync(app.Services);
 
 // VOK-H3-E1: ensure bucket foto jurnal ada SEKALI saat startup (bukan per-request presign, hindari

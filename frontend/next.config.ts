@@ -9,7 +9,10 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/(.*)",
-        headers: buildSecurityHeaders(process.env.NODE_ENV === "production"),
+        headers: buildSecurityHeaders(
+          process.env.NODE_ENV === "production",
+          process.env.MINIO_PUBLIC_URL,
+        ),
       },
       {
         source: "/sw.js",

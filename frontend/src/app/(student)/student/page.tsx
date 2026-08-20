@@ -1,7 +1,8 @@
-import { EmptyState, ErrorState, Icon } from "@/components/ui";
+import { EmptyState, ErrorState } from "@/components/ui";
+import { MaterialIcon } from "@/components/ui/MaterialIcon";
 import { fetcher } from "@/lib/fetcher";
 import { getSession } from "@/lib/session";
-import type { TodayJournalDto } from "@/lib/apiTypes";
+import { JournalEntryStatus, type TodayJournalDto } from "@/lib/apiTypes";
 import { TodayJournalCard } from "./TodayJournalCard";
 import { PageHeading } from "@/components/PageHeading";
 
@@ -49,15 +50,23 @@ export default async function StudentTodayPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeading
-        eyebrow="JURNAL HARI INI"
-        title={session ? `Halo, ${session.name}` : "Hari ini"}
-        description={formatTanggal()}
-      />
+      <PageHeading eyebrow="TUGAS UTAMA" title="Apa yang harus saya kerjakan sekarang?" description={formatTanggal()} />
+
+      {result.kind === "ok" && result.data.entry?.status === JournalEntryStatus.Rejected && (
+        <section className="border-l-4 border-status-red bg-status-red-bg p-4" aria-labelledby="revision-heading">
+          <div className="flex items-start gap-3">
+            <MaterialIcon name="warning" label="Perlu diperbaiki" />
+            <div>
+              <h2 id="revision-heading" className="font-semibold text-status-red">Perbaiki jurnal hari ini</h2>
+              <p className="mt-1 text-sm text-ink">Baca alasan mentor, perbaiki isi jurnal, lalu kirim ulang.</p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Presensi belum masuk MVP; tidak ditampilkan sebagai data seolah sudah aktif. */}
       <div className="flex items-start gap-3 rounded-[var(--radius-md)] border border-dashed border-border bg-surface-muted p-3 text-sm text-ink-muted">
-        <Icon name="calendar-days" size={20} className="mt-0.5 shrink-0" />
+        <MaterialIcon name="period" label="Tanggal" />
         <span>Presensi belum tersedia di aplikasi ini. Fokuskan dulu pada pengisian jurnal kegiatan harian.</span>
       </div>
 
@@ -65,21 +74,23 @@ export default async function StudentTodayPage() {
 
       {result.kind === "not-found" && (
         <EmptyState
-          icon={<Icon name="notebook-pen" size={32} />}
+          icon={<MaterialIcon name="journal" decorative />}
           title="Belum ada slot jurnal untuk hari ini"
           description="Slot jurnal dibuat otomatis tiap pagi (05:00 WIB) untuk hari kerja. Kalau hari ini libur atau kamu belum punya penempatan aktif, slot memang belum tersedia."
         />
       )}
 
       {result.kind === "ok" && (
-        <TodayJournalCard
-          slot={result.data.slot}
-          initialEntry={result.data.entry}
-          competencies={result.data.competencies}
-          initialWeekStatus={result.data.weekStatus}
-          streak={result.data.streak}
-          draftScope={session ? `${session.tenantId ?? "tanpa-tenant"}:${session.id}` : null}
-        />
+        <>
+          <TodayJournalCard
+            slot={result.data.slot}
+            initialEntry={result.data.entry}
+            competencies={result.data.competencies}
+            initialWeekStatus={result.data.weekStatus}
+            streak={result.data.streak}
+            draftScope={session ? `${session.tenantId ?? "tanpa-tenant"}:${session.id}` : null}
+          />
+        </>
       )}
     </div>
   );

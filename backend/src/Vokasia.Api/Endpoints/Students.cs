@@ -24,6 +24,7 @@ public static class StudentsEndpoints
         group.MapPost("/", CreateStudent).RequireAuthorization(RbacPolicies.DeptHeadPlus);
         group.MapPut("/{id:guid}", UpdateStudent).RequireAuthorization(RbacPolicies.DeptHeadPlus);
         group.MapGet("/", ListStudents).RequireAuthorization(RbacPolicies.TenantMember);
+        group.MapGet("/majors", ListMajors).RequireAuthorization(RbacPolicies.TenantMember);
 
         return app;
     }
@@ -194,6 +195,12 @@ public static class StudentsEndpoints
         var items = await query.OrderBy(s => s.FullName).Skip((page - 1) * pageSize).Take(pageSize).Select(s => ToDto(s)).ToListAsync(ct);
 
         return Results.Ok(new Paged<StudentDto>(items, page, pageSize, total));
+    }
+
+    private static async Task<IResult> ListMajors(VokasiaDbContext db, CancellationToken ct)
+    {
+        var items = await db.Majors.AsNoTracking().OrderBy(m => m.Name).Select(m => new MajorOptionDto(m.Id, m.Name)).ToListAsync(ct);
+        return Results.Ok(items);
     }
 
     private static StudentDto ToDto(Student s) => new(s.Id, s.FullName, s.Nisn, s.MajorId, s.Classroom, s.UserId);

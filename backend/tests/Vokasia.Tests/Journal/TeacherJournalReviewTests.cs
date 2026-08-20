@@ -48,8 +48,7 @@ public class TeacherJournalReviewTests : IClassFixture<VokasiaApiFactory>
     public async Task ListPlacements_TeacherIdFilter_ReturnsOnlyThatTeachersAssignments()
     {
         var tenantId = Guid.NewGuid();
-        var client = await AuthenticatedTeacherClientAsync(tenantId);
-        var myTeacherId = Guid.NewGuid();
+        var (client, myTeacherId) = await AuthenticatedTeacherContextAsync(tenantId, "teacher-filter");
         var otherTeacherId = Guid.NewGuid();
 
         Guid periodId;
@@ -84,7 +83,7 @@ public class TeacherJournalReviewTests : IClassFixture<VokasiaApiFactory>
     {
         // AC: filter BARU bersifat opsional - pemanggil lama (tanpa teacherId) tak boleh terdampak.
         var tenantId = Guid.NewGuid();
-        var client = await AuthenticatedTeacherClientAsync(tenantId, "teacher-nofilter");
+        var (client, myTeacherId) = await AuthenticatedTeacherContextAsync(tenantId, "teacher-nofilter");
 
         Guid periodId;
         using (var scope = _factory.Services.CreateScope())
@@ -99,8 +98,8 @@ public class TeacherJournalReviewTests : IClassFixture<VokasiaApiFactory>
             db.Companies.Add(company);
             db.Students.AddRange(studentA, studentB);
             db.Placements.AddRange(
-                new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = studentA.Id, CompanyId = company.Id, PeriodId = periodId, TeacherId = Guid.NewGuid(), Status = PlacementStatus.Active },
-                new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = studentB.Id, CompanyId = company.Id, PeriodId = periodId, TeacherId = Guid.NewGuid(), Status = PlacementStatus.Active });
+                new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = studentA.Id, CompanyId = company.Id, PeriodId = periodId, TeacherId = myTeacherId, Status = PlacementStatus.Active },
+                new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = studentB.Id, CompanyId = company.Id, PeriodId = periodId, TeacherId = myTeacherId, Status = PlacementStatus.Active });
             await db.SaveChangesAsync();
         }
 
@@ -116,7 +115,7 @@ public class TeacherJournalReviewTests : IClassFixture<VokasiaApiFactory>
         // Dipakai StudentDetailDrawer (dashboard W3): dari DashboardFlaggedStudentDto cuma py
         // studentId, butuh cari placement-nya dulu sebelum panggil for-teacher/{placementId}.
         var tenantId = Guid.NewGuid();
-        var client = await AuthenticatedTeacherClientAsync(tenantId, "teacher-studentfilter");
+        var (client, myTeacherId) = await AuthenticatedTeacherContextAsync(tenantId, "teacher-studentfilter");
 
         Guid periodId, targetStudentId, targetPlacementId;
         using (var scope = _factory.Services.CreateScope())
@@ -128,9 +127,9 @@ public class TeacherJournalReviewTests : IClassFixture<VokasiaApiFactory>
             var targetStudent = new Student { Id = Guid.NewGuid(), TenantId = tenantId, FullName = "Siswa Target", MajorId = Guid.NewGuid(), Classroom = "XII A" };
             targetStudentId = targetStudent.Id;
             var otherStudent = new Student { Id = Guid.NewGuid(), TenantId = tenantId, FullName = "Siswa Lain", MajorId = Guid.NewGuid(), Classroom = "XII B" };
-            var targetPlacement = new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = targetStudent.Id, CompanyId = company.Id, PeriodId = periodId, TeacherId = Guid.NewGuid(), Status = PlacementStatus.Active };
+            var targetPlacement = new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = targetStudent.Id, CompanyId = company.Id, PeriodId = periodId, TeacherId = myTeacherId, Status = PlacementStatus.Active };
             targetPlacementId = targetPlacement.Id;
-            var otherPlacement = new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = otherStudent.Id, CompanyId = company.Id, PeriodId = periodId, TeacherId = Guid.NewGuid(), Status = PlacementStatus.Active };
+            var otherPlacement = new Placement { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = otherStudent.Id, CompanyId = company.Id, PeriodId = periodId, TeacherId = myTeacherId, Status = PlacementStatus.Active };
 
             db.Periods.Add(period);
             db.Companies.Add(company);

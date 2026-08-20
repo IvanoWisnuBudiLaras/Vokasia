@@ -1,4 +1,5 @@
-import type { ReactNode, SVGProps } from "react";
+import type { ReactNode } from "react";
+import { Icon as Iconify, type IconProps as IconifyProps } from "@iconify/react";
 
 export type IconName =
   | "arrow-left"
@@ -34,7 +35,7 @@ export type IconName =
 export type IconSize = 16 | 20 | 24 | 32;
 
 export interface IconProps
-  extends Omit<SVGProps<SVGSVGElement>, "children" | "height" | "name" | "width"> {
+  extends Omit<IconifyProps, "icon" | "height" | "name" | "width"> {
   name: IconName;
   size?: IconSize;
 }
@@ -252,26 +253,14 @@ export function Icon({
   ...props
 }: IconProps) {
   const labelled = Boolean(ariaLabel || ariaLabelledBy);
-
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      focusable="false"
-      aria-hidden={labelled ? undefined : true}
-      aria-label={ariaLabel}
-      aria-labelledby={ariaLabelledBy}
-      role={labelled ? "img" : undefined}
-      {...props}
-    >
-      {glyphs[name]}
-    </svg>
-  );
+  const semanticName: Record<IconName, string> = {
+    "arrow-left": "arrow-back", "arrow-right": "arrow-forward", award: "workspace-premium", bell: "notifications",
+    "briefcase-business": "business-center", "building-2": "domain", "calendar-days": "calendar-month", camera: "photo-camera",
+    check: "check", "chevron-down": "expand-more", "chevron-up": "expand-less", "clipboard-check": "assignment-turned-in",
+    download: "download", "file-pen-line": "edit-document", "file-text": "description", flag: "flag", "graduation-cap": "school",
+    home: "home", image: "image", "layout-dashboard": "dashboard", "list-checks": "checklist", "map-pin": "location-on",
+    "message-square-text": "chat", "notebook-pen": "edit-note", package: "inventory-2", receipt: "receipt-long", signature: "draw",
+    warning: "warning", x: "close",
+  };
+  return <Iconify icon={`material-symbols-rounded:${semanticName[name]}`} width={size} height={size} aria-hidden={labelled ? undefined : true} aria-label={ariaLabel} aria-labelledby={ariaLabelledBy} role={labelled ? "img" : undefined} {...props} />;
 }

@@ -137,6 +137,8 @@ export interface SchoolDashboardDto {
   flagged: DashboardFlaggedStudentDto[];
 }
 
+export interface MajorOptionDto { id: string; name: string; }
+
 export interface NotificationDto {
   id: string;
   type: string;

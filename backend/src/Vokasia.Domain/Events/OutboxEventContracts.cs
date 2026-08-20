@@ -104,13 +104,10 @@ public record ExportRequestedEvent(Guid Id, Guid PeriodId, Guid TenantId, Guid R
 public record CertificateRequestedEvent(Guid PlacementId, Guid TenantId);
 
 /// <summary>
-/// VOK-H6-E1 §1 — payload nyata SaTenantsEndpoints.CreateTenant (wizard provisioning). TempPassword
-/// dibawa APA ADANYA (bukan hash) krn belum ada mekanisme "set password via link" (tak ada endpoint
-/// reset-password sungguhan di repo ini sampai ticket ini - lihat DECISIONS.md gap tercatat) - baris
-/// OutboxMessage ini ditandai published segera setelah konsumsi (TenantAdminInvitedConsumer), sama
-/// spt event lain, bukan disimpan lebih lama dari perlu.
+/// VOK-H6-E1 — invitation event contains no password or raw token. Consumer resolves the
+/// short-lived setup token from the existing Identity token store.
 /// </summary>
-public record TenantAdminInvitedEvent(Guid TenantId, Guid UserId, string Email, string FullName, string TempPassword);
+public record TenantAdminInvitedEvent(Guid TenantId, Guid UserId, string Email, string FullName);
 
 /// <summary>Payload nyata BillingCronJobs.GenerateMonthlyInvoices (VOK-H6-E1 §5, FR-BIL-01) — dikonsumsi InvoiceIssuedConsumer (Worker).</summary>
 public record InvoiceIssuedEvent(Guid InvoiceId, Guid TenantId);

@@ -1,0 +1,41 @@
+- generic [active] [ref=e1]:
+  - heading "Vokasia Dev Dashboard" [level=1] [ref=e3]
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - button "Monitor" [ref=e6] [cursor=pointer]
+      - button "Test Tools" [ref=e7] [cursor=pointer]
+      - button "Email & Magic Link" [ref=e8] [cursor=pointer]
+      - button "Rate Limit" [ref=e9] [cursor=pointer]
+      - button "Database" [ref=e10] [cursor=pointer]
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - generic [ref=e13]:
+          - generic [ref=e14]: Quick Actions
+          - button "Start All" [ref=e15] [cursor=pointer]
+          - button "Stop All" [ref=e16] [cursor=pointer]
+          - button "Refresh" [ref=e17] [cursor=pointer]
+        - generic [ref=e18]:
+          - generic [ref=e19]: Links
+          - link "Frontend :3000" [ref=e20] [cursor=pointer]:
+            - /url: http://localhost:3000
+          - link "API :5000" [ref=e21] [cursor=pointer]:
+            - /url: http://localhost:5000
+          - link "Mailpit :8025" [ref=e22] [cursor=pointer]:
+            - /url: http://localhost:8025
+          - link "MinIO :9001" [ref=e23] [cursor=pointer]:
+            - /url: http://localhost:9001
+          - link "RabbitMQ :15672" [ref=e24] [cursor=pointer]:
+            - /url: http://localhost:15672
+      - generic [ref=e25]:
+        - heading "Containers" [level=3] [ref=e26]
+        - generic [ref=e27]: Loading...
+      - generic [ref=e28]:
+        - heading "Logs" [level=3] [ref=e29]
+        - button "API" [ref=e30] [cursor=pointer]
+        - button "Worker" [ref=e31] [cursor=pointer]
+        - button "Frontend" [ref=e32] [cursor=pointer]
+        - button "Postgres" [ref=e33] [cursor=pointer]
+        - button "RabbitMQ" [ref=e34] [cursor=pointer]
+        - button "MinIO" [ref=e35] [cursor=pointer]
+        - button "Mailpit" [ref=e36] [cursor=pointer]
+        - generic [ref=e37]: Select a service to view logs...

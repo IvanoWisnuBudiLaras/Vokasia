@@ -58,6 +58,23 @@ services:
       timeout: 10s
       retries: 5
 
+  mailpit:
+    image: axllent/mailpit:latest
+    command: --smtp-auth-allow-insecure
+    ports:
+      - "1025:1025"   # SMTP port
+      - "8025:8025"   # Web UI
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_DATABASE: /data/mailpit.db
+    volumes:
+      - mailpit_data:/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "1025"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     build:
       context: ./backend
@@ -75,6 +92,14 @@ services:
       # BucketExistsAsync (dipanggil Program.cs startup, VOK-H3-E1) gagal connect -> container api
       # crash saat startup (exit 139) - ketahuan lewat docker logs nyata, bukan diasumsikan.
       Minio__Endpoint: minio:9000
+      Minio__PublicEndpoint: ${MINIO_PUBLIC_URL:-http://localhost:9000}
+      Cors__AllowedOrigins__0: http://localhost:3000
+      Smtp__Host: mailpit
+      Smtp__Port: 1025
+      Smtp__From: no-reply@vokasia.local
+      OpenIddict__Issuer: ${OpenIddict__Issuer:-http://localhost:5000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      Frontend__PublicUrl: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       # GAP ditemukan+ditambal VOK-H4-E2 live-verification (DECISIONS.md D28): ASPNETCORE_ENVIRONMENT
       # TAK PERNAH di-set di mana pun utk container (launchSettings.json cuma dibaca `dotnet run`
       # lokal/IDE, TIDAK dibaca image yg di-`dotnet publish` lalu dijalankan via ENTRYPOINT langsung
@@ -96,6 +121,7 @@ services:
       redis: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
       minio: { condition: service_healthy }
+      mailpit: { condition: service_healthy }
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
       interval: 10s
@@ -122,16 +148,21 @@ services:
       # Worker juga membuat presigned/thumbnail object-store access. `localhost` dari `.env`
       # menunjuk ke container worker sendiri, jadi selalu gunakan nama service Docker.
       Minio__Endpoint: minio:9000
+      Smtp__Host: mailpit
+      Smtp__Port: 1025
+      Smtp__From: no-reply@vokasia.local
       # Konsistensi dgn api (DECISIONS.md D28, lihat komentar lengkap di service api di atas) - worker
       # tak py branch IsDevelopment() sendiri saat ini, tp disamakan supaya dua service dev-compose
       # yang sama tak diam2 berbeda mode hosting (mencegah kelas gap yg sama muncul lain waktu tanpa
       # disadari kalau worker nanti nambah logika ber-environment).
       ASPNETCORE_ENVIRONMENT: Development
+      DOTNET_ENVIRONMENT: Development
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
       minio: { condition: service_healthy }
+      mailpit: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "dotnet", "Vokasia.Worker.dll", "--healthcheck"]
       interval: 15s
@@ -140,12 +171,18 @@ services:
       start_period: 30s
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
     ports:
       - "3000:3000"
     env_file: .env
     environment:
       API_INTERNAL_URL: http://api:8080
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:5000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      MINIO_PUBLIC_URL: http://localhost:9000
       REDIS_URL: redis://redis:6379 # VOK-H2-E3: BFF session store (Next.js, bukan Redis__Connection milik .NET)
       OIDC_BFF_CLIENT_SECRET: ${OIDC_BFF_CLIENT_SECRET:-dev-only-secret-change-me}
     depends_on:
@@ -163,11 +200,14 @@ services:
       start_period: 20s
 
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: ./deploy/edge
+      dockerfile: Dockerfile
     ports:
       - "0.0.0.0:80:80"
-    volumes:
-      - ./deploy/edge/Caddyfile:/etc/caddy/Caddyfile:ro
+      - "0.0.0.0:443:443"
+    environment:
+      EDGE_PUBLIC_HOST: ${EDGE_PUBLIC_HOST:-localhost}
     depends_on:
       api: { condition: service_healthy }
       frontend: { condition: service_healthy }
@@ -175,3 +215,4 @@ services:
 volumes:
   pg_data:
   minio_data:
+  mailpit_data:

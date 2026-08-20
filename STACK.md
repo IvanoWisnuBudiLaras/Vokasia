@@ -43,7 +43,7 @@ Background worker: **.NET Generic Host** (`Microsoft.Extensions.Hosting` 10.0.10
 | `Minio` | 7.0.0 | Client S3-compatible object storage |
 | `FluentValidation.DependencyInjectionExtensions` | 12.1.1 | Validasi input request |
 | `Microsoft.AspNetCore.OpenApi` | 10.0.10 | Generasi spesifikasi OpenAPI |
-| `Microsoft.OpenApi` | 2.1.0 | Model dokumen OpenAPI |
+| `Microsoft.OpenApi` | 2.7.5 | Model dokumen OpenAPI |
 
 ### Package `Vokasia.Worker`
 
@@ -66,7 +66,7 @@ Background worker: **.NET Generic Host** (`Microsoft.Extensions.Hosting` 10.0.10
 | Package | Versi | Fungsi |
 |---|---|---|
 | `Bogus` | 35.6.5 | Generator data seed demo (3 tenant, 900 siswa, 90 hari jurnal) |
-| `MailKit` | 4.9.0 | Pengiriman email SMTP |
+| `MailKit` | 4.16.0 | Pengiriman email SMTP |
 | `Npgsql.EntityFrameworkCore.PostgreSQL` | 10.0.3 | Provider database |
 | `StackExchange.Redis` | 3.0.17 | Client Redis |
 | `Minio` | 7.0.0 | Client object storage |

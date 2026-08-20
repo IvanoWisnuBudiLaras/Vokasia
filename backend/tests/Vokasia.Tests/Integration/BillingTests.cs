@@ -71,6 +71,41 @@ public class BillingTests
     }
 
     [Fact]
+    public async Task PaymentProofUploadUrl_Pdf_UsesBillingValidationRules()
+    {
+        var (tenantId, _) = await SeedActiveTenantWithPlanAsync();
+        var (_, adminClient) = await _factory.LoginAsAsync(
+            UserRole.TenantAdmin,
+            tenantId,
+            "billing-proof-upload-admin");
+
+        await _factory.TriggerGenerateMonthlyInvoicesAsync(new DateOnly(2027, 1, 1));
+
+        Guid invoiceId;
+        using (var scope = _factory.CreateDbScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<VokasiaDbContext>();
+            invoiceId = await db.Invoices.AsNoTracking()
+                .Where(invoice => invoice.TenantId == tenantId)
+                .Select(invoice => invoice.Id)
+                .SingleAsync();
+        }
+
+        var response = await adminClient.PostAsJsonAsync(
+            $"/api/invoices/{invoiceId}/payment-proof/upload-url",
+            new
+            {
+                FileName = "payment-proof.pdf",
+                ContentType = "application/pdf",
+                SizeBytes = 1024,
+            });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains($"tenant/{tenantId}/invoices/{invoiceId}/", body.GetProperty("objectKey").GetString());
+    }
+
+    [Fact]
     public async Task ConfirmPayment_WithoutProof_RejectsThenSucceedsAfterProofUploaded()
     {
         var (tenantId, _) = await SeedActiveTenantWithPlanAsync();
