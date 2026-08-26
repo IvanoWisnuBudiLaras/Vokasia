@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button, Icon, StatusBadge } from "@/components/ui";
 import { apiClient } from "@/lib/apiClient";
 import type { PortfolioDto } from "@/lib/apiTypes";
@@ -17,28 +17,32 @@ export function StudentPortfolioModal({ studentId, studentName, isOpen, onClose 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
+  const loadPortfolio = useCallback(async (isMounted: () => boolean) => {
+    setLoading(true);
+    setError(false);
+
+    try {
+      const res = await apiClient.get<PortfolioDto>(`/portfolio/student/${studentId}`);
+      if (isMounted()) setData(res);
+    } catch {
+      if (isMounted()) setError(true);
+    } finally {
+      if (isMounted()) setLoading(false);
+    }
+  }, [studentId]);
+
   useEffect(() => {
     if (!isOpen || !studentId) return;
 
     let isMounted = true;
-    setLoading(true);
-    setError(false);
-
-    apiClient.get<PortfolioDto>(`/portfolio/student/${studentId}`)
-      .then((res) => {
-        if (isMounted) setData(res);
-      })
-      .catch(() => {
-        if (isMounted) setError(true);
-      })
-      .finally(() => {
-        if (isMounted) setLoading(false);
-      });
+    queueMicrotask(() => {
+      if (isMounted) void loadPortfolio(() => isMounted);
+    });
 
     return () => {
       isMounted = false;
     };
-  }, [isOpen, studentId]);
+  }, [isOpen, loadPortfolio, studentId]);
 
   if (!isOpen) return null;
 

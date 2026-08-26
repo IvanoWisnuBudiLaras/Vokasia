@@ -10,6 +10,8 @@ import { ExportButton } from "./ExportButton";
 export interface RecapTableProps {
   periodId: string;
   initialRows: RecapRowDto[];
+  canExport?: boolean;
+  canFinalize?: boolean;
 }
 
 type SortKey = "studentName" | "companyName" | "mentorAvg" | "teacherAvg" | "finalScore" | "status";
@@ -32,7 +34,7 @@ function fmt(n: number | null): string {
  * halaman penuh (AC: "admin finalize sukses -> semua ScoreForm jadi readOnly + rekap menampilkan
  * final").
  */
-export function RecapTable({ periodId, initialRows }: RecapTableProps) {
+export function RecapTable({ periodId, initialRows, canExport = true, canFinalize = true }: RecapTableProps) {
   const [rows, setRows] = useState(initialRows);
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("studentName");
@@ -97,8 +99,8 @@ export function RecapTable({ periodId, initialRows }: RecapTableProps) {
           className="h-[var(--tap-min)] w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 sm:w-64"
         />
         <div className="flex items-center gap-3">
-          <ExportButton periodId={periodId} rows={rows} />
-          <FinalizeButton periodId={periodId} incompleteCount={incompleteCount} rows={rows} onFinalized={refresh} />
+          {canExport && <ExportButton periodId={periodId} />}
+          {canFinalize && <FinalizeButton periodId={periodId} incompleteCount={incompleteCount} rows={rows} onFinalized={refresh} />}
         </div>
       </div>
 

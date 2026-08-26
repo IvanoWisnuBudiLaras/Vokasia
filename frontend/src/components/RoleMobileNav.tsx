@@ -23,8 +23,6 @@ function isCurrent(pathname: string | null, href: string): boolean {
 /** Navigasi tugas mobile: status aktif eksplisit tanpa menambah state/data client lain. */
 export function RoleMobileNav({ items, hideAtDesktop = false }: RoleMobileNavProps) {
   const pathname = usePathname();
-  const scrollable = items.length > 4;
-
   return (
     <nav
       aria-label="Navigasi utama"
@@ -33,7 +31,7 @@ export function RoleMobileNav({ items, hideAtDesktop = false }: RoleMobileNavPro
         (hideAtDesktop ? "lg:hidden" : "")
       }
     >
-      <div className={`mx-auto flex max-w-lg ${scrollable ? "overflow-x-auto overscroll-x-contain" : ""}`}>
+      <div className="mx-auto flex max-w-lg">
         {items.map((item) => {
           const active = isCurrent(pathname, item.href);
           return (
@@ -42,14 +40,13 @@ export function RoleMobileNav({ items, hideAtDesktop = false }: RoleMobileNavPro
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={
-                "relative flex min-h-[var(--tap-min)] flex-col items-center justify-center gap-0.5 rounded-[var(--radius-md)] px-2 py-1 text-xs font-medium outline-none transition-[color,background-color,border-color] duration-[var(--dur-fast)] " +
+                "relative flex min-h-[var(--tap-min)] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-md)] px-0.5 py-1 text-[11px] font-medium leading-tight outline-none transition-[color,background-color,border-color] duration-[var(--dur-fast)] " +
                 "focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-[-2px] active:translate-y-px " +
-                (scrollable ? "min-w-20 flex-none " : "flex-1 ") +
                 (active ? "bg-primary-muted text-primary" : "text-ink-muted hover:bg-surface-muted hover:text-ink")
               }
             >
               <Icon name={item.icon} size={20} />
-              <span className="whitespace-nowrap">{item.label}</span>
+              <span className="max-w-full truncate whitespace-nowrap">{item.label}</span>
               {active && <span aria-hidden="true" className="absolute inset-x-5 bottom-0 h-0.5 rounded-full bg-primary" />}
             </a>
           );

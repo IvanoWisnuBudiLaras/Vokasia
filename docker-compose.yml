@@ -100,6 +100,7 @@ services:
       OpenIddict__Issuer: ${OpenIddict__Issuer:-http://localhost:5000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       Frontend__PublicUrl: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      PublicAppBaseUrl: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       # GAP ditemukan+ditambal VOK-H4-E2 live-verification (DECISIONS.md D28): ASPNETCORE_ENVIRONMENT
       # TAK PERNAH di-set di mana pun utk container (launchSettings.json cuma dibaca `dotnet run`
       # lokal/IDE, TIDAK dibaca image yg di-`dotnet publish` lalu dijalankan via ENTRYPOINT langsung
@@ -182,6 +183,7 @@ services:
       API_INTERNAL_URL: http://api:8080
       API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:5000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      PublicAppBaseUrl: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       MINIO_PUBLIC_URL: http://localhost:9000
       REDIS_URL: redis://redis:6379 # VOK-H2-E3: BFF session store (Next.js, bukan Redis__Connection milik .NET)
       OIDC_BFF_CLIENT_SECRET: ${OIDC_BFF_CLIENT_SECRET:-dev-only-secret-change-me}

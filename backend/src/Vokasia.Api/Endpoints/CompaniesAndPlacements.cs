@@ -5,13 +5,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Authorization;
+using Vokasia.Api.Services;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
 using Vokasia.Infrastructure.Persistence;
 
 namespace Vokasia.Api.Endpoints;
-
 /// <summary>VOK-H2-E1 §5: link/propose DUDI ke tenant, kuota slot, dan placement.</summary>
 public static class CompaniesAndPlacementsEndpoints
 {
@@ -191,6 +192,19 @@ public static class CompaniesAndPlacementsEndpoints
                 MentorEmail = req.MentorEmail,
                 Status = PlacementStatus.Active,
             };
+
+            var snapshot = await LearningRecordTemplateEndpoints.CreateSnapshotForPlacementAsync(
+                placement, tenant.UserId!.Value, db, ct);
+            if (snapshot is null)
+            {
+                if (transaction is not null)
+                {
+                    await transaction.RollbackAsync(ct);
+                }
+
+                return Results.UnprocessableEntity(new { message = "DUDI belum memiliki template Learning Record aktif." });
+            }
+
             db.Placements.Add(placement);
 
             // AC: OutboxMessage{PlacementCreated} tercatat 1 transaksi dgn placement (dispatcher nyata H4-E1).
@@ -280,13 +294,23 @@ public static class CompaniesAndPlacementsEndpoints
                     MentorEmail = req.MentorEmail,
                     Status = PlacementStatus.Active,
                 };
+
+                var snapshot = await LearningRecordTemplateEndpoints.CreateSnapshotForPlacementAsync(
+                    placement, tenant.UserId!.Value, db, ct);
+                if (snapshot is null)
+                {
+                    errors.Add(new ImportRowError(i, "CompanyId", "DUDI belum memiliki template Learning Record aktif."));
+                    continue;
+                }
+
                 db.Placements.Add(placement);
                 db.OutboxMessages.Add(new OutboxMessage
                 {
                     Id = Guid.NewGuid(),
                     Type = "PlacementCreated",
-                    PayloadJson = JsonSerializer.Serialize(new { placement.Id, placement.StudentId, placement.CompanyId, placement.PeriodId }),
+                    PayloadJson = JsonSerializer.Serialize(new { placement.Id, placement.StudentId, placement.CompanyId, placement.PeriodId, placement.MentorEmail }),
                 });
+                await db.SaveChangesAsync(ct);
                 successIds.Add(placement.Id);
                 pendingReservations++;
             }

@@ -10,6 +10,9 @@ public class RubricTemplate : ITenantScoped
     public Guid TenantId { get; set; }
     public string Name { get; set; } = default!;
     public bool IsDefault { get; set; }
+    public Guid? CompanyId { get; set; }
+    public int Version { get; set; } = 1;
+    public bool IsActive { get; set; } = true;
 
     public List<RubricAspect> Aspects { get; set; } = new();
 }
@@ -20,6 +23,7 @@ public class RubricAspect
     public Guid Id { get; set; }
     public Guid RubricTemplateId { get; set; }
     public string Name { get; set; } = default!;
+    public string? Description { get; set; }
     public RubricAspectKind Kind { get; set; }
     public int Weight { get; set; }
 }
@@ -49,4 +53,5 @@ public class AssessmentScore
     public ScoredBy ScoredBy { get; set; }
     public Guid ScoredByUserId { get; set; }
     public decimal Value { get; set; } // 0..100
+    public string? Comment { get; set; }
 }

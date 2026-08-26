@@ -11,6 +11,9 @@ public class Certificate : ITenantScoped
     public string CertCode { get; set; } = default!; // random 12 kar url-safe, unik
     public string PdfKey { get; set; } = default!;
     public DateTimeOffset IssuedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? RevokedAt { get; set; }
+    public string? PublicRevocationReason { get; set; }
+    public string? InternalRevocationNote { get; set; }
 }
 
 /// <summary>
@@ -24,7 +27,9 @@ public class Portfolio : ITenantScoped
     public Guid StudentId { get; set; }
     public string? Slug { get; set; }
     public string? Headline { get; set; }
+    public string? DraftHeadline { get; set; }
     public bool IsPublished { get; set; }
     /// <summary>Id JournalEntry approved yang dikurasi siswa sebagai sampel — csv sederhana untuk MVP.</summary>
     public string SampleJournalIdsCsv { get; set; } = "";
+    public string DraftSampleJournalIdsCsv { get; set; } = "";
 }

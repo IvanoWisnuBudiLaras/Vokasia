@@ -30,6 +30,7 @@ import { refreshOnExpiry } from "@/lib/refresh";
  * sudah diverifikasi jalan lewat smoke test HTTP nyata; menghindari menyentuhnya lagi di sesi yang
  * sama demi alasan DRY murni. Kandidat refactor sesi berikutnya kalau ada pemanggil ke-3.
  */
+
 export async function fetcher<T>(path: string, init?: RequestInit): Promise<T> {
   const store = await cookies();
   const sessionId = decodeSessCookie(store.get(SESS_COOKIE_NAME)?.value);
@@ -39,7 +40,9 @@ export async function fetcher<T>(path: string, init?: RequestInit): Promise<T> {
 
   const session = await getSessionData(sessionId);
   if (!session) {
-    throw new Error(`fetcher ${path} -> sesi tidak ditemukan atau kedaluwarsa.`);
+    // VOK-H2-E3: Lempar error khusus ini yang ditangkap page.tsx atau layout.tsx
+    // untuk menghapus cookie & melempar pengguna keluar bersih.
+    throw new Error("UNAUTHENTICATED");
   }
 
   const apiBase = process.env.API_INTERNAL_URL ?? "http://localhost:5000";

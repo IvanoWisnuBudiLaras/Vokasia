@@ -17,8 +17,8 @@ export default async function VerifyPage({ searchParams }: VerifyPageProps) {
   if (normalizedCode) redirect(`/verify/${encodeURIComponent(normalizedCode)}`);
 
   return (
-    <main data-theme="sekolah" className="flex flex-1 items-center justify-center bg-surface px-5 py-10">
-      <section className="w-full max-w-md rounded-[var(--radius-lg)] border border-border bg-surface p-6 shadow-sm sm:p-8">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-surface-paper px-6 py-12 selection:bg-brand-soft selection:text-ink">
+      <section className="w-full max-w-md rounded-xl border border-border/40 bg-surface p-6 shadow-sm sm:p-8">
         <Link
           href="/"
           className="inline-flex min-h-[var(--tap-min)] items-center gap-2 whitespace-nowrap rounded-[var(--radius-md)] px-2 text-sm font-medium text-ink-muted outline-none hover:text-primary focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:translate-y-px"

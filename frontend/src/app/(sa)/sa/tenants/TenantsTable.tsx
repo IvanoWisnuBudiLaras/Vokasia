@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Button, Pagination, StatusBadge, TableExportToolbar, Tooltip } from "@/components/ui";
 import { apiClient, ApiError } from "@/lib/apiClient";
 import type { Paged, PlanDto, TenantDto } from "@/lib/apiTypes";
-import { ImpersonatePanel } from "./ImpersonatePanel";
 import { TenantWizard } from "./TenantWizard";
 import { EditTenantPanel } from "./EditTenantPanel";
 
@@ -80,7 +80,6 @@ export function TenantsTable({ initialTenants, plans }: TenantsTableProps) {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [creationStatus, setCreationStatus] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [impersonatingTenantId, setImpersonatingTenantId] = useState<string | null>(null);
   const [editingTenantId, setEditingTenantId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -199,7 +198,7 @@ export function TenantsTable({ initialTenants, plans }: TenantsTableProps) {
             { key: "schoolName", label: "Nama Sekolah" },
             { key: "npsn", label: "NPSN" },
             { key: "city", label: "Kota" },
-            { key: "planId", label: "Paket Plan", format: (val) => planNameById.get(val) ?? "—" },
+            { key: "planId", label: "Paket Plan", format: (val) => typeof val === "string" ? planNameById.get(val) ?? "—" : "—" },
             { key: "isActive", label: "Status", format: (val) => (val ? "Aktif" : "Nonaktif") },
           ]}
         />
@@ -207,7 +206,42 @@ export function TenantsTable({ initialTenants, plans }: TenantsTableProps) {
 
       {refreshing && <p className="text-xs text-ink-muted">Memuat ulang…</p>}
 
-      <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-border bg-surface shadow-sm">
+      <div className="space-y-3 md:hidden">
+        {paginatedTenants.map((t) => (
+          <div key={t.id} className="rounded-[var(--radius-lg)] border border-border bg-surface p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <Link href={`/sa/tenants?selected=${t.id}`} className="font-medium text-primary underline-offset-4 hover:underline">
+                  {t.schoolName}
+                </Link>
+                <p className="mt-1 text-sm text-ink-muted">{t.city ?? "Kota belum diisi"}{t.npsn ? ` · NPSN ${t.npsn}` : ""}</p>
+              </div>
+              {t.isActive ? <StatusBadge status="green" label="Aktif" /> : <StatusBadge status="red" label="Nonaktif" />}
+            </div>
+            <p className="mt-3 text-sm text-ink-muted">Paket: <span className="text-ink">{t.planId ? planNameById.get(t.planId) ?? "—" : "—"}</span></p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="secondary" size="md" onClick={() => setEditingTenantId(editingTenantId === t.id ? null : t.id)} className="px-3 text-xs">Edit</Button>
+              {t.isActive && <DeactivateAction tenant={t} onDone={refresh} />}
+            </div>
+            {editingTenantId === t.id && (
+              <div className="mt-3">
+                <EditTenantPanel
+                  tenant={t}
+                  plans={plans}
+                  onClose={() => setEditingTenantId(null)}
+                  onSaved={() => {
+                    setEditingTenantId(null);
+                    void refresh();
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        ))}
+        {paginatedTenants.length === 0 && <p className="rounded-[var(--radius-lg)] border border-border p-6 text-center text-sm text-ink-muted">Tidak ada tenant yang cocok.</p>}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-[var(--radius-lg)] border border-border bg-surface shadow-sm md:block">
         <table className="w-full text-left text-sm">
           <thead className="bg-surface-muted border-b border-border font-medium text-ink-muted">
             <tr>
@@ -221,7 +255,7 @@ export function TenantsTable({ initialTenants, plans }: TenantsTableProps) {
           <tbody className="divide-y divide-border">
             {paginatedTenants.map((t) => (
               <tr key={t.id} className="hover:bg-surface-muted/50">
-                <td className="p-3 font-medium text-ink">{t.schoolName}{t.npsn && <span className="ml-1 text-xs text-ink-muted">({t.npsn})</span>}</td>
+                <td className="p-3 font-medium text-ink"><Link href={`/sa/tenants?selected=${t.id}`} className="text-primary underline-offset-4 hover:underline">{t.schoolName}</Link>{t.npsn && <span className="ml-1 text-xs text-ink-muted">({t.npsn})</span>}</td>
                 <td className="p-3 text-ink-muted">{t.city ?? "—"}</td>
                 <td className="p-3 text-ink-muted">{t.planId ? planNameById.get(t.planId) ?? "—" : "—"}</td>
                 <td className="p-3">
@@ -243,13 +277,6 @@ export function TenantsTable({ initialTenants, plans }: TenantsTableProps) {
                       <Tooltip content="Membekukan akses sekolah & siswa tenant ini sementara tanpa menghapus data">
                         <DeactivateAction tenant={t} onDone={refresh} />
                       </Tooltip>
-                      {t.isActive && impersonatingTenantId !== t.id && (
-                        <Tooltip content="Masuk sementara sebagai Admin Sekolah ini untuk verifikasi tampilan / bantuan teknis">
-                          <Button variant="secondary" size="md" onClick={() => setImpersonatingTenantId(t.id)} className="px-3 text-xs">
-                            Impersonasi
-                          </Button>
-                        </Tooltip>
-                      )}
                     </div>
                     {editingTenantId === t.id && (
                       <div className="mt-2 w-full text-left">
@@ -263,9 +290,6 @@ export function TenantsTable({ initialTenants, plans }: TenantsTableProps) {
                           }}
                         />
                       </div>
-                    )}
-                    {impersonatingTenantId === t.id && (
-                      <ImpersonatePanel tenantId={t.id} onClose={() => setImpersonatingTenantId(null)} />
                     )}
                   </div>
                 </td>

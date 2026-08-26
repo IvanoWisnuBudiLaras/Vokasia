@@ -30,6 +30,25 @@ export interface SaStudentDto {
   classroom: string;
 }
 
+export interface StudentHomeRevisionDto {
+  id: string;
+  submittedAt: string;
+  mentorNote: string | null;
+}
+
+export interface StudentHomeDto {
+  status: number;
+  companyName: string;
+  periodName: string;
+  mentorName: string | null;
+  teacherName: string | null;
+  placementReady: boolean;
+  journalActive: boolean;
+  assessmentStarted: boolean;
+  certificateIssued: boolean;
+  revisionItems: StudentHomeRevisionDto[];
+}
+
 /**
  * VOK-H3-E2 — DTO jurnal (cermin Vokasia.Api/Endpoints/Dtos.cs enum-terkait). PENTING: backend
  * TIDAK mengonfigurasi JsonStringEnumConverter di mana pun (dikonfirmasi grep Program.cs/
@@ -84,7 +103,6 @@ export interface TodayJournalDto {
   entry: JournalDto | null;
   competencies: CompetencyDto[];
   weekStatus: WeekDayStatusDto[];
-  streak: number;
 }
 
 export interface PresignedUploadDto {
@@ -114,6 +132,12 @@ export interface BatchResult {
  * dengan JournalSlotStatus dkk di atas (tanpa JsonStringEnumConverter, lihat komentar file ini).
  */
 export const RagStatus = { Green: 0, Amber: 1, Red: 2 } as const;
+
+export function ragLabel(rag: number): string {
+  if (rag === RagStatus.Red) return "Perlu tindakan";
+  if (rag === RagStatus.Amber) return "Perlu perhatian";
+  return "Normal";
+}
 
 /** Numerik (backend) -> literal string dipakai <StatusBadge> (components/ui/StatusBadge.tsx punya tipe RagStatus SENDIRI yang beda — string literal, bukan angka — sengaja TIDAK disatukan nama tipenya, lihat pemakaian). */
 export function ragToBadgeStatus(rag: number): "green" | "amber" | "red" {
@@ -171,6 +195,34 @@ export interface PlacementDto {
   status: number; // PlacementStatus: Active=0, Completed=1, Terminated=2
 }
 
+export interface TenantMentorSummaryDto {
+  id: string;
+  fullName: string;
+  email: string;
+  assignedStudentCount: number;
+  pendingJournalCount: number;
+  incompleteAssessmentCount: number;
+  isActive: boolean;
+}
+
+export interface TenantMentorStudentDto {
+  placementId: string;
+  studentName: string;
+  companyName: string;
+  placementStatus: number;
+  pendingJournalCount: number;
+  assessmentStatus: string;
+}
+
+export interface TenantMentorDetailDto {
+  id: string;
+  fullName: string;
+  email: string;
+  isActive: boolean;
+  lastJournalAt: string | null;
+  students: TenantMentorStudentDto[];
+}
+
 export interface StudentDto {
   id: string;
   fullName: string;
@@ -214,6 +266,7 @@ export interface RubricAspectDto {
   name: string;
   kind: number; // RubricAspectKind
   weight: number;
+  description: string | null;
 }
 
 export interface RubricDto {
@@ -221,6 +274,9 @@ export interface RubricDto {
   name: string;
   isDefault: boolean;
   aspects: RubricAspectDto[];
+  companyId: string | null;
+  version: number;
+  isActive: boolean;
 }
 
 export interface AssessmentAspectDto {
@@ -230,6 +286,9 @@ export interface AssessmentAspectDto {
   weight: number;
   mentorValue: number | null;
   teacherValue: number | null;
+  description: string | null;
+  mentorComment: string | null;
+  teacherComment: string | null;
 }
 
 export interface AssessmentDto {
@@ -262,6 +321,17 @@ export interface RecapRowDto {
   status: "BelumDinilai" | "Draft" | "Final"; // dibangun server via ternary string literal (GetGradeRecap) - BUKAN enum, string asli.
 }
 
+export interface JournalReportRowDto {
+  journalId: string;
+  placementId: string;
+  studentName: string;
+  companyName: string;
+  date: string;
+  status: number; // JournalEntryStatus
+  submittedAt: string;
+  mentorNote: string | null;
+}
+
 export interface ExportAcceptedDto {
   exportId: string;
 }
@@ -279,19 +349,42 @@ export interface CertificateDownloadDto {
 }
 
 export interface VerifyCertificateDto {
+  certificateNumber: string;
   studentName: string;
   schoolName: string;
+  majorName: string;
   companyName: string;
   periodLabel: string;
   issuedAt: string;
+  status: number;
+  revokedAt: string | null;
+  publicRevocationReason: string | null;
   valid: boolean;
 }
+
+export const CertificateVerificationStatus = { Valid: 0, Revoked: 1 } as const;
 
 /**
  * VOK-H6-E1/E2 — /sa (tenants, DUDI, plans, ops), billing, portofolio. Sama konvensi enum-sbg-angka
  * (lihat komentar besar puncak file) — `InvoiceStatus`/`FeatureFlagKey` datang sbg ANGKA dari API.
  */
-export const InvoiceStatus = { Issued: 0, ProofUploaded: 1, Paid: 2 } as const;
+export const InvoiceStatus = {
+  Unpaid: 0,
+  PendingVerification: 1,
+  Paid: 2,
+  Rejected: 3,
+  Expired: 4,
+  // Aliases for backwards compatibility
+  Issued: 0,
+  ProofUploaded: 1,
+} as const;
+
+export const SubscriptionStatus = {
+  Pending: 0,
+  Active: 1,
+  Expired: 2,
+  Suspended: 3,
+} as const;
 export const FeatureFlagKey = { GeotagAllowed: 0, ParentDigest: 1 } as const;
 
 export interface TenantDto {
@@ -349,13 +442,50 @@ export interface MergeResultDto {
   movedPlacements: number;
 }
 
+export interface BankTransferInstructionsDto {
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+}
+
+export interface SubscriptionDto {
+  id: string;
+  tenantId: string;
+  planId: string;
+  planName: string;
+  startsAt: string;
+  endsAt: string;
+  status: number; // SubscriptionStatus
+  studentCapacity: number;
+  annualPrice: number;
+}
+
+export interface PaymentSubmissionDto {
+  id: string;
+  invoiceId: string;
+  submittedBy: string;
+  submittedAt: string;
+  proofKey: string;
+  note: string | null;
+  approved: boolean | null;
+  verifiedAt: string | null;
+  verificationReason: string | null;
+}
+
 export interface InvoiceDto {
   id: string;
   tenantId: string;
-  periodMonth: string;
+  invoiceNumber: string;
+  planName: string;
   amount: number;
+  studentCapacity: number;
+  periodMonth: string;
+  issuedAt: string;
+  dueAt: string;
+  paidAt: string | null;
   status: number; // InvoiceStatus
   proofKey: string | null;
+  rejectionReason: string | null;
 }
 
 export interface KpiDto {
@@ -397,6 +527,9 @@ export interface PortfolioJournalSampleDto {
 export interface PortfolioCertificateDto {
   certCode: string;
   issuedAt: string;
+  status: number;
+  revokedAt: string | null;
+  publicRevocationReason: string | null;
 }
 
 export interface PortfolioDto {
@@ -406,6 +539,8 @@ export interface PortfolioDto {
   certificate: PortfolioCertificateDto | null;
   isPublished: boolean;
   slug: string | null;
+  hasUnpublishedChanges: boolean;
+  missingPublicationRequirements: string[];
 }
 
 export interface PublishPortfolioResult {
@@ -431,15 +566,282 @@ export interface SchoolUserDto {
   isActive: boolean;
 }
 
+export interface SaUserDto extends SchoolUserDto {
+  tenantId: string;
+  tenantName: string;
+  createdAt: string;
+}
+
+export interface SaUserDetailDto {
+  user: SaUserDto;
+  keyAccess: string[];
+  recentActivity: AuditDto[];
+}
+
+export interface SaTenantUsageDto {
+  activeUsers: number;
+  inactiveUsers: number;
+  activeStudents: number;
+  activePlacements: number;
+  activeMentors: number;
+  activeTeachers: number;
+}
+
 /** VOK-H6-E1 §6 GetPublicPortfolio — TANPA NISN/kontak (server-side guaranteed, lihat backend PortfolioEndpoints.AssertPublicDtoHasNoSensitiveFields). */
 export interface PublicPortfolioDto {
   studentName: string;
   schoolName: string;
   majorName: string;
-  year: number;
+  periodLabel: string;
   companyName: string;
   durationLabel: string;
+  description: string | null;
   verifiedCompetencies: string[];
-  sampleThumbnailUrls: string[];
-  hasCertificate: boolean;
+  evidence: PublicPortfolioEvidenceDto[];
+  certificate: PublicPortfolioCertificateDto | null;
+}
+
+export interface PublicPortfolioEvidenceDto {
+  context: string;
+  submittedAt: string;
+  mediaUrl: string | null;
+}
+
+export interface PublicPortfolioCertificateDto {
+  certificateNumber: string;
+  issuedAt: string;
+  status: number;
+  revokedAt: string | null;
+  publicRevocationReason: string | null;
+}
+
+export type LearningAssessmentStage = "Middle" | "Final";
+export type LearningAssessmentStatus = "Draft" | "Finalized" | "Reopened";
+
+export interface LearningAssessmentEvidenceDto {
+  journalEntryId: string;
+  text: string;
+  submittedAt: string;
+}
+
+export interface LearningAssessmentEvidenceCandidateDto {
+  journalEntryId: string;
+  text: string;
+  submittedAt: string;
+}
+
+export interface LearningAssessmentCriterionDto {
+  criterionSnapshotId: string;
+  name: string;
+  description: string;
+  sortOrder: number;
+  score: number | null;
+  comment: string | null;
+  evidence: LearningAssessmentEvidenceDto[];
+}
+
+export interface LearningAssessmentDto {
+  placementId: string;
+  stage: LearningAssessmentStage;
+  status: LearningAssessmentStatus;
+  operationalState: "NotDue" | "Due" | "Overdue" | "Complete";
+  operationalStateLabel: string;
+  overallNote: string | null;
+  finalizedAt: string | null;
+  criteria: LearningAssessmentCriterionDto[];
+  evidenceCandidates: LearningAssessmentEvidenceCandidateDto[];
+  middleContext: { available: boolean; status: LearningAssessmentStatus | null; operationalState: string | null } | null;
+}
+
+export interface LearningAssessmentDraftCriterionInput {
+  criterionSnapshotId: string;
+  score: number | null;
+  comment: string;
+  journalEntryIds: string[];
+}
+
+export interface LearningAssessmentDraftInput {
+  overallNote: string;
+  criteria: LearningAssessmentDraftCriterionInput[];
+}
+
+export type StudentLearningRecordProgressState = "AwaitingMiddle" | "MiddleComplete" | "FinalComplete" | "CorrectionInProgress";
+
+export interface StudentLearningRecordEvidenceDto {
+  journalEntryId: string;
+  text: string;
+  submittedAt: string;
+}
+
+export interface StudentLearningRecordCriterionDto {
+  criterionSnapshotId: string;
+  name: string;
+  description: string;
+  sortOrder: number;
+  score: number;
+  comment: string | null;
+  evidence: StudentLearningRecordEvidenceDto[];
+}
+
+export interface StudentLearningRecordStageDto {
+  stage: LearningAssessmentStage;
+  evaluatorDisplayName: string;
+  finalizedAt: string;
+  overallNote: string;
+  criteria: StudentLearningRecordCriterionDto[];
+}
+
+export interface StudentLearningRecordMonitoringEventDto {
+  id: string;
+  status: LearningRecordMonitoringStatus;
+  note: string | null;
+  followUpContext: string | null;
+  createdAt: string;
+}
+
+export interface StudentLearningRecordPlacementDto {
+  placementId: string;
+  companyName: string;
+  periodName: string;
+  startDate: string;
+  endDate: string;
+  progressState: StudentLearningRecordProgressState;
+  currentStage: LearningAssessmentStage | null;
+  stages: StudentLearningRecordStageDto[];
+  monitoringTimeline: StudentLearningRecordMonitoringEventDto[];
+  legacyFinalAssessment: StudentLegacyFinalAssessmentDto | null;
+}
+
+export interface StudentLegacyFinalAssessmentDto {
+  assessmentId: string;
+  finalScore: number | null;
+  finalizedAt: string | null;
+}
+
+export interface StudentLearningRecordPlacementSummaryDto {
+  placementId: string;
+  companyName: string;
+  periodName: string;
+  startDate: string;
+  endDate: string;
+  progressState: StudentLearningRecordProgressState;
+  currentStage: LearningAssessmentStage | null;
+  legacyFinalOnly: boolean;
+}
+
+export type LearningRecordMonitoringStatus = "ProgressingAsExpected" | "NeedsAttention" | "Problem";
+export type LearningRecordMonitoringVisibility = "StudentVisible" | "Internal";
+
+export interface TeacherMonitoringPlacementDto {
+  placementId: string;
+  studentName: string;
+  companyName: string;
+}
+
+export interface TeacherMonitoringEventDto {
+  id: string;
+  placementId: string;
+  status: LearningRecordMonitoringStatus;
+  note: string | null;
+  visibility: LearningRecordMonitoringVisibility;
+  followUpVisitId: string | null;
+  followUpContext: string | null;
+  createdAt: string;
+}
+
+export interface TeacherMonitoringOverdueFindingDto {
+  placementId: string;
+  studentName: string;
+  companyName: string;
+  stage: LearningAssessmentStage;
+  dueDate: string;
+  label: string;
+}
+
+export interface TeacherMonitoringWorkspaceDto {
+  placements: TeacherMonitoringPlacementDto[];
+  events: TeacherMonitoringEventDto[];
+  overdueFindings: TeacherMonitoringOverdueFindingDto[];
+}
+
+export interface TeacherLearningRecordEvidenceDto {
+  journalEntryId: string;
+  text: string;
+  submittedAt: string;
+}
+
+export interface TeacherLearningRecordCriterionDto {
+  criterionSnapshotId: string;
+  name: string;
+  description: string;
+  sortOrder: number;
+  score: number | null;
+  comment: string | null;
+  evidence: TeacherLearningRecordEvidenceDto[];
+}
+
+export interface TeacherLearningRecordStageDto {
+  stage: LearningAssessmentStage;
+  status: LearningAssessmentStatus;
+  operationalState: "NotDue" | "Due" | "Overdue" | "Complete";
+  operationalStateLabel: string;
+  evaluatorDisplayName: string | null;
+  revisionId: string | null;
+  finalizedAt: string | null;
+  overallNote: string | null;
+  criteria: TeacherLearningRecordCriterionDto[];
+}
+
+export interface TeacherLearningRecordPlacementDto {
+  placementId: string;
+  studentName: string;
+  companyName: string;
+  periodName: string;
+  startDate: string;
+  endDate: string;
+  stages: TeacherLearningRecordStageDto[];
+}
+
+export interface LearningRecordReportRowDto {
+  placementId: string;
+  studentName: string;
+  companyId: string;
+  companyName: string;
+  periodId: string;
+  periodName: string;
+  periodStartDate: string;
+  periodEndDate: string;
+  middleStatus: LearningAssessmentStatus | null;
+  finalStatus: LearningAssessmentStatus | null;
+  monitoringStatus: LearningRecordMonitoringStatus | null;
+  monitoringUpdatedAt: string | null;
+  completionStatus: "Finalized" | "CorrectionInProgress" | "InProgress" | "NotStarted";
+}
+
+export interface LearningRecordReportSummaryDto {
+  totalCount: number;
+  completeCount: number;
+  incompleteCount: number;
+  needsAttentionCount: number;
+}
+
+export interface LearningRecordReportFindingDto {
+  kind: string;
+  count: number;
+  label: string;
+}
+
+export interface LearningRecordReportResponseDto {
+  items: LearningRecordReportRowDto[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  summary: LearningRecordReportSummaryDto;
+  findings: LearningRecordReportFindingDto[];
+}
+
+export interface LearningRecordReportExportStatusDto {
+  exportId: string;
+  status: "Requested" | "Completed" | "Failed";
 }

@@ -4,6 +4,7 @@ using Vokasia.Api.Endpoints;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
 using Vokasia.Infrastructure.Persistence;
+using Vokasia.Api.Authorization;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Vokasia.Api.Auth;
@@ -30,7 +31,7 @@ public static class AuditEndpoints
         // TenantAdmin)" — pasangan QueryAuditLogs SA (SaOpsEndpoints, semua tenant) di sini HANYA
         // tenant sendiri (TenantId dari claim, BUKAN dari query string — TenantAdmin tak boleh
         // mengintip audit tenant lain lewat parameter).
-        app.MapGet("/api/audit-logs", GetTenantAuditLogs).RequireAuthorization(Api.Auth.RbacPolicies.TenantAdminOnly);
+        app.MapGet("/api/audit-logs", GetTenantAuditLogs).RequireAuthorization(Authorization.RbacPolicies.TenantAdminOnly);
 
         return app;
     }

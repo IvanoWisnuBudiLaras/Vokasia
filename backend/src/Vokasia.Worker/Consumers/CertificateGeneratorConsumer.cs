@@ -10,6 +10,7 @@ using Vokasia.Domain.Entities;
 using Vokasia.Domain.Events;
 using Vokasia.Infrastructure.Messaging;
 using Vokasia.Infrastructure.Persistence;
+using Vokasia.Infrastructure.Configuration;
 using Vokasia.Worker.Export;
 
 namespace Vokasia.Worker.Consumers;
@@ -61,9 +62,11 @@ public class CertificateGeneratorConsumer(
             join c in db.Companies.AsNoTracking() on p.CompanyId equals c.Id
             join per in db.Periods.AsNoTracking() on p.PeriodId equals per.Id
             join t in db.Tenants.AsNoTracking() on p.TenantId equals t.Id
+            join major in db.Majors.AsNoTracking() on s.MajorId equals major.Id into majorRows
+            from major in majorRows.DefaultIfEmpty()
             join a in db.Assessments.AsNoTracking() on p.Id equals a.PlacementId into aj
             from a in aj.DefaultIfEmpty()
-            select new { s.FullName, CompanyName = c.Name, per.Name, per.StartDate, per.EndDate, t.SchoolName, FinalScore = (decimal?)a.FinalScore }
+            select new { s.FullName, MajorName = major == null ? "-" : major.Name, CompanyName = c.Name, per.Name, per.StartDate, per.EndDate, t.SchoolName, FinalScore = (decimal?)a.FinalScore }
             ).FirstOrDefaultAsync(ct);
 
         if (info is null)
@@ -74,10 +77,15 @@ public class CertificateGeneratorConsumer(
         }
 
         var certCode = await GenerateUniqueCertCodeAsync(ct);
-        var publicUrl = config["Frontend:PublicUrl"] ?? config["NEXT_PUBLIC_APP_URL"] ?? "http://localhost:3000";
+        var publicUrl = PublicAppOrigin.Resolve(config);
         var verifyUrl = $"{publicUrl.TrimEnd('/')}/verify/{certCode}";
+        var issuedAt = DateTimeOffset.UtcNow;
 
-        var pdfData = new CertificateData(info.FullName, info.SchoolName, info.CompanyName, info.Name, info.StartDate, info.EndDate, info.FinalScore, certCode, verifyUrl);
+        var pdfData = new CertificateData(info.FullName, info.SchoolName, info.CompanyName, info.Name, info.StartDate, info.EndDate, info.FinalScore, certCode, verifyUrl)
+        {
+            MajorName = info.MajorName,
+            IssuedAt = issuedAt,
+        };
         var pdfBytes = new CertificatePdfDocument(pdfData).GeneratePdf();
 
         var bucket = config[BucketConfigKey] ?? DefaultBucket;
@@ -96,7 +104,7 @@ public class CertificateGeneratorConsumer(
         db.Certificates.Add(new Certificate
         {
             Id = Guid.NewGuid(), TenantId = msg.TenantId, PlacementId = msg.PlacementId,
-            CertCode = certCode, PdfKey = objectKey,
+            CertCode = certCode, PdfKey = objectKey, IssuedAt = issuedAt,
         });
 
         await db.SaveChangesAsync(ct);

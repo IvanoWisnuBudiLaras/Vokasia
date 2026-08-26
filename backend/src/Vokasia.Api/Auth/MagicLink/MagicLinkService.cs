@@ -7,6 +7,7 @@ using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
 using Vokasia.Infrastructure.Identity;
 using Vokasia.Infrastructure.Persistence;
+using Vokasia.Infrastructure.Configuration;
 
 namespace Vokasia.Api.Auth.MagicLink;
 
@@ -29,14 +30,12 @@ public class MagicLinkService
     private readonly VokasiaDbContext _db;
     private readonly UserManager<AppUser> _userManager;
     private readonly IConfiguration _config;
-    private readonly ILogger<MagicLinkService> _logger;
 
-    public MagicLinkService(VokasiaDbContext db, UserManager<AppUser> userManager, IConfiguration config, ILogger<MagicLinkService> logger)
+    public MagicLinkService(VokasiaDbContext db, UserManager<AppUser> userManager, IConfiguration config)
     {
         _db = db;
         _userManager = userManager;
         _config = config;
-        _logger = logger;
     }
 
     private static string Hash(string rawToken) =>
@@ -92,16 +91,12 @@ public class MagicLinkService
 
         await _db.SaveChangesAsync(ct);
 
-        var appUrl = _config["Frontend:PublicUrl"] ?? "http://localhost:3000";
+        var appUrl = PublicAppOrigin.Resolve(_config);
         var magicLinkUrl = $"{appUrl}/mentor-invite?token={raw}";
 
         // [GAP dicatat eksplisit, bukan diam-diam distub] SendEmail infra (SMTP/Resend) = H4-E3,
         // belum ada. Sementara: log dev + kembalikan URL di response API (staf yang buat undangan
         // meneruskan manual ke mentor via WhatsApp/dll) - lihat DECISIONS.md entry ticket ini.
-        _logger.LogInformation(
-            "[dev-only, tanpa infra email sampai H4-E3] Magic link mentor {Email}: {Url}",
-            invite.Email, magicLinkUrl);
-
         return (true, new MentorInviteDto(invite.Id, invite.PlacementId, invite.Email, invite.ExpiresAt, magicLinkUrl), null);
     }
 
@@ -161,7 +156,24 @@ public class MagicLinkService
             return (false, null, "Akun mentor ini nonaktif.");
         }
 
+        await using var transaction = _db.Database.IsRelational()
+            ? await _db.Database.BeginTransactionAsync(ct)
+            : null;
+
+        var claimedAt = DateTimeOffset.UtcNow;
+        var claimed = _db.Database.IsRelational()
+            ? await _db.MentorInvites
+                .Where(i => i.Id == invite.Id && i.UsedAt == null && i.ExpiresAt >= claimedAt)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(i => i.UsedAt, claimedAt), ct) == 1
+            : TryClaimInMemory(invite, claimedAt);
+        if (!claimed)
+        {
+            return (false, null, "Tautan tidak valid atau sudah kedaluwarsa.");
+        }
+
         invite.UsedAt = DateTimeOffset.UtcNow; // sekali pakai (AC ticket §3) — ditulis SEBELUM SaveChanges tunggal di bawah (atomic dgn tautan placement).
+
+        invite.UsedAt = claimedAt;
 
         // Tanpa IgnoreQueryFilters(): request /connect/token ini anonim (belum ada klaim tenant_id
         // sama sekali), jadi filter Placement (!_tenantContext.TenantId.HasValue || ...) otomatis
@@ -169,11 +181,52 @@ public class MagicLinkService
         var placement = await _db.Placements.FirstOrDefaultAsync(p => p.Id == invite.PlacementId, ct);
         if (placement is not null)
         {
+            var previousMentorUserId = placement.MentorUserId;
             placement.MentorUserId = user.Id;
+            if (previousMentorUserId.HasValue && previousMentorUserId.Value != user.Id)
+            {
+                var pendingDrafts = await _db.LearningAssessments
+                    .IgnoreQueryFilters()
+                    .AsNoTracking()
+                    .Where(item => item.PlacementId == placement.Id
+                        && item.Status != LearningAssessmentStatus.Finalized
+                        && item.EvaluatorUserId.HasValue
+                        && item.EvaluatorUserId != user.Id)
+                    .Select(item => new { item.Id, item.Stage, item.EvaluatorUserId })
+                    .ToListAsync(ct);
+                _db.AuditLogs.Add(new AuditLog
+                {
+                    Id = Guid.NewGuid(), TenantId = placement.TenantId, ActorUserId = user.Id,
+                    Action = "PlacementMentorReplaced", Entity = nameof(Placement), EntityId = placement.Id.ToString(),
+                    MetaJson = JsonSerializer.Serialize(new
+                    {
+                        placementId = placement.Id,
+                        previousMentorUserId,
+                        newMentorUserId = user.Id,
+                        pendingDrafts,
+                        draftTransferRequired = pendingDrafts.Count > 0,
+                    }),
+                });
+            }
         }
 
         await _db.SaveChangesAsync(ct);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(ct);
+        }
 
         return (true, user, null);
+    }
+
+    private static bool TryClaimInMemory(MentorInvite invite, DateTimeOffset claimedAt)
+    {
+        if (invite.UsedAt is not null || invite.ExpiresAt < claimedAt)
+        {
+            return false;
+        }
+
+        invite.UsedAt = claimedAt;
+        return true;
     }
 }

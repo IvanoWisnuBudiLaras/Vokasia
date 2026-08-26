@@ -130,7 +130,7 @@ export function PlansPageClient({ initialPlans }: PlansPageClientProps) {
             title="Daftar Paket Langganan Vokasia Platform"
             columns={[
               { key: "name", label: "Nama Paket" },
-              { key: "priceMonthly", label: "Harga/Bulan", format: (val) => `Rp ${val.toLocaleString("id-ID")}` },
+              { key: "priceMonthly", label: "Harga/Bulan", format: (val) => `Rp ${typeof val === "number" ? val.toLocaleString("id-ID") : "-"}` },
               { key: "maxStudents", label: "Maks Siswa" },
               { key: "maxPlacements", label: "Maks Placement" },
             ]}

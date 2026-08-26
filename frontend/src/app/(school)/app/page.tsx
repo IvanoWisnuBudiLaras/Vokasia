@@ -1,10 +1,8 @@
-import { PageHeading } from "@/components/PageHeading";
 import { ErrorState, EmptyState, Icon } from "@/components/ui";
 import type { Paged, PeriodSummary, SchoolDashboardDto } from "@/lib/apiTypes";
 import { fetcher } from "@/lib/fetcher";
 import { getSession } from "@/lib/session";
 import { DashboardBody } from "./DashboardBody";
-import { KpiCards } from "./KpiCards";
 import { PeriodSelector } from "./PeriodSelector";
 
 // Data tenant-scoped per-user — jangan pernah di-cache statis (AGENTS.md #1, tenant isolation).
@@ -50,12 +48,23 @@ export default async function SchoolDashboardPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeading
-        eyebrow={session?.role === "Teacher" ? "TINDAKAN GURU" : "OPERASI SEKOLAH"}
-        title={session?.role === "Teacher" ? "Siapa yang membutuhkan perhatian?" : "Operasi PKL sekolah"}
-        description={session?.role === "Teacher" ? "Mulai dari siswa merah, lalu kuning; buka riwayat untuk menentukan tindakan berikutnya." : "Atur periode, pantau siswa, dan lanjutkan proses penilaian PKL."}
-        action={!periodsError ? <PeriodSelector periods={periods} value={selectedPeriodId ?? ""} /> : undefined}
-      />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-3xl font-extrabold tracking-tight text-ink">
+            {session?.role === "Teacher" ? "Siswa Perlu Perhatian" : "Operasi PKL Sekolah"}
+          </h1>
+          <p className="text-base text-ink-muted">
+            {session?.role === "Teacher"
+              ? "Tangani siswa dengan prioritas tertinggi terlebih dahulu."
+              : "Pantau ringkasan operasional dan progres penilaian harian."}
+          </p>
+        </div>
+        {!periodsError && (
+          <div className="shrink-0">
+            <PeriodSelector periods={periods} value={selectedPeriodId ?? ""} />
+          </div>
+        )}
+      </div>
 
       {periodsError && <ErrorState message="Daftar periode belum bisa dimuat." />}
 
@@ -74,23 +83,31 @@ export default async function SchoolDashboardPage({
       {dashboard && (
         <>
           {session?.role === "Teacher" ? (
-            <div className="border-l-4 border-status-red bg-surface-muted p-4 text-sm">
-              <strong className="text-ink">Urutan triase:</strong> {dashboard.flagged.filter((item) => item.rag === 2).length} merah, {dashboard.flagged.filter((item) => item.rag === 1).length} kuning.
-              <span className="ml-1 text-ink-muted">Pilih siswa untuk melihat jurnal dan tindak lanjut.</span>
-            </div>
+            <section className="flex flex-col gap-4">
+              <div className="border-l-4 border-status-red bg-surface-muted p-4 text-sm">
+                <strong className="text-ink">Prioritas tertinggi ditampilkan lebih dulu.</strong>
+                <span className="ml-1 text-ink-muted">Data berikut berasal dari status jurnal hari ini.</span>
+              </div>
+              <div id="siswa-bermasalah" className="flex flex-col gap-2">
+                <h2 className="text-sm font-semibold text-ink">Siswa perlu perhatian</h2>
+                {selectedPeriodId && <DashboardBody flagged={dashboard.flagged} periodId={selectedPeriodId} />}
+              </div>
+            </section>
           ) : (
-            <KpiCards
-              journalTodayPct={dashboard.journalTodayPct}
-              pendingApprovals={dashboard.pendingApprovals}
-              lateVisits={dashboard.lateVisits}
-              flaggedCount={dashboard.flagged.length}
-            />
+            <section className="flex flex-col gap-5">
+              <div className="border-y border-border py-4">
+                <p className="text-sm font-semibold text-ink">Ringkasan periode</p>
+                <p className="mt-1 text-sm text-ink-muted">Jurnal hari ini terisi {dashboard.journalTodayPct}%. {dashboard.pendingApprovals} jurnal menunggu persetujuan.</p>
+              </div>
+              <div id="siswa-bermasalah" className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold text-ink">Prioritas operasional</h2>
+                  <a href="/app/operasi" className="text-sm font-semibold text-primary underline underline-offset-4">Lihat semua</a>
+                </div>
+                {selectedPeriodId && <DashboardBody flagged={dashboard.flagged.slice(0, 6)} periodId={selectedPeriodId} />}
+              </div>
+            </section>
           )}
-
-          <div id="siswa-bermasalah" className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold text-ink">Siswa Bermasalah</h2>
-            {selectedPeriodId && <DashboardBody flagged={dashboard.flagged} periodId={selectedPeriodId} />}
-          </div>
         </>
       )}
     </div>

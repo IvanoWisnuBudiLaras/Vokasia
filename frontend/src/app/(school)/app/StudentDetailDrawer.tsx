@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { Button, Icon, StatusBadge } from "@/components/ui";
+import { RichTextContent } from "@/components/ui/RichTextContent";
 import { apiClient } from "@/lib/apiClient";
 import Link from "next/link";
 import {
   JournalEntryStatus,
+  ragLabel,
   ragToBadgeStatus,
   type DashboardFlaggedStudentDto,
   type JournalWithCommentsDto,
+  type AssessmentDto,
   type Paged,
   type PlacementDto,
 } from "@/lib/apiTypes";
@@ -31,7 +34,7 @@ export function StudentDetailActions({ placementId }: { placementId: string }) {
 
 function statusLabel(status: number): string {
   if (status === JournalEntryStatus.Approved) return "Disetujui";
-  if (status === JournalEntryStatus.Rejected) return "Ditolak";
+  if (status === JournalEntryStatus.Rejected) return "Perlu revisi";
   return "Menunggu";
 }
 
@@ -48,6 +51,8 @@ export function StudentDetailDrawer({ student, periodId, onClose }: StudentDetai
   const [error, setError] = useState(false);
   const [entries, setEntries] = useState<JournalWithCommentsDto[]>([]);
   const [placementId, setPlacementId] = useState<string | null>(null);
+  const [placementStatus, setPlacementStatus] = useState<number | null>(null);
+  const [assessment, setAssessment] = useState<AssessmentDto | null>(null);
 
   useEffect(() => {
     if (!student) return;
@@ -58,6 +63,8 @@ export function StudentDetailDrawer({ student, periodId, onClose }: StudentDetai
     setError(false);
     setEntries([]);
     setPlacementId(null);
+    setPlacementStatus(null);
+    setAssessment(null);
 
     const fetchDetail = async () => {
       try {
@@ -70,8 +77,15 @@ export function StudentDetailDrawer({ student, periodId, onClose }: StudentDetai
           return;
         }
         if (!cancelled) setPlacementId(placement.id);
+        if (!cancelled) setPlacementStatus(placement.status);
         const journals = await apiClient.get<JournalWithCommentsDto[]>(`/journals/for-teacher/${placement.id}`);
         if (!cancelled) setEntries(journals.slice(0, 5));
+        try {
+          const currentAssessment = await apiClient.get<AssessmentDto>(`/assessment?placementId=${placement.id}`);
+          if (!cancelled) setAssessment(currentAssessment);
+        } catch {
+          if (!cancelled) setAssessment(null);
+        }
       } catch {
         if (!cancelled) setError(true);
       } finally {
@@ -96,7 +110,7 @@ export function StudentDetailDrawer({ student, periodId, onClose }: StudentDetai
         onClick={onClose}
         className="absolute inset-0 bg-ink/30"
       />
-      <div className="relative flex h-full w-full max-w-md flex-col gap-4 overflow-y-auto border-l border-border bg-surface p-5 shadow-lg">
+      <div className="relative flex h-full w-full flex-col gap-4 overflow-y-auto border-border bg-surface p-5 shadow-lg lg:max-w-md lg:border-l">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-ink">{student.name}</h2>
@@ -110,12 +124,17 @@ export function StudentDetailDrawer({ student, periodId, onClose }: StudentDetai
         <div className="flex items-center gap-2">
           <StatusBadge
             status={ragToBadgeStatus(student.rag)}
-            label={student.rag === 2 ? "Merah" : student.rag === 1 ? "Kuning" : "Hijau"}
+            label={ragLabel(student.rag)}
           />
           <span className="text-sm text-ink-muted">{student.reason}</span>
         </div>
 
         {placementId && <StudentDetailActions placementId={placementId} />}
+
+        <dl className="grid gap-2 border-y border-border py-3 text-sm">
+          <div className="flex items-center justify-between gap-3"><dt className="text-ink-muted">Status PKL</dt><dd className="font-medium text-ink">{placementStatus === 0 ? "Aktif" : placementStatus === 1 ? "Selesai" : placementStatus === 2 ? "Dihentikan" : "Belum tersedia"}</dd></div>
+          <div className="flex items-center justify-between gap-3"><dt className="text-ink-muted">Penilaian</dt><dd className="font-medium text-ink">{assessment ? assessment.isFinal ? "Final" : "Belum final" : "Belum dimulai"}</dd></div>
+        </dl>
 
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold text-ink">Riwayat Jurnal Terakhir</h3>
@@ -143,7 +162,7 @@ export function StudentDetailDrawer({ student, periodId, onClose }: StudentDetai
                       label={statusLabel(entry.status)}
                     />
                   </div>
-                  <p className="mt-1 line-clamp-2 text-sm text-ink">{entry.text}</p>
+                  <RichTextContent value={entry.text} className="mt-1 line-clamp-2 text-sm text-ink" />
                   {comments.length > 0 && (
                     <p className="mt-1 inline-flex items-center gap-1 text-xs text-ink-muted">
                       <Icon name="message-square-text" size={16} /> {comments.length} komentar guru

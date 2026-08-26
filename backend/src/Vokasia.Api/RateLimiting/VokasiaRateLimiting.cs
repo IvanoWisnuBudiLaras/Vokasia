@@ -117,11 +117,15 @@ public static class VokasiaRateLimiting
                 var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
                 var key = $"login:{ip}:{email.ToLowerInvariant()}";
 
+                var isTesting = httpContext.RequestServices.GetRequiredService<IHostEnvironment>().IsEnvironment("Testing") ||
+                                httpContext.RequestServices.GetRequiredService<IHostEnvironment>().IsDevelopment();
+                var limit = isTesting ? 1000 : LoginAttemptsPerIdentity;
+
                 return RateLimitPartition.GetSlidingWindowLimiter(key, _ => new SlidingWindowRateLimiterOptions
                 {
                     Window = TimeSpan.FromMinutes(1),
                     SegmentsPerWindow = 4,
-                    PermitLimit = LoginAttemptsPerIdentity,
+                    PermitLimit = limit,
                     QueueLimit = 0,
                     AutoReplenishment = true,
                 });

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Vokasia.Domain.Common;
 
 namespace Vokasia.Domain.Events;
 
@@ -76,6 +77,14 @@ public record PlacementCreatedEvent(
 /// </summary>
 public record JournalReminderEmailRequestedEvent(Guid UserId, Guid SlotId, string StudentName, string Date);
 
+public record LearningAssessmentReminderEmailRequestedEvent(
+    Guid RecipientUserId,
+    Guid PlacementId,
+    string StudentName,
+    LearningAssessmentStage Stage,
+    LearningAssessmentReminderType ReminderType,
+    DateOnly DueDate);
+
 /// <summary>
 /// Payload nyata JournalCronJobs.FlagGhostingStudents (PascalCase implisit, BEDA dari
 /// JournalReminderEmailRequestedEvent di atas yg camelCase - lihat komentar kelas). VOK-H4-E3:
@@ -96,6 +105,8 @@ public record GhostingAlertEmailRequestedEvent(Guid PlacementId, string StudentN
 /// diulang di sini SEJAK AWAL ditulis, bukan ditambal belakangan).
 /// </summary>
 public record AssessmentFinalizedEvent(Guid PlacementId, decimal? FinalScore);
+
+public record LearningAssessmentReopenedEvent(Guid AssessmentId, Guid PlacementId, string Stage, string Reason);
 
 /// <summary>Payload nyata GradeRecapEndpoints.RequestExport — dikonsumsi ExportRequestedConsumer (Worker).</summary>
 public record ExportRequestedEvent(Guid Id, Guid PeriodId, Guid TenantId, Guid RequestedByUserId, string Format);

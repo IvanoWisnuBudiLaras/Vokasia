@@ -1,5 +1,6 @@
 import { EmptyState, ErrorState, Icon } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
+import { getSession } from "@/lib/session";
 import { PeriodStatusNum, type Paged, type PeriodSummary, type RecapRowDto } from "@/lib/apiTypes";
 import { RecapTable } from "./RecapTable";
 
@@ -32,6 +33,7 @@ export default async function GradeRecapPage() {
   let periodLabel = "";
   let noPeriod = false;
   let periodId: string | undefined;
+  const session = await getSession();
 
   try {
     const periods = await fetcher<Paged<PeriodSummary>>("/periods?pageSize=50");
@@ -52,12 +54,11 @@ export default async function GradeRecapPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold text-ink">Rekap Nilai</h1>
-        {periodLabel && <p className="text-sm text-ink-muted">Periode: {periodLabel}</p>}
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-3xl font-extrabold tracking-tight text-ink">Rekapitulasi Nilai</h1>
+        {periodLabel && <p className="text-base text-ink-muted">Periode aktif: <span className="font-semibold text-ink">{periodLabel}</span></p>}
       </div>
-
       {loadError && <ErrorState message="Rekap nilai belum bisa dimuat." />}
 
       {!loadError && noPeriod && <EmptyState icon={<Icon name="layout-dashboard" size={32} />} title="Belum ada periode" description="Buat periode PKL terlebih dahulu." />}
@@ -66,7 +67,14 @@ export default async function GradeRecapPage() {
         <EmptyState icon={<Icon name="layout-dashboard" size={32} />} title="Belum ada penempatan" description="Belum ada siswa yang ditempatkan pada periode ini." />
       )}
 
-      {!loadError && periodId && rows.length > 0 && <RecapTable periodId={periodId} initialRows={rows} />}
+      {!loadError && periodId && rows.length > 0 && (
+        <RecapTable
+          periodId={periodId}
+          initialRows={rows}
+          canExport={session?.role === "TenantAdmin" || session?.role === "DeptHead"}
+          canFinalize={session?.role === "TenantAdmin"}
+        />
+      )}
     </div>
   );
 }

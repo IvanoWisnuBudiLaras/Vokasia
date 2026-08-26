@@ -1,9 +1,10 @@
-import { revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 import { decodeSessCookie, getSessionData, SESS_COOKIE_NAME } from "@/lib/bffSession";
 import { publicPortfolioCacheTag } from "@/lib/publicPortfolioCache";
 import { refreshOnExpiry } from "@/lib/refresh";
+import { SESSION_COOKIE } from "@/lib/session";
 
 function apiBase(): string {
   return process.env.API_INTERNAL_URL ?? "http://localhost:5000";
@@ -76,12 +77,18 @@ async function handle(req: NextRequest, ctx: RouteContext): Promise<NextResponse
   const store = await cookies();
   const sessionId = decodeSessCookie(store.get(SESS_COOKIE_NAME)?.value);
   if (!sessionId) {
-    return NextResponse.json({ message: "Belum login." }, { status: 401 });
+    const res = NextResponse.json({ message: "Belum login." }, { status: 401 });
+    res.cookies.delete(SESS_COOKIE_NAME);
+    res.cookies.delete(SESSION_COOKIE);
+    return res;
   }
 
   const session = await getSessionData(sessionId);
   if (!session) {
-    return NextResponse.json({ message: "Sesi tidak ditemukan atau kedaluwarsa." }, { status: 401 });
+    const res = NextResponse.json({ message: "Sesi tidak ditemukan atau kedaluwarsa." }, { status: 401 });
+    res.cookies.delete(SESS_COOKIE_NAME);
+    res.cookies.delete(SESSION_COOKIE);
+    return res;
   }
 
   const { path } = await ctx.params;
@@ -198,6 +205,7 @@ async function handle(req: NextRequest, ctx: RouteContext): Promise<NextResponse
       // penjadwalan sinkron; kegagalan cache-handler asinkron berada di luar respons Route Handler.
       try {
         revalidateTag(publicPortfolioCacheTag(slugToExpire), { expire: 0 });
+        revalidatePath(`/p/${slugToExpire}`);
       } catch {
         const message =
           mutation === "unpublish"
@@ -220,10 +228,17 @@ async function handle(req: NextRequest, ctx: RouteContext): Promise<NextResponse
     return new NextResponse(null, { status: upstream.status });
   }
 
-  return new NextResponse(outBody, {
+  const response = new NextResponse(outBody, {
     status: upstream.status,
     headers: { "Content-Type": upstream.headers.get("content-type") ?? "application/json" },
   });
+
+  if (upstream.status === 401) {
+    response.cookies.delete(SESS_COOKIE_NAME);
+    response.cookies.delete(SESSION_COOKIE);
+  }
+
+  return response;
 }
 
 export const GET = handle;

@@ -1,52 +1,56 @@
-using System.Text.Json;
 using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Minio;
 using Minio.DataModel.Args;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Authorization;
+using Vokasia.Api.Export;
 using Vokasia.Api.RateLimiting;
-using Vokasia.Api.Storage;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
 using Vokasia.Infrastructure.Persistence;
+using Vokasia.Infrastructure.Configuration;
 
 namespace Vokasia.Api.Endpoints;
 
-/// <summary>
-/// VOK-H6-E1 §6 — Portfolio publik siswa (FR-CRT-03). §1-5 dari editor siswa sendiri
-/// (StudentSelf); GetPublicPortfolio anonim + rate-limit + cache 5 menit (AC ticket literal).
-/// </summary>
+/// <summary>Slice 6: structured student portfolio publication and safe public evidence delivery.</summary>
 public static class PortfolioEndpoints
 {
     private const string BucketConfigKey = "Minio:Bucket";
     private const string DefaultBucket = "vokasia-journal";
-    private const int PresignedExpirySeconds = 15 * 60; // > Cache-Control publik (5 mnt) - tautan tak kadaluarsa selagi masih di-cache.
+    private const int MaxEvidence = 6;
 
     public static IEndpointRouteBuilder MapPortfolioEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/portfolio").WithTags("Portfolio")
-            .RequireAuthorization(RbacPolicies.StudentSelf)
-            .AddEndpointFilter<ValidationFilter>();
+            .RequireAuthorization(RbacPolicies.StudentSelf);
 
-        group.MapGet("/", GetMyPortfolio);
-        group.MapPut("/", UpdatePortfolio);
+        group.MapGet("", GetMyPortfolio);
+        group.MapPut("/", UpdatePortfolio).AddEndpointFilter<ValidationFilter>();
         group.MapPost("/publish", PublishPortfolio);
         group.MapPost("/unpublish", UnpublishPortfolio);
 
-        app.MapGet("/api/portfolio/student/{studentId:guid}", GetStudentPortfolioForStaff).RequireAuthorization(RbacPolicies.TenantMember);
+        app.MapGet("/api/portfolio/student/{studentId:guid}", GetStudentPortfolioForStaff)
+            .RequireAuthorization(RbacPolicies.TenantMember);
 
-        // Publik BY DESIGN (siapa saja bisa lihat portofolio yang di-publish siswa) - rate limit
-        // "public" (pola sama VerifyCertificate/MagicLinkEndpoints.Validate).
-        app.MapGet("/p/{slug}", GetPublicPortfolio).RequireRateLimiting(VokasiaRateLimiting.PublicPolicy);
+        app.MapGet("/p/{slug}", GetPublicPortfolio)
+            .RequireRateLimiting(VokasiaRateLimiting.PublicPolicy);
+        app.MapGet("/api/public/portfolio/{slug}/cv", GetPublicCv)
+            .RequireRateLimiting(VokasiaRateLimiting.PublicPolicy);
+        app.MapGet("/api/public/portfolio/{slug}/evidence/{index:int}", GetPublicEvidence)
+            .RequireRateLimiting(VokasiaRateLimiting.PublicPolicy);
 
         return app;
     }
 
-    private static async Task<Student?> FindCallerStudentAsync(VokasiaDbContext db, ITenantContext tenant, CancellationToken ct) =>
-        await db.Students.FirstOrDefaultAsync(s => s.UserId == tenant.UserId, ct);
+    private sealed record EvidenceRow(Guid JournalEntryId, string Text, DateTimeOffset SubmittedAt, string? MediaKey);
+    private sealed record PlacementPublicInfo(string CompanyName, string PeriodLabel, DateOnly StartDate, DateOnly EndDate);
 
-    /// <summary>Proyeksi kompetensi TERVERIFIKASI = distinct Competency dari JournalEntry Approved milik siswa (H4) — bukan klaim mentah siswa (H3), ini yang dimaksud ticket "kompetensi dari proyeksi jurnal Approved").</summary>
+    private static Task<Student?> FindCallerStudentAsync(VokasiaDbContext db, ITenantContext tenant, CancellationToken ct) =>
+        db.Students.FirstOrDefaultAsync(s => s.UserId == tenant.UserId, ct);
+
     private static async Task<List<string>> GetVerifiedCompetenciesAsync(VokasiaDbContext db, Guid studentId, CancellationToken ct) =>
         await (
             from p in db.Placements.AsNoTracking()
@@ -56,38 +60,154 @@ public static class PortfolioEndpoints
             join jc in db.JournalCompetencies.AsNoTracking() on je.Id equals jc.JournalEntryId
             join comp in db.Competencies.AsNoTracking() on jc.CompetencyId equals comp.Id
             select comp.Name
-            ).Distinct().OrderBy(n => n).ToListAsync(ct);
+        ).Distinct().OrderBy(n => n).ToListAsync(ct);
+
+    private static IQueryable<JournalEntry> ApprovedEntriesForStudent(VokasiaDbContext db, Guid studentId) =>
+        from je in db.JournalEntries.AsNoTracking()
+        join p in db.Placements.AsNoTracking() on je.PlacementId equals p.Id
+        where p.StudentId == studentId && je.Status == JournalEntryStatus.Approved
+        select je;
+
+    private static async Task<List<Guid>> GetLatestApprovedIdsAsync(VokasiaDbContext db, Guid studentId, CancellationToken ct) =>
+        await ApprovedEntriesForStudent(db, studentId)
+            .OrderByDescending(je => je.SubmittedAt)
+            .ThenByDescending(je => je.Id)
+            .Take(MaxEvidence)
+            .Select(je => je.Id)
+            .ToListAsync(ct);
+
+    private static async Task<List<EvidenceRow>> GetEvidenceRowsAsync(
+        VokasiaDbContext db,
+        Guid studentId,
+        IReadOnlyList<Guid> requestedIds,
+        CancellationToken ct)
+    {
+        var ids = requestedIds.Count > 0
+            ? requestedIds.Distinct().Take(MaxEvidence).ToList()
+            : await GetLatestApprovedIdsAsync(db, studentId, ct);
+
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var journals = await ApprovedEntriesForStudent(db, studentId)
+            .Where(je => ids.Contains(je.Id))
+            .Select(je => new { je.Id, je.Text, je.SubmittedAt })
+            .ToListAsync(ct);
+        var byId = journals.ToDictionary(j => j.Id);
+        var photoKeys = await db.JournalPhotos.AsNoTracking()
+            .Where(photo => ids.Contains(photo.JournalEntryId) && photo.Status == PhotoStatus.Processed)
+            .Select(photo => new { photo.JournalEntryId, photo.ObjectKey, photo.ThumbKey })
+            .ToListAsync(ct);
+
+        var ordered = new List<EvidenceRow>();
+        foreach (var id in ids)
+        {
+            if (!byId.TryGetValue(id, out var journal))
+            {
+                continue;
+            }
+
+            var photo = photoKeys
+                .Where(candidate => candidate.JournalEntryId == id)
+                .OrderBy(candidate => candidate.ObjectKey)
+                .FirstOrDefault();
+            ordered.Add(new EvidenceRow(journal.Id, RichTextDocument.ToPlainText(journal.Text), journal.SubmittedAt, photo?.ThumbKey ?? photo?.ObjectKey));
+        }
+
+        return ordered
+            .OrderByDescending(row => row.SubmittedAt)
+            .ThenByDescending(row => row.JournalEntryId)
+            .ToList();
+    }
+
+    private static async Task<PlacementPublicInfo?> GetLatestPlacementAsync(VokasiaDbContext db, Guid studentId, CancellationToken ct) =>
+        await (
+            from placement in db.Placements.AsNoTracking()
+            where placement.StudentId == studentId
+            join company in db.Companies.AsNoTracking() on placement.CompanyId equals company.Id
+            join period in db.Periods.AsNoTracking() on placement.PeriodId equals period.Id
+            orderby period.EndDate descending
+            select new PlacementPublicInfo(company.Name, period.Name, period.StartDate, period.EndDate)
+        ).FirstOrDefaultAsync(ct);
+
+    private static async Task<List<string>> GetMissingRequirementsAsync(
+        VokasiaDbContext db,
+        Student student,
+        string? headline,
+        CancellationToken ct)
+    {
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(headline))
+        {
+            missing.Add("Tambahkan deskripsi singkat pengalaman PKL.");
+        }
+
+        if (await GetLatestPlacementAsync(db, student.Id, ct) is null)
+        {
+            missing.Add("Lengkapi data penempatan PKL.");
+        }
+
+        return missing;
+    }
+
+    private static async Task<PortfolioCertificateDto?> GetPortfolioCertificateAsync(VokasiaDbContext db, Guid studentId, CancellationToken ct) =>
+        await (
+            from placement in db.Placements.AsNoTracking()
+            where placement.StudentId == studentId
+            join cert in db.Certificates.AsNoTracking() on placement.Id equals cert.PlacementId
+            orderby cert.IssuedAt descending
+            select new PortfolioCertificateDto(
+                cert.CertCode,
+                cert.IssuedAt,
+                cert.RevokedAt.HasValue ? CertificateVerificationStatus.Revoked : CertificateVerificationStatus.Valid,
+                cert.RevokedAt,
+                cert.PublicRevocationReason)
+        ).FirstOrDefaultAsync(ct);
+
+    private static List<Guid> ParseIds(string? csv) =>
+        string.IsNullOrWhiteSpace(csv)
+            ? []
+            : csv.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(value => Guid.TryParse(value, out var id) ? id : Guid.Empty)
+                .Where(id => id != Guid.Empty)
+                .ToList();
+
+    private static bool SequenceEqualIds(IReadOnlyList<Guid> left, IReadOnlyList<Guid> right) =>
+        left.Count == right.Count && left.SequenceEqual(right);
+
+    private static async Task<PortfolioDto> BuildPrivatePortfolioAsync(VokasiaDbContext db, Student student, Portfolio? portfolio, CancellationToken ct)
+    {
+        var verifiedCompetencies = await GetVerifiedCompetenciesAsync(db, student.Id, ct);
+        var draftIds = ParseIds(portfolio?.DraftSampleJournalIdsCsv);
+        if (draftIds.Count == 0)
+        {
+            draftIds = portfolio?.IsPublished == true ? ParseIds(portfolio.SampleJournalIdsCsv) : await GetLatestApprovedIdsAsync(db, student.Id, ct);
+        }
+
+        var evidence = await GetEvidenceRowsAsync(db, student.Id, draftIds, ct);
+        var samples = evidence.Select(row => new PortfolioJournalSampleDto(row.JournalEntryId, row.Text, row.SubmittedAt)).ToList();
+        var draftHeadline = portfolio?.DraftHeadline ?? portfolio?.Headline;
+        var draftSavedIds = ParseIds(portfolio?.DraftSampleJournalIdsCsv);
+        var publishedIds = ParseIds(portfolio?.SampleJournalIdsCsv);
+        var hasUnpublishedChanges = portfolio?.IsPublished == true &&
+            ((portfolio.DraftHeadline ?? portfolio.Headline) != portfolio.Headline ||
+             (draftSavedIds.Count > 0 && !SequenceEqualIds(draftSavedIds, publishedIds)));
+        var missing = await GetMissingRequirementsAsync(db, student, draftHeadline, ct);
+        var certificate = await GetPortfolioCertificateAsync(db, student.Id, ct);
+
+        return new PortfolioDto(draftHeadline, verifiedCompetencies, samples, certificate, portfolio?.IsPublished ?? false, portfolio?.Slug, hasUnpublishedChanges, missing);
+    }
 
     private static async Task<IResult> GetMyPortfolio(VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
     {
         var student = await FindCallerStudentAsync(db, tenant, ct);
-        if (student is null)
-        {
-            return Results.Forbid();
-        }
-
-        var portfolio = await db.Portfolios.AsNoTracking().FirstOrDefaultAsync(p => p.StudentId == student.Id, ct);
-        var verifiedCompetencies = await GetVerifiedCompetenciesAsync(db, student.Id, ct);
-
-        var sampleIds = ParseSampleIds(portfolio?.SampleJournalIdsCsv);
-        var samples = sampleIds.Count == 0
-            ? []
-            : await db.JournalEntries.AsNoTracking()
-                .Where(je => sampleIds.Contains(je.Id))
-                .Select(je => new PortfolioJournalSampleDto(je.Id, je.Text, je.SubmittedAt))
-                .ToListAsync(ct);
-
-        var certificate = await (
-            from p in db.Placements.AsNoTracking()
-            where p.StudentId == student.Id
-            join cert in db.Certificates.AsNoTracking() on p.Id equals cert.PlacementId
-            select new PortfolioCertificateDto(cert.CertCode, cert.IssuedAt)
-            ).FirstOrDefaultAsync(ct);
-
-        return Results.Ok(new PortfolioDto(portfolio?.Headline, verifiedCompetencies, samples, certificate, portfolio?.IsPublished ?? false, portfolio?.Slug));
+        return student is null
+            ? Results.Forbid()
+            : Results.Ok(await BuildPrivatePortfolioAsync(db, student, await db.Portfolios.AsNoTracking().FirstOrDefaultAsync(p => p.StudentId == student.Id, ct), ct));
     }
 
-    /// <summary>AC: "kurasi; hanya jurnal Approved milik sendiri" — ditegakkan (bukan dipercaya dari client): filter Approved + PlacementId milik student ini SEBELUM diterima jadi sampel.</summary>
     private static async Task<IResult> UpdatePortfolio(UpdatePortfolioRequest req, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
     {
         var student = await FindCallerStudentAsync(db, tenant, ct);
@@ -96,24 +216,6 @@ public static class PortfolioEndpoints
             return Results.Forbid();
         }
 
-        var sampleIds = req.SampleJournalIds ?? [];
-        var ownPlacementIds = await db.Placements.AsNoTracking().Where(p => p.StudentId == student.Id).Select(p => p.Id).ToListAsync(ct);
-        var validApprovedIds = sampleIds.Count == 0
-            ? []
-            : await db.JournalEntries.AsNoTracking()
-                .Where(je => sampleIds.Contains(je.Id) && je.Status == JournalEntryStatus.Approved && ownPlacementIds.Contains(je.PlacementId))
-                .Select(je => je.Id)
-                .ToListAsync(ct);
-
-        var rejected = sampleIds.Except(validApprovedIds).ToList();
-        if (rejected.Count > 0)
-        {
-            return Results.ValidationProblem(new Dictionary<string, string[]>
-            {
-                ["SampleJournalIds"] = ["Hanya jurnal Approved milik sendiri yang bisa dijadikan sampel: " + string.Join(",", rejected)],
-            });
-        }
-
         var portfolio = await db.Portfolios.FirstOrDefaultAsync(p => p.StudentId == student.Id, ct);
         if (portfolio is null)
         {
@@ -121,18 +223,17 @@ public static class PortfolioEndpoints
             db.Portfolios.Add(portfolio);
         }
 
-        portfolio.Headline = req.Headline;
-        portfolio.SampleJournalIdsCsv = string.Join(",", validApprovedIds);
-
+        // An empty headline is an explicit draft value. Keeping it distinct from null prevents
+        // PublishPortfolio from falling back to the previous published headline after a clear.
+        portfolio.DraftHeadline = req.Headline?.Trim() ?? string.Empty;
+        portfolio.DraftSampleJournalIdsCsv = string.Join(",", await GetLatestApprovedIdsAsync(db, student.Id, ct));
         await db.SaveChangesAsync(ct);
         return Results.NoContent();
     }
 
-    /// <summary>AC: "opt-in publik; validasi payload publik tidak memuat NISN/kontak (assert server-side, NFR-SEC-05); slug nama-jurusan-tahun unik; audit."</summary>
     private static async Task<IResult> PublishPortfolio(VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
     {
-        AssertPublicDtoHasNoSensitiveFields(); // NFR-SEC-05 — defense-in-depth runtime, lihat doc-comment method.
-
+        AssertPublicDtoHasNoSensitiveFields();
         var student = await FindCallerStudentAsync(db, tenant, ct);
         if (student is null)
         {
@@ -146,24 +247,27 @@ public static class PortfolioEndpoints
             db.Portfolios.Add(portfolio);
         }
 
+        portfolio.DraftHeadline ??= portfolio.Headline;
+        if (string.IsNullOrWhiteSpace(portfolio.DraftSampleJournalIdsCsv))
+        {
+            portfolio.DraftSampleJournalIdsCsv = string.Join(",", await GetLatestApprovedIdsAsync(db, student.Id, ct));
+        }
+
+        var missing = await GetMissingRequirementsAsync(db, student, portfolio.DraftHeadline, ct);
+        if (missing.Count > 0)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["Publication"] = missing.ToArray() });
+        }
+
         if (string.IsNullOrEmpty(portfolio.Slug))
         {
             var major = await db.Majors.AsNoTracking().FirstOrDefaultAsync(m => m.Id == student.MajorId, ct);
-            var year = await (
-                from p in db.Placements.AsNoTracking()
-                where p.StudentId == student.Id
-                join per in db.Periods.AsNoTracking() on p.PeriodId equals per.Id
-                orderby per.EndDate descending
-                select per.EndDate.Year
-                ).FirstOrDefaultAsync(ct);
-            if (year == 0)
-            {
-                year = DateTime.UtcNow.Year;
-            }
-
-            portfolio.Slug = await GenerateUniqueSlugAsync(db, student.FullName, major?.Name ?? "umum", year, ct);
+            var placement = await GetLatestPlacementAsync(db, student.Id, ct);
+            portfolio.Slug = await GenerateUniqueSlugAsync(db, student.FullName, major?.Name ?? "umum", placement?.EndDate.Year ?? DateTime.UtcNow.Year, ct);
         }
 
+        portfolio.Headline = portfolio.DraftHeadline;
+        portfolio.SampleJournalIdsCsv = portfolio.DraftSampleJournalIdsCsv;
         portfolio.IsPublished = true;
         await db.SaveChangesAsync(ct);
 
@@ -178,11 +282,9 @@ public static class PortfolioEndpoints
             MetaJson = JsonSerializer.Serialize(new { portfolio.Slug }),
         });
         await db.SaveChangesAsync(ct);
-
         return Results.Ok(new PublishPortfolioResult(portfolio.Slug!));
     }
 
-    /// <summary>AC: "cabut kapan pun -> publik 404."</summary>
     private static async Task<IResult> UnpublishPortfolio(VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
     {
         var student = await FindCallerStudentAsync(db, tenant, ct);
@@ -197,18 +299,12 @@ public static class PortfolioEndpoints
             return Results.NotFound();
         }
 
-        portfolio.IsPublished = false; // Slug DIPERTAHANKAN (bukan dihapus) - publish ulang nanti pakai slug yang sama, bukan slug baru.
+        portfolio.IsPublished = false;
         await db.SaveChangesAsync(ct);
         return Results.NoContent();
     }
 
-    /// <summary>
-    /// AC: publik + rate limit + cacheable (Cache-Control 5 mnt). Data W6 SAJA: nama, sekolah,
-    /// jurusan, tahun, DUDI, durasi, kompetensi terverifikasi, sampel (thumbnail), status sertifikat
-    /// — TANPA kontak/NISN (ditegakkan struktural: query di bawah TIDAK PERNAH select Student.Nisn
-    /// ataupun kolom kontak apa pun ke PublicPortfolioDto).
-    /// </summary>
-    private static async Task<IResult> GetPublicPortfolio(string slug, VokasiaDbContext db, IBrowserObjectStorageSigner storageSigner, IConfiguration config, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> GetPublicPortfolio(string slug, VokasiaDbContext db, HttpContext http, CancellationToken ct)
     {
         var portfolio = await db.Portfolios.AsNoTracking().FirstOrDefaultAsync(p => p.Slug == slug && p.IsPublished, ct);
         if (portfolio is null)
@@ -219,67 +315,118 @@ public static class PortfolioEndpoints
         var student = await db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == portfolio.StudentId, ct);
         var tenant = student is null ? null : await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == student.TenantId, ct);
         var major = student is null ? null : await db.Majors.AsNoTracking().FirstOrDefaultAsync(m => m.Id == student.MajorId, ct);
-        if (student is null || tenant is null)
+        var placement = student is null ? null : await GetLatestPlacementAsync(db, student.Id, ct);
+        if (student is null || tenant is null || placement is null)
         {
             return Results.NotFound();
         }
 
-        var placementInfo = await (
-            from p in db.Placements.AsNoTracking()
-            where p.StudentId == student.Id
-            join c in db.Companies.AsNoTracking() on p.CompanyId equals c.Id
-            join per in db.Periods.AsNoTracking() on p.PeriodId equals per.Id
-            orderby per.EndDate descending
-            select new { CompanyName = c.Name, per.StartDate, per.EndDate }
-            ).FirstOrDefaultAsync(ct);
-
         var verifiedCompetencies = await GetVerifiedCompetenciesAsync(db, student.Id, ct);
+        var evidenceRows = await GetEvidenceRowsAsync(db, student.Id, ParseIds(portfolio.SampleJournalIdsCsv), ct);
+        var evidence = evidenceRows.Select((row, index) => new PublicPortfolioEvidenceDto(row.Text, row.SubmittedAt, row.MediaKey is null ? null : $"/p/{Uri.EscapeDataString(slug)}/evidence/{index}")).ToList();
+        var certificate = await (
+            from placementRow in db.Placements.AsNoTracking()
+            where placementRow.StudentId == student.Id
+            join cert in db.Certificates.AsNoTracking() on placementRow.Id equals cert.PlacementId
+            orderby cert.IssuedAt descending
+            select new PublicPortfolioCertificateDto(cert.CertCode, cert.IssuedAt, cert.RevokedAt.HasValue ? CertificateVerificationStatus.Revoked : CertificateVerificationStatus.Valid, cert.RevokedAt, cert.PublicRevocationReason)
+        ).FirstOrDefaultAsync(ct);
 
-        var sampleIds = ParseSampleIds(portfolio.SampleJournalIdsCsv);
-        var photoKeys = sampleIds.Count == 0
-            ? []
-            : await (
-                from ph in db.JournalPhotos.AsNoTracking()
-                where sampleIds.Contains(ph.JournalEntryId) && ph.Status == PhotoStatus.Processed
-                select new { ph.ObjectKey, ph.ThumbKey }
-                ).ToListAsync(ct);
-
-        var bucket = config[BucketConfigKey] ?? DefaultBucket;
-        var thumbUrls = new List<string>();
-        foreach (var photo in photoKeys)
-        {
-            var key = photo.ThumbKey ?? photo.ObjectKey;
-            if (!ObjectStorageKeyPolicy.IsOwnedKey(key, tenant.Id, "journal"))
-            {
-                continue;
-            }
-
-            thumbUrls.Add(await storageSigner.PresignedGetObjectAsync(new PresignedGetObjectArgs().WithBucket(bucket).WithObject(key).WithExpiry(PresignedExpirySeconds)));
-        }
-
-        var hasCertificate = await db.Certificates.AsNoTracking().Join(db.Placements.AsNoTracking(), c => c.PlacementId, p => p.Id, (c, p) => p.StudentId).AnyAsync(sid => sid == student.Id, ct);
-
-        var durationLabel = placementInfo is null
-            ? "-"
-            : $"{Math.Max(1, (placementInfo.EndDate.ToDateTime(TimeOnly.MinValue) - placementInfo.StartDate.ToDateTime(TimeOnly.MinValue)).Days / 30)} bulan";
-        var year = placementInfo?.EndDate.Year ?? DateTime.UtcNow.Year;
-
-        http.Response.Headers.CacheControl = "public, max-age=300"; // AC literal: "cacheable (Cache-Control 5 mnt)".
-
-        return Results.Ok(new PublicPortfolioDto(
-            student.FullName, tenant.SchoolName, major?.Name ?? "-", year,
-            placementInfo?.CompanyName ?? "-", durationLabel, verifiedCompetencies, thumbUrls, hasCertificate));
+        http.Response.Headers.CacheControl = "public, max-age=300";
+        var durationLabel = $"{Math.Max(1, (placement.EndDate.ToDateTime(TimeOnly.MinValue) - placement.StartDate.ToDateTime(TimeOnly.MinValue)).Days / 30)} bulan";
+        return Results.Ok(new PublicPortfolioDto(student.FullName, tenant.SchoolName, major?.Name ?? "-", placement.PeriodLabel, placement.CompanyName, durationLabel, portfolio.Headline, verifiedCompetencies, evidence, certificate));
     }
 
-    private static List<Guid> ParseSampleIds(string? csv) =>
-        string.IsNullOrWhiteSpace(csv) ? [] : csv.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(Guid.Parse).ToList();
+    private static async Task<IResult> GetPublicCv(string slug, VokasiaDbContext db, IConfiguration config, HttpContext http, CancellationToken ct)
+    {
+        var portfolio = await db.Portfolios.AsNoTracking().FirstOrDefaultAsync(p => p.Slug == slug && p.IsPublished, ct);
+        if (portfolio is null)
+        {
+            return Results.NotFound();
+        }
+
+        var student = await db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == portfolio.StudentId, ct);
+        var tenant = student is null ? null : await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == student.TenantId, ct);
+        var major = student is null ? null : await db.Majors.AsNoTracking().FirstOrDefaultAsync(m => m.Id == student.MajorId, ct);
+        var placement = student is null ? null : await GetLatestPlacementAsync(db, student.Id, ct);
+        if (student is null || tenant is null || major is null || placement is null)
+        {
+            return Results.NotFound();
+        }
+
+        var certificate = await (
+            from placementRow in db.Placements.AsNoTracking()
+            where placementRow.StudentId == student.Id
+            join cert in db.Certificates.AsNoTracking() on placementRow.Id equals cert.PlacementId
+            orderby cert.IssuedAt descending
+            select new { cert.CertCode, cert.IssuedAt }
+        ).FirstOrDefaultAsync(ct);
+
+        var publicUrl = PublicAppOrigin.Resolve(config);
+        var portfolioUrl = $"{publicUrl.TrimEnd('/')}/p/{Uri.EscapeDataString(slug)}";
+        var verificationUrl = certificate is null ? null : $"{publicUrl.TrimEnd('/')}/verify/{certificate.CertCode}";
+        var competencies = await GetVerifiedCompetenciesAsync(db, student.Id, ct);
+        var durationLabel = $"{Math.Max(1, (placement.EndDate.ToDateTime(TimeOnly.MinValue) - placement.StartDate.ToDateTime(TimeOnly.MinValue)).Days / 30)} bulan";
+        var pdf = AtsCvPdfWriter.Write(new AtsCvData(
+            student.FullName,
+            "Kontak: melalui portofolio publik Vokasia",
+            tenant.SchoolName,
+            major.Name,
+            placement.CompanyName,
+            placement.PeriodLabel,
+            durationLabel,
+            portfolio.Headline,
+            competencies,
+            certificate?.CertCode,
+            certificate?.IssuedAt,
+            verificationUrl,
+            portfolioUrl));
+
+        http.Response.Headers.CacheControl = "private, no-store";
+        return Results.File(pdf, "application/pdf", $"cv-{Slugify(student.FullName)}.pdf");
+    }
+
+    private static async Task<IResult> GetPublicEvidence(string slug, int index, VokasiaDbContext db, IMinioClient minio, IConfiguration config, HttpContext http, CancellationToken ct)
+    {
+        if (index < 0 || index >= MaxEvidence)
+        {
+            return Results.NotFound();
+        }
+
+        var portfolio = await db.Portfolios.AsNoTracking().FirstOrDefaultAsync(p => p.Slug == slug && p.IsPublished, ct);
+        if (portfolio is null)
+        {
+            return Results.NotFound();
+        }
+
+        var student = await db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == portfolio.StudentId, ct);
+        if (student is null)
+        {
+            return Results.NotFound();
+        }
+
+        var rows = await GetEvidenceRowsAsync(db, student.Id, ParseIds(portfolio.SampleJournalIdsCsv), ct);
+        if (index >= rows.Count || rows[index].MediaKey is null || !ObjectStorageKeyPolicy.IsOwnedKey(rows[index].MediaKey, student.TenantId, "journal"))
+        {
+            return Results.NotFound();
+        }
+
+        try
+        {
+            await using var image = new MemoryStream();
+            await minio.GetObjectAsync(new GetObjectArgs().WithBucket(config[BucketConfigKey] ?? DefaultBucket).WithObject(rows[index].MediaKey).WithCallbackStream(stream => stream.CopyTo(image)), ct);
+            http.Response.Headers.CacheControl = "public, max-age=300";
+            return Results.File(image.ToArray(), "image/jpeg");
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            return Results.NotFound();
+        }
+    }
 
     private static async Task<string> GenerateUniqueSlugAsync(VokasiaDbContext db, string fullName, string majorName, int year, CancellationToken ct)
     {
         var baseSlug = Slugify($"{fullName}-{majorName}-{year}");
-        // Keep the readable identity while avoiding predictable sequential enumeration and making
-        // simultaneous publishes for students with the same name/year extremely unlikely to
-        // collide. The database uniqueness check below remains authoritative.
         var candidate = $"{baseSlug}-{CreateSlugSuffix()}";
         var suffix = 2;
         while (await db.Portfolios.AsNoTracking().AnyAsync(p => p.Slug == candidate, ct))
@@ -306,8 +453,7 @@ public static class PortfolioEndpoints
 
     private static string Slugify(string input)
     {
-        var lowered = input.ToLowerInvariant();
-        var chars = lowered.Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray();
+        var chars = input.ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray();
         var collapsed = new string(chars);
         while (collapsed.Contains("--"))
         {
@@ -317,29 +463,20 @@ public static class PortfolioEndpoints
         return collapsed.Trim('-');
     }
 
-    /// <summary>
-    /// NFR-SEC-05 defense-in-depth: PublishPortfolio ticket AC literal minta assert server-side
-    /// bahwa payload publik TIDAK memuat NISN/kontak — reflection thd nama properti PublicPortfolioDto
-    /// SEKARANG (bukan cuma percaya bentuk record tak pernah berubah) supaya penambahan field
-    /// sensitif baru ke DTO itu di masa depan (mis. "Email"/"Nisn"/"Phone") akan bikin PublishPortfolio
-    /// GAGAL keras saat itu juga (bukan diam-diam bocor ke publik) - pola sama semangatnya dgn assert
-    /// reflection VerifyCertificate_ValidCode_Returns200WithoutSensitiveFields (CertificateFlowTests).
-    /// </summary>
     private static void AssertPublicDtoHasNoSensitiveFields()
     {
-        string[] blockedKeywords = ["nisn", "kontak", "contact", "phone", "telp", "email"];
+        string[] blockedKeywords = ["nisn", "kontak", "contact", "phone", "telp", "email", "tenantid", "objectkey", "bucket"];
         var offending = typeof(PublicPortfolioDto).GetProperties()
-            .Select(p => p.Name)
-            .Where(name => blockedKeywords.Any(kw => name.Contains(kw, StringComparison.OrdinalIgnoreCase)))
+            .Select(property => property.Name)
+            .Where(name => blockedKeywords.Any(keyword => name.Contains(keyword, StringComparison.OrdinalIgnoreCase)))
             .ToList();
-
         if (offending.Count > 0)
         {
-            throw new InvalidOperationException($"PublicPortfolioDto mengandung field sensitif yang dilarang NFR-SEC-05: {string.Join(", ", offending)}");
+            throw new InvalidOperationException($"PublicPortfolioDto mengandung field publik yang dilarang: {string.Join(", ", offending)}");
         }
     }
 
-    private static async Task<IResult> GetStudentPortfolioForStaff(Guid studentId, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
+    private static async Task<IResult> GetStudentPortfolioForStaff(Guid studentId, VokasiaDbContext db, CancellationToken ct)
     {
         var student = await db.Students.AsNoTracking().FirstOrDefaultAsync(s => s.Id == studentId, ct);
         if (student is null)
@@ -347,24 +484,6 @@ public static class PortfolioEndpoints
             return Results.NotFound();
         }
 
-        var portfolio = await db.Portfolios.AsNoTracking().FirstOrDefaultAsync(p => p.StudentId == student.Id, ct);
-        var verifiedCompetencies = await GetVerifiedCompetenciesAsync(db, student.Id, ct);
-
-        var sampleIds = ParseSampleIds(portfolio?.SampleJournalIdsCsv);
-        var samples = sampleIds.Count == 0
-            ? []
-            : await db.JournalEntries.AsNoTracking()
-                .Where(je => sampleIds.Contains(je.Id))
-                .Select(je => new PortfolioJournalSampleDto(je.Id, je.Text, je.SubmittedAt))
-                .ToListAsync(ct);
-
-        var certificate = await (
-            from p in db.Placements.AsNoTracking()
-            where p.StudentId == student.Id
-            join cert in db.Certificates.AsNoTracking() on p.Id equals cert.PlacementId
-            select new PortfolioCertificateDto(cert.CertCode, cert.IssuedAt)
-            ).FirstOrDefaultAsync(ct);
-
-        return Results.Ok(new PortfolioDto(portfolio?.Headline, verifiedCompetencies, samples, certificate, portfolio?.IsPublished ?? false, portfolio?.Slug));
+        return Results.Ok(await BuildPrivatePortfolioAsync(db, student, await db.Portfolios.AsNoTracking().FirstOrDefaultAsync(p => p.StudentId == student.Id, ct), ct));
     }
 }

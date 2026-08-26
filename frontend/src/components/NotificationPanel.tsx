@@ -23,7 +23,7 @@ const ICON_BY_TYPE: Record<string, IconName> = {
 
 const LABEL_BY_TYPE: Record<string, string> = {
   JournalApproved: "Jurnal disetujui",
-  JournalRejected: "Jurnal ditolak",
+  JournalRejected: "Perlu revisi",
   GhostingAlert: "Siswa butuh perhatian",
   TeacherComment: "Komentar guru baru",
   JournalReminder: "Pengingat isi jurnal",
@@ -49,6 +49,18 @@ function extractDownloadUrl(payloadJson: string): string | null {
   } catch {
     return null;
   }
+}
+
+function extractJournalId(payloadJson: string): string | null {
+  try {
+    const parsed = JSON.parse(payloadJson) as Record<string, unknown>;
+    for (const key of ["journalId", "JournalId", "entryId", "EntryId"]) {
+      if (typeof parsed[key] === "string" && parsed[key].length > 0) return parsed[key];
+    }
+  } catch {
+    // Payload not meant for navigation; leave the notification as a normal item.
+  }
+  return null;
 }
 
 /**
@@ -82,25 +94,43 @@ export function NotificationPanel({ items, onMarkRead, onMarkAllRead, align = "r
           <ul>
             {items.map((n) => {
               const downloadUrl = n.type === "ExportReady" ? extractDownloadUrl(n.payloadJson) : null;
+              const journalId = ["JournalApproved", "JournalRejected", "TeacherComment"].includes(n.type)
+                ? extractJournalId(n.payloadJson)
+                : null;
+              const journalHref = journalId ? `/student/history?journalId=${encodeURIComponent(journalId)}` : null;
               return (
                 <li key={n.id}>
-                  <button
-                    type="button"
-                    onClick={() => !n.isRead && onMarkRead(n.id)}
-                    className={
-                      "flex w-full items-start gap-2 border-b border-border p-3 text-left text-sm outline-none last:border-b-0 " +
-                      "transition-[color,background-color,border-color] hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:-outline-offset-2 active:bg-primary-muted " +
-                      (n.isRead ? "text-ink-muted" : "bg-primary-muted/40 font-medium text-ink")
-                    }
-                  >
+                  <div className={
+                    "flex items-start gap-2 border-b border-border p-3 text-left text-sm last:border-b-0 " +
+                    (n.isRead ? "text-ink-muted" : "bg-primary-muted/40 font-medium text-ink")
+                  }>
                     <Icon name={ICON_BY_TYPE[n.type] ?? "bell"} size={20} className="shrink-0" />
-                    <span className="flex flex-col gap-0.5">
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span>{LABEL_BY_TYPE[n.type] ?? n.type}</span>
                       <span className="text-xs text-ink-muted">
                         {new Date(n.createdAt).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                       </span>
+                      {journalHref && (
+                        <a
+                          href={journalHref}
+                          onClick={() => !n.isRead && onMarkRead(n.id)}
+                          className="mt-1 inline-flex min-h-[var(--tap-min)] items-center text-xs font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+                        >
+                          Buka jurnal terkait
+                        </a>
+                      )}
                     </span>
-                  </button>
+                    {!journalHref && (
+                      <button
+                        type="button"
+                        aria-label={n.isRead ? undefined : "Tandai notifikasi sudah dibaca"}
+                        onClick={() => !n.isRead && onMarkRead(n.id)}
+                        className="min-h-[var(--tap-min)] min-w-[var(--tap-min)] rounded-[var(--radius-sm)] outline-none hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+                      >
+                        <span className="sr-only">Tandai sudah dibaca</span>
+                      </button>
+                    )}
+                  </div>
                   {downloadUrl && (
                     <a
                       href={downloadUrl}

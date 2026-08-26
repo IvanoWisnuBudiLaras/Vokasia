@@ -36,6 +36,8 @@ export async function POST() {
   const apiPublicUrl = getRuntimeUrl("API_PUBLIC_URL", "http://localhost:5000");
 
   const res = NextResponse.redirect(new URL("/account/logout", apiPublicUrl), { status: 303 });
+  res.headers.set("Cache-Control", "no-store, max-age=0");
+  res.headers.set("Clear-Site-Data", '"cache"');
 
   const isSecure = process.env.NODE_ENV === "production" && appUrl.startsWith("https://");
   const clearOptions = {

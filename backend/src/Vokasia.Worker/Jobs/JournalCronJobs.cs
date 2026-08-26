@@ -58,6 +58,10 @@ public class JournalCronJobs(VokasiaDbContext db, INotifier notifier, ILogger<Jo
             .Where(x => x.StartDate <= date && date <= x.EndDate)
             .ToListAsync();
 
+        // [OPTIMASI] 1.000 siswa x 6 bulan = 130k slot. Hindari pre-generate massal: cukup
+        // generate slot HARI INI untuk placement AKTIF (on-demand-reverse). Slot siswa yang
+        // terminated/di-keluar-kan tidak dilanjutkan (status != Active), remaining slot otomatis
+        // terabaikan oleh filter query GetTodayJournal & RemindEmptyJournals.
         if (eligible.Count == 0)
         {
             logger.LogInformation("GenerateDailyJournalSlots: {Date} tak ada placement aktif dlm rentang periode manapun.", date);

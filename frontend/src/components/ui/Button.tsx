@@ -11,10 +11,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClass: Record<Variant, string> = {
-  primary: "bg-primary text-primary-ink shadow-sm hover:bg-primary/90 active:bg-primary/80",
-  secondary: "border border-border bg-surface-muted text-ink hover:bg-surface hover:text-primary active:bg-primary-muted",
-  danger: "bg-status-red text-primary-ink shadow-sm hover:bg-status-red/90 active:bg-status-red/80",
-  "danger-outline": "border border-status-red/40 bg-surface-muted text-status-red hover:bg-status-red hover:text-white hover:border-status-red active:bg-status-red/90 transition-colors font-medium",
+  primary: "bg-primary text-white shadow-[0_2px_4px_0_oklch(50.4%_0.162_243.3/0.25)] hover:bg-brand-strong hover:-translate-y-0.5 active:translate-y-0 active:bg-brand-strong/90 transition-all duration-[var(--dur-fast)] font-semibold",
+  secondary: "border border-border/60 bg-surface text-ink hover:bg-surface-muted hover:text-ink active:bg-surface-muted/70 transition-colors font-medium",
+  danger: "bg-status-red text-white shadow-sm hover:bg-status-red/90 active:bg-status-red/80 font-semibold",
+  "danger-outline": "border border-status-red/30 bg-transparent text-status-red hover:bg-status-red/5 active:bg-status-red/10 transition-colors font-medium",
 };
 
 // lg = target sentuh utama mobile (NFR-UX-02, tombol "KIRIM JURNAL" / "APPROVE").

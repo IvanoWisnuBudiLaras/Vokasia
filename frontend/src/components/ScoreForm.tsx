@@ -9,12 +9,14 @@ export interface ScoreAspectInput {
   name: string;
   kind: number;
   weight: number;
+  description?: string | null;
 }
 
 export interface ScoreFormProps {
   aspects: ScoreAspectInput[];
   values: Record<string, number | null>;
-  onSave: (aspectId: string, value: number) => Promise<void>;
+  comments?: Record<string, string | null>;
+  onSave: (aspectId: string, value: number, comment: string) => Promise<void>;
   readOnly?: boolean;
 }
 
@@ -38,10 +40,15 @@ const AUTOSAVE_DEBOUNCE_MS = 800;
  * `readOnly` (assessment.IsFinal) -> semua input disabled, tak ada percobaan save (AC: "admin
  * finalize sukses -> semua ScoreForm jadi readOnly").
  */
-export function ScoreForm({ aspects, values, onSave, readOnly = false }: ScoreFormProps) {
+export function ScoreForm({ aspects, values, comments = {}, onSave, readOnly = false }: ScoreFormProps) {
   const [local, setLocal] = useState<Record<string, number>>(() => {
     const init: Record<string, number> = {};
     for (const a of aspects) init[a.id] = values[a.id] ?? 0;
+    return init;
+  });
+  const [localComments, setLocalComments] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const a of aspects) init[a.id] = comments[a.id] ?? "";
     return init;
   });
   const [status, setStatus] = useState<Record<string, RowStatus>>({});
@@ -55,12 +62,12 @@ export function ScoreForm({ aspects, values, onSave, readOnly = false }: ScoreFo
     };
   }, []);
 
-  function scheduleSave(aspectId: string, value: number) {
+  function scheduleSave(aspectId: string, value: number, comment: string) {
     if (timers.current[aspectId]) clearTimeout(timers.current[aspectId]);
     setStatus((s) => ({ ...s, [aspectId]: "saving" }));
     timers.current[aspectId] = setTimeout(async () => {
       try {
-        await onSave(aspectId, value);
+        await onSave(aspectId, value, comment);
         setStatus((s) => ({ ...s, [aspectId]: "saved" }));
         setErrorMsg((e) => ({ ...e, [aspectId]: "" }));
       } catch (err) {
@@ -73,7 +80,12 @@ export function ScoreForm({ aspects, values, onSave, readOnly = false }: ScoreFo
   function handleChange(aspectId: string, raw: string) {
     const value = Math.max(0, Math.min(100, Number(raw) || 0));
     setLocal((v) => ({ ...v, [aspectId]: value }));
-    if (!readOnly) scheduleSave(aspectId, value);
+    if (!readOnly) scheduleSave(aspectId, value, localComments[aspectId] ?? "");
+  }
+
+  function handleCommentChange(aspectId: string, comment: string) {
+    setLocalComments((current) => ({ ...current, [aspectId]: comment }));
+    if (!readOnly) scheduleSave(aspectId, local[aspectId] ?? 0, comment);
   }
 
   return (
@@ -83,7 +95,10 @@ export function ScoreForm({ aspects, values, onSave, readOnly = false }: ScoreFo
         return (
           <div key={aspect.id} className="rounded-[var(--radius-lg)] border border-border bg-surface p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-ink">{aspect.name}</span>
+              <div>
+                <span className="text-sm font-medium text-ink">{aspect.name}</span>
+                {aspect.description && <p className="mt-1 text-xs leading-relaxed text-ink-muted">{aspect.description}</p>}
+              </div>
               <span className="text-xs text-ink-muted">bobot {aspect.weight}%</span>
             </div>
             <div className="flex items-center gap-3">
@@ -111,6 +126,17 @@ export function ScoreForm({ aspects, values, onSave, readOnly = false }: ScoreFo
                 className="h-[var(--tap-min)] w-20 rounded-[var(--radius-md)] border border-border px-2 text-center text-base outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:opacity-[0.55]"
               />
             </div>
+            <label className="mt-3 block text-xs font-medium text-ink-muted">
+              Catatan penilai (opsional)
+              <textarea
+                value={localComments[aspect.id] ?? ""}
+                maxLength={2000}
+                disabled={readOnly}
+                onChange={(event) => handleCommentChange(aspect.id, event.target.value)}
+                className="mt-1 min-h-20 w-full resize-y rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:opacity-[0.55]"
+                aria-label={`Catatan ${aspect.name}`}
+              />
+            </label>
             <div
               id={`${aspect.id}-save-status`}
               role={rowStatus === "error" ? "alert" : "status"}

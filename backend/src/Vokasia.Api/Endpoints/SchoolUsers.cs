@@ -2,9 +2,11 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Authorization;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Infrastructure.Identity;
+using Vokasia.Infrastructure.Configuration;
 using Vokasia.Infrastructure.Persistence;
 using Vokasia.Infrastructure.Security;
 using Vokasia.Infrastructure.Email;
@@ -74,7 +76,7 @@ public static class SchoolUsersEndpoints
         // The bearer token is transient and only its hash plus UTC expiry is persisted.
         var invitation = StaffInvitationToken.Create(DateTimeOffset.UtcNow);
         await userManager.SetAuthenticationTokenAsync(user, StaffInvitationToken.LoginProvider, StaffInvitationToken.Name, StaffInvitationToken.StoredValue(invitation.Hash, invitation.ExpiresAt));
-        var setupUrl = $"{(configuration["NEXT_PUBLIC_APP_URL"] ?? "http://localhost:3000").TrimEnd('/')}/set-password?token={Uri.EscapeDataString(invitation.Raw)}";
+        var setupUrl = $"{PublicAppOrigin.Resolve(configuration)}/set-password?token={Uri.EscapeDataString(invitation.Raw)}";
         await emailSender.SendAsync(new EmailMessage(user.Email!, "StaffInvitation", "Atur kata sandi Vokasia", $"<p>Atur kata sandi akun Vokasia Anda: <a href=\"{setupUrl}\">Atur kata sandi</a></p>", $"Atur kata sandi akun Vokasia Anda: {setupUrl}", Guid.NewGuid()), ct);
         return Results.Created($"/api/school-users/{user.Id}", new { User = ToDto(user), ExpiresInHours = 24 });
     }

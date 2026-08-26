@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Minio;
 using Minio.DataModel.Args;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Authorization;
 using Vokasia.Api.Storage;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;

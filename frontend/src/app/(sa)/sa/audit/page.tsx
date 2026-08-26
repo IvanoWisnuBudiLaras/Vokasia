@@ -6,6 +6,7 @@ import { AuditExportToolbar } from "./AuditExportToolbar";
 export const dynamic = "force-dynamic";
 
 interface SearchParams {
+  tenantId?: string;
   actorId?: string;
   entity?: string;
   from?: string;
@@ -25,6 +26,7 @@ export default async function SaAuditPage({ searchParams }: { searchParams: Prom
 
   const query = new URLSearchParams();
   if (sp.actorId) query.set("actorId", sp.actorId);
+  if (sp.tenantId) query.set("tenantId", sp.tenantId);
   if (sp.entity) query.set("entity", sp.entity);
   if (sp.from) query.set("from", sp.from);
   if (sp.to) query.set("to", sp.to);
@@ -44,6 +46,7 @@ export default async function SaAuditPage({ searchParams }: { searchParams: Prom
 
   function pageHref(p: number) {
     const q = new URLSearchParams();
+    if (sp.tenantId) q.set("tenantId", sp.tenantId);
     if (sp.actorId) q.set("actorId", sp.actorId);
     if (sp.entity) q.set("entity", sp.entity);
     if (sp.from) q.set("from", sp.from);

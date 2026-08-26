@@ -19,5 +19,15 @@ export const materialSymbols = {
 } as const;
 
 export function MaterialIcon({ name, label, decorative = false }: { name: keyof typeof materialSymbols; label?: string; decorative?: boolean }) {
-  return <Icon icon={materialSymbols[name]} role={label && !decorative ? "img" : undefined} aria-hidden={decorative || !label ? true : undefined} aria-label={decorative ? undefined : label} width="1.25em" height="1.25em" />;
+  return (
+    <span
+      data-icon={materialSymbols[name]}
+      role={label && !decorative ? "img" : undefined}
+      aria-hidden={decorative || !label ? true : undefined}
+      aria-label={decorative ? undefined : label}
+      className="inline-flex items-center justify-center"
+    >
+      <Icon icon={materialSymbols[name]} width="1.25em" height="1.25em" />
+    </span>
+  );
 }

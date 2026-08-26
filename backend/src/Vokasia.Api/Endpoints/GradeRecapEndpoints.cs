@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Authorization;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
@@ -30,11 +31,22 @@ public static class GradeRecapEndpoints
     /// dari query (1) sekaligus, digabung di memori jadi dictionary. Sama filosofi dgn ListJournals
     /// (JournalEndpoints) - "tanpa N+1" dibuktikan lewat jumlah query KONSTAN, bukan cuma diasumsikan.
     /// </summary>
-    private static async Task<IResult> GetGradeRecap(Guid periodId, VokasiaDbContext db, CancellationToken ct)
+    private static async Task<IResult> GetGradeRecap(Guid periodId, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
     {
+        var teacherScoped = string.Equals(tenant.Role, UserRole.Teacher.ToString(), StringComparison.OrdinalIgnoreCase);
+        if (teacherScoped && !tenant.UserId.HasValue)
+        {
+            return Results.Forbid();
+        }
+
+        var placements = db.Placements.AsNoTracking().Where(p => p.PeriodId == periodId);
+        if (teacherScoped)
+        {
+            placements = placements.Where(p => p.TeacherId == tenant.UserId!.Value);
+        }
+
         var rows = await (
-            from p in db.Placements.AsNoTracking()
-            where p.PeriodId == periodId
+            from p in placements
             join s in db.Students.AsNoTracking() on p.StudentId equals s.Id
             join c in db.Companies.AsNoTracking() on p.CompanyId equals c.Id
             join a in db.Assessments.AsNoTracking() on p.Id equals a.PlacementId into aj

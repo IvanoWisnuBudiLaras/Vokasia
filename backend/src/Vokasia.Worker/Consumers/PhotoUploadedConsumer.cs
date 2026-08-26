@@ -112,6 +112,13 @@ public class PhotoUploadedConsumer(
                 notifier.CreateNotification(studentUserId.Value, NotificationType.PhotoProcessingFailed, new { PhotoId = msg.PhotoId });
             }
 
+            // The object was accepted into the tenant-owned private prefix but failed byte-level
+            // image validation. Remove it so a permanently rejected upload cannot accumulate as
+            // an orphan. Storage failures remain transient and are intentionally rethrown.
+            await minio.RemoveObjectAsync(new RemoveObjectArgs()
+                .WithBucket(bucket)
+                .WithObject(photo.ObjectKey), ct);
+
             await db.SaveChangesAsync(ct);
             logger.LogWarning(ex, "{Consumer}: foto {PhotoId} gagal decode (korup/bukan gambar) - Status=Failed, notif siswa.", Name, msg.PhotoId);
             return;

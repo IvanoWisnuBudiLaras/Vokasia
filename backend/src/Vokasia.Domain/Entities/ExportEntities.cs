@@ -16,6 +16,12 @@ public class ExportRequest : ITenantScoped
     public ExportFormat Format { get; set; }
     public ExportStatus Status { get; set; } = ExportStatus.Requested;
     public string? ObjectKey { get; set; }
+    /// <summary>Null for legacy V2 grade-recap rows; V3 rows use the Learning Record export contract.</summary>
+    public string? ReportKind { get; set; }
+    /// <summary>Immutable serialized semantic report query captured at request time.</summary>
+    public string? ReportQueryJson { get; set; }
+    public string? ExportScope { get; set; }
+    public int? ExportQuantity { get; set; }
     public DateTimeOffset RequestedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? CompletedAt { get; set; }
 }

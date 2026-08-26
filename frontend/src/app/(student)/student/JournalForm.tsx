@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Textarea } from "@/components/ui";
+import { Button } from "@/components/ui";
+import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { apiClient, ApiError } from "@/lib/apiClient";
 import type { CompetencyDto, JournalDto, JournalSlotDto } from "@/lib/apiTypes";
+import { richTextPlainText } from "@/lib/richText";
 import { CompetencyPicker } from "./CompetencyPicker";
 import { PhotoUploader, type PendingPhoto } from "./PhotoUploader";
 import { journalDraftKey, parseJournalDraft, serializeJournalDraft } from "./journalDraft";
@@ -32,8 +34,7 @@ export function JournalForm({ slot, competencies, draftScope, rejectedReason, on
   const [photos, setPhotos] = useState<PendingPhoto[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [draftReady, setDraftReady] = useState(!draftScope);
-  const [draftRestored, setDraftRestored] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
   const [offline, setOffline] = useState(false);
 
   const draftKey = draftScope ? journalDraftKey(draftScope, slot.id) : null;
@@ -51,12 +52,10 @@ export function JournalForm({ slot, competencies, draftScope, rejectedReason, on
         if (draft) {
           setText(draft.text);
           setCompetencyIds(draft.competencyIds);
-          setDraftRestored(true);
+          setDraftSaved(true);
         }
       } catch {
         // Storage bisa dibatasi browser; form tetap harus dapat digunakan.
-      } finally {
-        setDraftReady(true);
       }
     });
 
@@ -73,30 +72,56 @@ export function JournalForm({ slot, competencies, draftScope, rejectedReason, on
     return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); };
   }, []);
 
-  useEffect(() => {
-    if (!draftReady || !draftKey) return;
-
+  function persistDraft(nextText: string, nextCompetencyIds: string[]) {
+    if (!draftKey) return;
     try {
-      if (text.trim().length === 0 && competencyIds.length === 0) {
+      if (nextText.trim().length === 0 && nextCompetencyIds.length === 0) {
         sessionStorage.removeItem(draftKey);
+        setDraftSaved(false);
         return;
       }
 
-      sessionStorage.setItem(draftKey, serializeJournalDraft(text, competencyIds));
+      sessionStorage.setItem(draftKey, serializeJournalDraft(nextText, nextCompetencyIds));
+      setDraftSaved(true);
     } catch {
       // Storage bisa dibatasi browser; form tetap harus dapat digunakan.
     }
-  }, [competencyIds, draftKey, draftReady, text]);
+  }
 
   const stillUploading = photos.some((p) => p.status === "uploading");
   const hasFailedPhoto = photos.some((p) => p.status === "error");
-  const canSubmit = text.trim().length > 0 && !submitting && !stillUploading && !offline;
+  const plainText = richTextPlainText(text);
+  const hasPhotos = photos.length > 0 && photos.some((p) => p.status === "uploaded");
+  const canSubmit =
+    plainText.trim().length > 0 &&
+    plainText.length <= MAX_TEXT &&
+    competencyIds.length > 0 &&
+    hasPhotos &&
+    !submitting &&
+    !stillUploading &&
+    !offline;
+
+  function handleTextChange(value: string) {
+    setText(value);
+    setDraftSaved(false);
+    persistDraft(value, competencyIds);
+  }
+
+  function handleCompetenciesChange(ids: string[]) {
+    setCompetencyIds(ids);
+    setDraftSaved(false);
+    persistDraft(text, ids);
+  }
 
   async function handleSubmit() {
     setError(null);
 
-    if (text.trim().length === 0) {
+    if (plainText.trim().length === 0) {
       setError("Tulis dulu apa yang kamu kerjakan hari ini.");
+      return;
+    }
+    if (plainText.length > MAX_TEXT) {
+      setError(`Jurnal maksimal ${MAX_TEXT} karakter.`);
       return;
     }
     if (hasFailedPhoto) {
@@ -147,48 +172,30 @@ export function JournalForm({ slot, competencies, draftScope, rejectedReason, on
     <div className="flex flex-col gap-4">
       {rejectedReason && (
         <div role="alert" className="rounded-[var(--radius-md)] border border-status-red/30 bg-status-red-bg p-3 text-sm text-status-red">
-          <strong className="font-semibold">Jurnal sebelumnya ditolak:</strong> {rejectedReason}
+          <strong className="font-semibold">Catatan mentor:</strong> {rejectedReason}
         </div>
       )}
 
       {offline && <p role="status" className="border border-status-amber/40 bg-status-amber-bg p-3 text-sm text-status-amber">Anda sedang offline. Draf tetap tersimpan di sesi browser; sambungkan internet untuk mengirim jurnal.</p>}
 
-      <div
-        role="status"
-        aria-live="polite"
-        className="rounded-[var(--radius-md)] border border-border bg-surface-muted px-3 py-2 text-sm text-ink-muted"
-      >
-        <strong className="font-medium text-ink">
-          {!draftScope
-            ? "Draf sesi ini tidak disimpan."
-            : draftRestored
-              ? "Draf sesi ini sudah dipulihkan."
-              : "Draf aman selama tab ini terbuka."}
-        </strong>{" "}
-        {draftScope
-          ? "Draf teks dan kompetensi disimpan sementara di tab ini. "
-          : "Tetap di halaman ini sampai jurnal berhasil dikirim. "}
-        Foto perlu dipilih kembali setelah halaman dimuat ulang.
-      </div>
+      {draftSaved && draftScope && <span role="status" aria-live="polite" className="inline-flex items-center gap-1 text-xs text-ink-muted"><span aria-hidden="true">✓</span> Tersimpan</span>}
 
-      <Textarea
+      <RichTextEditor
         label="Apa yang kamu kerjakan hari ini?"
-        maxLength={MAX_TEXT}
-        showCounter
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={handleTextChange}
         disabled={submitting}
-        placeholder="Ceritakan singkat kegiatan PKL-mu hari ini..."
+        maxLength={MAX_TEXT}
       />
 
-      <CompetencyPicker options={competencies} selected={competencyIds} max={MAX_COMPETENCIES} onChange={setCompetencyIds} />
+      <CompetencyPicker options={competencies} selected={competencyIds} max={MAX_COMPETENCIES} onChange={handleCompetenciesChange} />
 
       <PhotoUploader max={MAX_PHOTOS} photos={photos} setPhotos={setPhotos} disabled={submitting} />
 
       {error && <p role="alert" className="rounded-[var(--radius-md)] border border-status-red/30 bg-status-red-bg p-3 text-sm font-medium text-status-red">{error}</p>}
 
       <Button size="lg" className="w-full" onClick={handleSubmit} loading={submitting} disabled={!canSubmit}>
-        Kirim untuk ditinjau
+        {rejectedReason ? "Kirim ulang jurnal" : "Kirim jurnal"}
       </Button>
     </div>
   );

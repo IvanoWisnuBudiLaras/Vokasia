@@ -1,133 +1,68 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { Icon } from "@/components/ui";
 import { publicFetcher } from "@/lib/publicFetcher";
 import { publicPortfolioCacheTag } from "@/lib/publicPortfolioCache";
-import type { PublicPortfolioDto } from "@/lib/apiTypes";
+import { CertificateVerificationStatus, type PublicPortfolioDto } from "@/lib/apiTypes";
+import { PublicEvidenceGallery } from "./PublicEvidenceGallery";
+import { ShareButton } from "./ShareButton";
+import { ShareFileButton } from "./ShareFileButton";
 import { AtsCvExportButton } from "./AtsCvExportButton";
 
-interface PageProps {
-  params: Promise<{ slug: string }>;
+interface PageProps { params: Promise<{ slug: string }> }
+
+async function loadPortfolio(slug: string) {
+  const result = await publicFetcher<PublicPortfolioDto>(`/p/${encodeURIComponent(slug)}`, 300, [publicPortfolioCacheTag(slug)]);
+  return result.status === 404 ? null : result.data;
 }
 
-async function loadPortfolio(slug: string): Promise<PublicPortfolioDto | null> {
-  const { status, data } = await publicFetcher<PublicPortfolioDto>(
-    `/p/${encodeURIComponent(slug)}`,
-    300,
-    [publicPortfolioCacheTag(slug)]
-  );
-  return status === 404 ? null : data;
+function dateLabel(value: string) {
+  return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value));
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const portfolio = await loadPortfolio(slug);
   if (!portfolio) return { title: "Portofolio tidak ditemukan — Vokasia" };
-
-  const title = `${portfolio.studentName} — Portofolio PKL ${portfolio.majorName} | Vokasia`;
-  const description = `${portfolio.studentName}, siswa ${portfolio.majorName} ${portfolio.schoolName}, PKL di ${portfolio.companyName}.`;
-  return { title, description, openGraph: { title, description, type: "profile" } };
+  return { title: `${portfolio.studentName} — Portofolio PKL | Vokasia`, description: `${portfolio.studentName}, ${portfolio.majorName} dari ${portfolio.schoolName}.` };
 }
 
-/**
- * Portofolio publik hanya memuat identitas aman, kompetensi terverifikasi, sampel karya,
- * dan status sertifikat. Kontak maupun NISN tidak menjadi bagian kontrak respons.
- */
 export default async function PublicPortfolioPage({ params }: PageProps) {
   const { slug } = await params;
   const portfolio = await loadPortfolio(slug);
   if (!portfolio) notFound();
 
-  return (
-    <main data-theme="sekolah" className="flex flex-1 bg-surface px-5 py-8 sm:px-8 sm:py-12">
-      <article className="mx-auto flex w-full min-w-0 max-w-2xl flex-col gap-7">
-        <nav className="flex items-center justify-between gap-4 border-b border-border pb-4">
-          <Link
-            href="/"
-            className="inline-flex min-h-[var(--tap-min)] items-center gap-2 whitespace-nowrap rounded-[var(--radius-md)] px-2 text-sm font-medium text-ink-muted outline-none hover:text-primary focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:translate-y-px"
-          >
-            <Icon name="arrow-left" size={16} />
-            Beranda
-          </Link>
+  const certificate = portfolio.certificate;
+  const certificateRevoked = certificate?.status === CertificateVerificationStatus.Revoked;
+  portfolio.periodLabel = portfolio.periodLabel.replace(/^PKL\s+/i, "");
 
-          <div className="flex items-center gap-3">
-            <AtsCvExportButton studentName={portfolio.studentName} />
-            <span className="hidden items-center gap-2 text-xs text-ink-muted sm:flex">
-              <Image src="/icon.svg" alt="" width={24} height={24} />
-              Portofolio Vokasia
-            </span>
-          </div>
+  return (
+    <main className="min-h-screen bg-surface-paper px-5 py-8 sm:px-10 sm:py-14">
+      <article className="mx-auto flex w-full max-w-4xl flex-col gap-12">
+        <nav className="flex items-center justify-between gap-4 border-b border-border pb-5">
+          <Link href="/" className="text-sm font-semibold text-ink">Vokasia</Link>
+          <div className="flex flex-wrap items-center justify-end gap-2"><AtsCvExportButton slug={slug} /><ShareFileButton url={`/p/${encodeURIComponent(slug)}/cv`} filename={`cv-${slug}.pdf`} label="Bagikan CV PDF" title={`CV ATS ${portfolio.studentName}`} /><ShareButton title={`Portofolio PKL ${portfolio.studentName}`} /></div>
         </nav>
 
-        <header className="min-w-0">
-          <p className="text-xs font-semibold tracking-[0.12em] text-primary">PORTOFOLIO PKL</p>
-          <h1 className="mt-2 min-w-0 [overflow-wrap:anywhere] text-3xl font-bold tracking-tight text-ink">{portfolio.studentName}</h1>
-          <p className="mt-2 break-words text-sm leading-6 text-ink-muted">
-            {portfolio.majorName} · {portfolio.schoolName} · {portfolio.year}
-          </p>
+        <header className="flex flex-col gap-4">
+          <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-ink sm:text-5xl">{portfolio.studentName}</h1>
+          <p className="text-lg leading-7 text-ink-muted">{portfolio.majorName} · {portfolio.schoolName}</p>
+          <div className="flex flex-col gap-1 text-sm text-ink-muted sm:flex-row sm:gap-3"><span>PKL {portfolio.periodLabel}</span><span className="hidden sm:inline" aria-hidden="true">·</span><span>{portfolio.companyName}</span><span className="hidden sm:inline" aria-hidden="true">·</span><span>{portfolio.durationLabel}</span></div>
+          {portfolio.description && <p className="max-w-2xl text-base leading-7 text-ink">{portfolio.description}</p>}
         </header>
 
-        <section className="grid gap-4 border-y border-border py-5 min-[30rem]:grid-cols-2">
-          <div>
-            <p className="text-xs font-semibold tracking-wide text-ink-muted">TEMPAT PKL</p>
-            <p className="mt-1 break-words font-medium text-ink">{portfolio.companyName}</p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold tracking-wide text-ink-muted">DURASI</p>
-            <p className="mt-1 break-words font-medium text-ink">{portfolio.durationLabel}</p>
-          </div>
-        </section>
+        {portfolio.verifiedCompetencies.length > 0 && <section aria-labelledby="kompetensi" className="flex flex-col gap-4"><h2 id="kompetensi" className="border-b border-border pb-3 text-xl font-semibold text-ink">Kompetensi terverifikasi</h2><ul className="grid gap-2 text-base text-ink sm:grid-cols-2">{portfolio.verifiedCompetencies.map((competency) => <li key={competency} className="border-l-2 border-primary pl-3">{competency}</li>)}</ul></section>}
 
-        {portfolio.verifiedCompetencies.length > 0 && (
-          <section aria-labelledby="kompetensi">
-            <h2 id="kompetensi" className="text-base font-semibold text-ink">
-              Kompetensi terverifikasi
-            </h2>
-            <ul className="mt-3 flex min-w-0 flex-wrap gap-2">
-              {portfolio.verifiedCompetencies.map((competency) => (
-                <li
-                  key={competency}
-                  className="max-w-full break-words rounded-full bg-primary-muted px-3 py-1.5 text-sm font-medium text-ink"
-                >
-                  {competency}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+        <PublicEvidenceGallery evidence={portfolio.evidence} studentName={portfolio.studentName} />
 
-        {portfolio.sampleThumbnailUrls.length > 0 && (
-          <section aria-labelledby="sampel-karya">
-            <h2 id="sampel-karya" className="text-base font-semibold text-ink">
-              Sampel karya
-            </h2>
-            <div className="mt-3 grid min-w-0 grid-cols-[repeat(2,minmax(0,1fr))] gap-2 min-[25rem]:grid-cols-[repeat(3,minmax(0,1fr))]">
-              {portfolio.sampleThumbnailUrls.map((url, index) => (
-                // URL presigned MinIO dinamis tidak cocok untuk allowlist next/image.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={url}
-                  src={url}
-                  alt={`Sampel karya ${index + 1}`}
-                  width={640}
-                  height={640}
-                  loading={index === 0 ? "eager" : "lazy"}
-                  fetchPriority={index === 0 ? "high" : "auto"}
-                  className="aspect-square min-w-0 w-full rounded-[var(--radius-md)] border border-border object-cover"
-                />
-              ))}
-            </div>
-          </section>
-        )}
+        {certificate && <section aria-labelledby="sertifikat" className={`flex flex-col gap-4 rounded-[var(--radius-lg)] border p-5 sm:p-6 ${certificateRevoked ? "border-status-red bg-status-red-bg" : "border-status-green bg-status-green-bg"}`}>
+          <div><h2 id="sertifikat" className="text-xl font-semibold text-ink">Sertifikat PKL</h2><p className="mt-1 text-sm text-ink-muted">Diterbitkan oleh {portfolio.schoolName} · {dateLabel(certificate.issuedAt)}</p></div>
+          <dl className="grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-ink-muted">Nomor sertifikat</dt><dd className="mt-1 break-all font-mono font-medium text-ink">{certificate.certificateNumber}</dd></div><div><dt className="text-ink-muted">Status</dt><dd className={`mt-1 font-medium ${certificateRevoked ? "text-status-red" : "text-status-green"}`}>{certificateRevoked ? "Dicabut" : "Valid"}</dd></div></dl>
+          {certificateRevoked && certificate.publicRevocationReason && <p className="text-sm leading-6 text-status-red">Alasan pencabutan: {certificate.publicRevocationReason}</p>}
+          <div className="flex flex-wrap gap-2"><a href={`/api/verify/${encodeURIComponent(certificate.certificateNumber)}/certificate`} target="_blank" rel="noreferrer" className="inline-flex min-h-[var(--tap-min)] items-center rounded-[var(--radius-md)] bg-surface px-4 text-sm font-medium text-ink ring-1 ring-border focus-visible:outline-2 focus-visible:outline-focus">Lihat sertifikat</a><ShareFileButton url={`/api/verify/${encodeURIComponent(certificate.certificateNumber)}/certificate?download=1`} filename={`sertifikat-${certificate.certificateNumber}.pdf`} label="Bagikan PDF" title={`Sertifikat PKL ${portfolio.studentName}`} /><Link href={`/verify/${encodeURIComponent(certificate.certificateNumber)}`} className="inline-flex min-h-[var(--tap-min)] items-center rounded-[var(--radius-md)] px-2 text-sm font-medium text-primary underline focus-visible:outline-2 focus-visible:outline-focus">Verifikasi</Link></div>
+        </section>}
 
-        {portfolio.hasCertificate && (
-          <div className="flex items-center justify-center gap-2 rounded-[var(--radius-md)] border border-status-green/30 bg-status-green-bg px-3 py-3 text-center text-sm font-medium text-status-green">
-            <Icon name="award" size={20} />
-            Sertifikat PKL telah terbit
-          </div>
-        )}
+        <footer className="border-t border-border pt-5 text-sm text-ink-muted">Diverifikasi oleh Vokasia · <Link href={certificate ? `/verify/${encodeURIComponent(certificate.certificateNumber)}` : "/"} className="text-primary underline">Lihat verifikasi</Link></footer>
       </article>
     </main>
   );

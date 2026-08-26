@@ -9,7 +9,7 @@ namespace Vokasia.Infrastructure.Persistence;
 
 /// <summary>
 /// Satu DbContext untuk seluruh platform (Identity + OpenIddict store + domain entities).
-/// Skema ini dibekukan gate M0 (PRD WBS 1.2) — perubahan pasca-beku = change control (PRD 3.6).
+/// Skema ini terbuka untuk pengembangan dan revisi.
 /// </summary>
 public class VokasiaDbContext : IdentityDbContext<AppUser, AppRole, Guid>
 {
@@ -49,12 +49,26 @@ public class VokasiaDbContext : IdentityDbContext<AppUser, AppRole, Guid>
     public DbSet<Plan> Plans => Set<Plan>();
     public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<PaymentSubmission> PaymentSubmissions => Set<PaymentSubmission>();
+    public DbSet<Subscription> Subscriptions => Set<Subscription>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<ProcessedMessage> ProcessedMessages => Set<ProcessedMessage>();
     public DbSet<MentorInvite> MentorInvites => Set<MentorInvite>();
     public DbSet<SentEmail> SentEmails => Set<SentEmail>();
+    public DbSet<LearningRecordTemplate> LearningRecordTemplates => Set<LearningRecordTemplate>();
+    public DbSet<LearningRecordTemplateCriterion> LearningRecordTemplateCriteria => Set<LearningRecordTemplateCriterion>();
+    public DbSet<PlacementLearningRecordSnapshot> PlacementLearningRecordSnapshots => Set<PlacementLearningRecordSnapshot>();
+    public DbSet<PlacementLearningRecordCriterionSnapshot> PlacementLearningRecordCriterionSnapshots => Set<PlacementLearningRecordCriterionSnapshot>();
+    public DbSet<LearningAssessment> LearningAssessments => Set<LearningAssessment>();
+    public DbSet<LearningAssessmentDraftCriterion> LearningAssessmentDraftCriteria => Set<LearningAssessmentDraftCriterion>();
+    public DbSet<LearningAssessmentRevision> LearningAssessmentRevisions => Set<LearningAssessmentRevision>();
+    public DbSet<LearningAssessmentRevisionCriterion> LearningAssessmentRevisionCriteria => Set<LearningAssessmentRevisionCriterion>();
+    public DbSet<LearningAssessmentRevisionCriterionEvidence> LearningAssessmentRevisionCriterionEvidence => Set<LearningAssessmentRevisionCriterionEvidence>();
+    public DbSet<LearningAssessmentCriterionEvidence> LearningAssessmentCriterionEvidence => Set<LearningAssessmentCriterionEvidence>();
+    public DbSet<TeacherMonitoringEvent> TeacherMonitoringEvents => Set<TeacherMonitoringEvent>();
+    public DbSet<AssessmentReminderDelivery> AssessmentReminderDeliveries => Set<AssessmentReminderDelivery>();
 
     /// <summary>
     /// VOK-H6-E3 §1 (FR-AUTH-07): "satu pintu" penegakan AC "audit log mencatat actor=SA, as=user"
@@ -119,7 +133,7 @@ public class VokasiaDbContext : IdentityDbContext<AppUser, AppRole, Guid>
         });
         b.Entity<JournalEntry>(e =>
         {
-            e.Property(x => x.Text).HasMaxLength(500);
+            e.Property(x => x.Text).HasMaxLength(12_000);
             e.HasIndex(x => x.SlotId).IsUnique();
             e.HasIndex(x => new { x.PlacementId, x.Status });
         });
@@ -134,17 +148,141 @@ public class VokasiaDbContext : IdentityDbContext<AppUser, AppRole, Guid>
 
         b.Entity<Visit>(e => e.HasIndex(x => x.PlacementId));
 
-        b.Entity<RubricTemplate>();
-        b.Entity<RubricAspect>(e => e.HasIndex(x => x.RubricTemplateId));
+        b.Entity<RubricTemplate>(e =>
+        {
+            e.HasIndex(x => new { x.TenantId, x.CompanyId, x.IsActive, x.Version });
+            e.Property(x => x.Name).HasMaxLength(200);
+        });
+        b.Entity<RubricAspect>(e =>
+        {
+            e.HasIndex(x => x.RubricTemplateId);
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Description).HasMaxLength(1000);
+        });
         b.Entity<Assessment>(e => e.HasIndex(x => x.PlacementId));
-        b.Entity<AssessmentScore>(e => e.HasIndex(x => x.AssessmentId));
+        b.Entity<AssessmentScore>(e =>
+        {
+            e.HasIndex(x => x.AssessmentId);
+            e.Property(x => x.Comment).HasMaxLength(2000);
+        });
+
+        b.Entity<LearningRecordTemplate>(e =>
+        {
+            e.HasIndex(x => new { x.TenantId, x.CompanyId, x.Status, x.Version });
+            e.HasOne<Company>().WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Criteria).WithOne().HasForeignKey(x => x.TemplateId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<LearningRecordTemplateCriterion>(e =>
+        {
+            e.HasIndex(x => new { x.TemplateId, x.SortOrder }).IsUnique();
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Description).HasMaxLength(1000);
+        });
+        b.Entity<PlacementLearningRecordSnapshot>(e =>
+        {
+            e.HasIndex(x => x.PlacementId).IsUnique();
+            e.HasIndex(x => new { x.TenantId, x.CompanyId });
+            e.HasOne<Placement>().WithMany().HasForeignKey(x => x.PlacementId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Company>().WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<LearningRecordTemplate>().WithMany().HasForeignKey(x => x.SourceTemplateId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Criteria).WithOne().HasForeignKey(x => x.SnapshotId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<PlacementLearningRecordCriterionSnapshot>(e =>
+        {
+            e.HasIndex(x => new { x.SnapshotId, x.SortOrder }).IsUnique();
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Description).HasMaxLength(1000);
+        });
+        b.Entity<LearningAssessment>(e =>
+        {
+            e.HasIndex(x => new { x.PlacementId, x.Stage }).IsUnique();
+            e.HasIndex(x => new { x.TenantId, x.Status });
+            e.HasIndex(x => x.SnapshotId);
+            e.Property(x => x.OverallNote).HasMaxLength(2000);
+            e.HasOne<Placement>().WithMany().HasForeignKey(x => x.PlacementId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<PlacementLearningRecordSnapshot>().WithMany().HasForeignKey(x => x.SnapshotId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.LatestFinalizedRevision).WithMany().HasForeignKey(x => x.LatestFinalizedRevisionId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.DraftCriteria).WithOne().HasForeignKey(x => x.AssessmentId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Revisions).WithOne().HasForeignKey(x => x.AssessmentId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<LearningAssessmentDraftCriterion>(e =>
+        {
+            e.HasIndex(x => new { x.AssessmentId, x.CriterionSnapshotId }).IsUnique();
+            e.Property(x => x.Comment).HasMaxLength(2000);
+            e.HasOne<PlacementLearningRecordCriterionSnapshot>().WithMany().HasForeignKey(x => x.CriterionSnapshotId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Evidence).WithOne().HasForeignKey(x => x.DraftCriterionId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<LearningAssessmentRevision>(e =>
+        {
+            e.HasIndex(x => new { x.AssessmentId, x.FinalizedAt });
+            e.HasIndex(x => new { x.PlacementId, x.Stage });
+            e.Property(x => x.EvaluatorDisplayName).HasMaxLength(200);
+            e.Property(x => x.OverallNote).HasMaxLength(2000);
+            e.HasOne<Placement>().WithMany().HasForeignKey(x => x.PlacementId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<PlacementLearningRecordSnapshot>().WithMany().HasForeignKey(x => x.SnapshotId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Criteria).WithOne().HasForeignKey(x => x.RevisionId).OnDelete(DeleteBehavior.Cascade);
+            e.Navigation(x => x.Criteria).HasField("_criteria").UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+        b.Entity<LearningAssessmentRevisionCriterion>(e =>
+        {
+            e.HasIndex(x => new { x.RevisionId, x.CriterionSnapshotId }).IsUnique();
+            e.Property(x => x.Comment).HasMaxLength(2000);
+            e.HasOne<PlacementLearningRecordCriterionSnapshot>().WithMany().HasForeignKey(x => x.CriterionSnapshotId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Evidence).WithOne().HasForeignKey(x => x.RevisionCriterionId).OnDelete(DeleteBehavior.Cascade);
+            e.Navigation(x => x.Evidence).HasField("_evidence").UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+        b.Entity<LearningAssessmentRevisionCriterionEvidence>(e =>
+        {
+            e.HasIndex(x => x.RevisionCriterionId);
+            e.HasIndex(x => x.JournalEntryId);
+            e.Property(x => x.Text).HasMaxLength(12_000);
+            e.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.JournalEntryId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<LearningAssessmentCriterionEvidence>(e =>
+        {
+            e.HasIndex(x => x.DraftCriterionId);
+            e.HasIndex(x => x.JournalEntryId);
+            e.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<TeacherMonitoringEvent>(e =>
+        {
+            e.HasIndex(x => new { x.TenantId, x.PlacementId, x.Status });
+            e.HasIndex(x => new { x.TeacherUserId, x.CreatedAt });
+            e.Property(x => x.Note).HasMaxLength(2000);
+            e.Property(x => x.FollowUpContext).HasMaxLength(2000);
+            e.HasOne<Placement>().WithMany().HasForeignKey(x => x.PlacementId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Visit>().WithMany().HasForeignKey(x => x.FollowUpVisitId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<AssessmentReminderDelivery>(e =>
+        {
+            e.HasIndex(x => new { x.PlacementId, x.Stage, x.ReminderType, x.RecipientUserId }).IsUnique();
+            e.HasIndex(x => x.TenantId);
+            e.HasOne<Placement>().WithMany().HasForeignKey(x => x.PlacementId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<Placement>(e => e.HasIndex(x => new { x.TenantId, x.StudentId }));
 
         b.Entity<Certificate>(e => e.HasIndex(x => x.CertCode).IsUnique());
         b.Entity<Portfolio>(e => e.HasIndex(x => x.Slug).IsUnique());
 
         b.Entity<Plan>();
         b.Entity<FeatureFlag>(e => e.HasIndex(x => new { x.TenantId, x.PlanId, x.Key }));
-        b.Entity<Invoice>(e => e.HasIndex(x => new { x.TenantId, x.PeriodMonth }).IsUnique());
+        b.Entity<Invoice>(e =>
+        {
+            e.HasIndex(x => x.InvoiceNumber).IsUnique();
+            e.HasIndex(x => new { x.TenantId, x.PeriodMonth });
+            e.HasIndex(x => new { x.TenantId, x.Status });
+        });
+        b.Entity<PaymentSubmission>(e =>
+        {
+            e.HasIndex(x => new { x.TenantId, x.InvoiceId });
+            e.HasIndex(x => new { x.InvoiceId, x.SubmittedAt });
+        });
+        b.Entity<Subscription>(e =>
+        {
+            e.HasIndex(x => x.TenantId).IsUnique();
+            e.HasIndex(x => new { x.TenantId, x.Status });
+        });
 
         b.Entity<Notification>(e => e.HasIndex(x => new { x.UserId, x.IsRead }));
         b.Entity<AuditLog>(e => e.HasIndex(x => new { x.TenantId, x.CreatedAt }));
@@ -196,6 +334,20 @@ public class VokasiaDbContext : IdentityDbContext<AppUser, AppRole, Guid>
         b.Entity<Portfolio>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
         b.Entity<ExportRequest>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
         b.Entity<Invoice>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<PaymentSubmission>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<Subscription>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<LearningRecordTemplate>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<LearningRecordTemplateCriterion>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<PlacementLearningRecordSnapshot>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<PlacementLearningRecordCriterionSnapshot>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<LearningAssessment>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<LearningAssessmentDraftCriterion>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<LearningAssessmentRevision>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<LearningAssessmentRevisionCriterion>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<LearningAssessmentRevisionCriterionEvidence>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<LearningAssessmentCriterionEvidence>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<TeacherMonitoringEvent>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
+        b.Entity<AssessmentReminderDelivery>().HasQueryFilter(x => !_tenantContext.TenantId.HasValue || x.TenantId == _tenantContext.TenantId);
         // Company dan Plan global. FeatureFlag campuran plan-level/tenant override dan difilter
         // secara eksplisit oleh resolver karena TenantId-nya nullable.
     }

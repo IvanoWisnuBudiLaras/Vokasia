@@ -115,7 +115,14 @@ public static class MinimalXlsxWriter
                     sb.Append($"""<c r="{cellRef}"><v>{Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)}</v></c>""");
                     break;
                 default:
-                    var text = SecurityElement.Escape(value.ToString() ?? "");
+                    // Excel treats formula-like user text as a formula when it is entered into a
+                    // workbook. Prefixing with an apostrophe is the standard spreadsheet text
+                    // escape: Excel keeps the cell as text and does not execute the expression.
+                    var rawText = value.ToString() ?? "";
+                    var safeText = rawText.Length > 0 && rawText[0] is '=' or '+' or '-' or '@'
+                        ? "'" + rawText
+                        : rawText;
+                    var text = SecurityElement.Escape(safeText);
                     sb.Append($"""<c r="{cellRef}" t="inlineStr"><is><t xml:space="preserve">{text}</t></is></c>""");
                     break;
             }

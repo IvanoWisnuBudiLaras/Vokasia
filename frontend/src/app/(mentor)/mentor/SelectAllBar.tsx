@@ -16,7 +16,7 @@ export function SelectAllBar({ selectedCount, total, busy, onSelectAll, onClear,
   const allSelected = total > 0 && selectedCount === total;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] bg-surface-muted px-3 py-2">
+    <div className={`fixed inset-x-0 bottom-20 z-40 flex flex-wrap items-center gap-2 border-y border-border bg-surface-muted px-3 py-2 shadow-lg lg:static lg:rounded-[var(--radius-md)] lg:shadow-none ${selectedCount === 0 ? "max-lg:hidden" : ""}`}>
       <button
         type="button"
         onClick={allSelected ? onClear : onSelectAll}
@@ -24,7 +24,7 @@ export function SelectAllBar({ selectedCount, total, busy, onSelectAll, onClear,
       >
         {allSelected ? "Batalkan semua" : `Pilih semua (${total})`}
       </button>
-      <span className="flex-1 text-right text-xs text-ink-muted">{selectedCount} dipilih</span>
+      <span className="min-w-0 flex-1 text-right text-xs text-ink-muted">{selectedCount} dipilih</span>
       <Button size="lg" onClick={onApprove} disabled={selectedCount === 0 || busy} loading={busy}>
         <Icon name="check" size={16} /> Setujui ({selectedCount})
       </Button>

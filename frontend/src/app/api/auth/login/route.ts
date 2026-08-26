@@ -45,6 +45,6 @@ export async function GET(req: Request) {
   authorizeUrl.searchParams.set("state", state);
   authorizeUrl.searchParams.set("code_challenge", challenge);
   authorizeUrl.searchParams.set("code_challenge_method", "S256");
-
+  authorizeUrl.searchParams.set("prompt", "login");
   return NextResponse.redirect(authorizeUrl);
 }

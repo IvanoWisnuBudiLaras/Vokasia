@@ -13,4 +13,14 @@ public static class AppTimeZone
 
     public static DateOnly TodayJakarta() =>
         DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Jakarta));
+
+    public static TimeSpan CalculateDevRefreshTokenLifetime(DateTimeOffset nowUtc)
+    {
+        var nowWib = TimeZoneInfo.ConvertTimeFromUtc(nowUtc.UtcDateTime, Jakarta);
+        int daysToAdd = nowWib.Hour >= 12 ? 2 : 1;
+        var targetMidnightWib = nowWib.Date.AddDays(daysToAdd);
+        var targetMidnightUtc = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(targetMidnightWib, Jakarta), TimeSpan.Zero);
+        var lifetime = targetMidnightUtc - nowUtc;
+        return lifetime.TotalSeconds > 0 ? lifetime : TimeSpan.FromHours(1);
+    }
 }

@@ -24,6 +24,38 @@ interface ParsedPreviewRow {
   errors: string[];
 }
 
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let field = "";
+  let quoted = false;
+  let closedQuote = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const current = line[index];
+    if (quoted) {
+      if (current === '"' && line[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else if (current === '"') {
+        quoted = false;
+        closedQuote = true;
+      } else {
+        field += current;
+      }
+    } else if (current === '"' && field.length === 0 && !closedQuote) {
+      quoted = true;
+    } else if (current === ",") {
+      fields.push(field.trim());
+      field = "";
+      closedQuote = false;
+    } else if (!closedQuote || /\s/.test(current)) {
+      field += current;
+    }
+  }
+  if (quoted) throw new Error("Format CSV tidak valid: tanda kutip belum ditutup.");
+  fields.push(field.trim());
+  return fields;
+}
+
 export function ImportStudentsModal({
   isOpen,
   onClose,
@@ -36,13 +68,11 @@ export function ImportStudentsModal({
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<{
     imported: number;
-    errors: Array<{ rowNumber: number; column: string; error: string }>;
+    errors: Array<{ row: number; column: string; message: string }>;
   } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isDryRunExecuted, setIsDryRunExecuted] = useState(false);
-
-  if (!isOpen) return null;
 
   // Client-side quick preview parser for line-by-line preview
   const parsedRows = useMemo(() => {
@@ -50,7 +80,12 @@ export function ImportStudentsModal({
     const lines = fileContent.split(/\r?\n/).filter((line) => line.trim().length > 0);
     if (lines.length <= 1) return [];
 
-    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    let headers: string[];
+    try {
+      headers = parseCsvLine(lines[0]).map((h) => h.trim().toLowerCase());
+    } catch {
+      return [];
+    }
     const idx = (name: string) => headers.findIndex((h) => h.includes(name));
     const [iName, iNisn, iMajor, iClass] = [
       idx("fullname") >= 0 ? idx("fullname") : idx("nama"),
@@ -61,7 +96,12 @@ export function ImportStudentsModal({
 
     const rows: ParsedPreviewRow[] = [];
     for (let r = 1; r < lines.length; r++) {
-      const cols = lines[r].split(",").map((c) => c.trim());
+      let cols: string[];
+      try {
+        cols = parseCsvLine(lines[r]);
+      } catch {
+        cols = [];
+      }
       const fullName = cols[iName >= 0 ? iName : 0] ?? "";
       const nisn = cols[iNisn >= 0 ? iNisn : 1] ?? "";
       const majorName = cols[iMajor >= 0 ? iMajor : 2] ?? "";
@@ -85,6 +125,8 @@ export function ImportStudentsModal({
     return rows;
   }, [fileContent]);
 
+  if (!isOpen) return null;
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0] ?? null;
     setFile(selected);
@@ -94,6 +136,12 @@ export function ImportStudentsModal({
     setIsDryRunExecuted(false);
 
     if (selected) {
+      if (selected.size > 5 * 1024 * 1024) {
+        setErrorMsg("Ukuran file maksimal 5 MB.");
+        setFile(null);
+        setFileContent("");
+        return;
+      }
       const reader = new FileReader();
       reader.onload = (evt) => {
         setFileContent((evt.target?.result as string) || "");
@@ -160,8 +208,8 @@ export function ImportStudentsModal({
         setSuccessMsg(`🎉 Berhasil mengimpor ${data.imported ?? parsedRows.length} data siswa ke dalam sistem!`);
         if (onSuccess) onSuccess();
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || "Terjadi kesalahan saat memproses file CSV.");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "Terjadi kesalahan saat memproses file CSV.");
     } finally {
       setIsLoading(false);
     }
@@ -217,7 +265,7 @@ export function ImportStudentsModal({
               <li>
                 Header opsional: <code className="font-mono font-semibold text-primary bg-primary/10 px-1 rounded">Nisn</code>
               </li>
-              <li>Sistem akan otomatis menyesuaikan jurusan apabila belum terdaftar.</li>
+              <li>Jurusan harus sudah terdaftar di master tenant; import tidak membuat jurusan baru.</li>
             </ul>
           </div>
 
@@ -333,13 +381,13 @@ export function ImportStudentsModal({
           {/* Backend Dry Run Error List */}
           {result?.errors && result.errors.length > 0 && (
             <div className="rounded-[var(--radius-md)] border border-status-red/30 bg-status-red-bg p-3 text-xs space-y-1">
-              <p className="font-bold text-status-red">
+                <p className="font-bold text-status-red">
                 Temuan Validasi Backend ({result.errors.length} Error):
               </p>
               <div className="max-h-32 overflow-y-auto space-y-1 pl-1">
                 {result.errors.map((err, idx) => (
                   <p key={idx} className="text-status-red/90 font-mono">
-                    Baris {err.rowNumber} [{err.column}]: {err.error}
+                    Baris {err.row} [{err.column}]: {err.message}
                   </p>
                 ))}
               </div>
@@ -372,7 +420,7 @@ export function ImportStudentsModal({
             <Button
               variant="primary"
               size="md"
-              disabled={isLoading || !file || invalidRowsCount > 0}
+              disabled={isLoading || !file || !isDryRunExecuted || invalidRowsCount > 0}
               onClick={() => handleUpload(false)}
             >
               {isLoading ? "Mengunggah…" : "🚀 Import Sekarang"}

@@ -35,6 +35,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <OutDir>C:\Users\maste\AppData\Local\Temp\vokasia\bin\Vokasia.Infrastructure\</OutDir>
+    <IntermediateOutputPath>C:\Users\maste\AppData\Local\Temp\vokasia\obj\Vokasia.Infrastructure\</IntermediateOutputPath>
   </PropertyGroup>
 
 </Project>

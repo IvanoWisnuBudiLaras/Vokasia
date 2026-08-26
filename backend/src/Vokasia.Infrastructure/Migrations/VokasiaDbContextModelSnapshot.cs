@@ -346,6 +346,7 @@ namespace Vokasia.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsFinal")
+                        .IsConcurrencyToken()
                         .HasColumnType("boolean");
 
                     b.Property<Guid>("PlacementId")
@@ -364,6 +365,40 @@ namespace Vokasia.Infrastructure.Migrations
                     b.ToTable("Assessments");
                 });
 
+            modelBuilder.Entity("Vokasia.Domain.Entities.AssessmentReminderDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("DeliveredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PlacementId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RecipientUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ReminderType")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Stage")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("PlacementId", "Stage", "ReminderType", "RecipientUserId")
+                        .IsUnique();
+
+                    b.ToTable("AssessmentReminderDeliveries");
+                });
+
             modelBuilder.Entity("Vokasia.Domain.Entities.AssessmentScore", b =>
                 {
                     b.Property<Guid>("Id")
@@ -372,6 +407,10 @@ namespace Vokasia.Infrastructure.Migrations
 
                     b.Property<Guid>("AssessmentId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.Property<Guid>("RubricAspectId")
                         .HasColumnType("uuid");
@@ -443,6 +482,9 @@ namespace Vokasia.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("InternalRevocationNote")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("IssuedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -452,6 +494,12 @@ namespace Vokasia.Infrastructure.Migrations
 
                     b.Property<Guid>("PlacementId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("PublicRevocationReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
@@ -585,6 +633,12 @@ namespace Vokasia.Infrastructure.Migrations
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("ExportQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ExportScope")
+                        .HasColumnType("text");
+
                     b.Property<int>("Format")
                         .HasColumnType("integer");
 
@@ -593,6 +647,12 @@ namespace Vokasia.Infrastructure.Migrations
 
                     b.Property<Guid>("PeriodId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ReportKind")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReportQueryJson")
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("RequestedAt")
                         .HasColumnType("timestamp with time zone");
@@ -669,16 +729,42 @@ namespace Vokasia.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<decimal>("Amount")
+                    b.Property<decimal>("AmountSnapshot")
                         .HasColumnType("numeric");
+
+                    b.Property<DateTimeOffset>("DueAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("InvoiceNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("IssuedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateOnly>("PeriodMonth")
                         .HasColumnType("date");
 
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PlanNameSnapshot")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("ProofKey")
                         .HasColumnType("text");
 
+                    b.Property<string>("RejectionReason")
+                        .HasColumnType("text");
+
                     b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("StudentCapacitySnapshot")
                         .HasColumnType("integer");
 
                     b.Property<Guid>("TenantId")
@@ -686,8 +772,12 @@ namespace Vokasia.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "PeriodMonth")
+                    b.HasIndex("InvoiceNumber")
                         .IsUnique();
+
+                    b.HasIndex("TenantId", "PeriodMonth");
+
+                    b.HasIndex("TenantId", "Status");
 
                     b.ToTable("Invoices");
                 });
@@ -734,8 +824,8 @@ namespace Vokasia.Infrastructure.Migrations
 
                     b.Property<string>("Text")
                         .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasMaxLength(12000)
+                        .HasColumnType("character varying(12000)");
 
                     b.HasKey("Id");
 
@@ -800,6 +890,300 @@ namespace Vokasia.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("JournalSlots");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("EvaluatorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("LatestFinalizedRevisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OverallNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("PlacementId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ReopenedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Stage")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LatestFinalizedRevisionId");
+
+                    b.HasIndex("SnapshotId");
+
+                    b.HasIndex("PlacementId", "Stage")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "Status");
+
+                    b.ToTable("LearningAssessments");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessmentCriterionEvidence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DraftCriterionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("LinkedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PortfolioEvidenceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DraftCriterionId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.ToTable("LearningAssessmentCriterionEvidence");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessmentDraftCriterion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AssessmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("CriterionSnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CriterionSnapshotId");
+
+                    b.HasIndex("AssessmentId", "CriterionSnapshotId")
+                        .IsUnique();
+
+                    b.ToTable("LearningAssessmentDraftCriteria");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessmentRevision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AssessmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EvaluatorDisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("EvaluatorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("FinalizedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("OverallNote")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("PlacementId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Stage")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SnapshotId");
+
+                    b.HasIndex("AssessmentId", "FinalizedAt");
+
+                    b.HasIndex("PlacementId", "Stage");
+
+                    b.ToTable("LearningAssessmentRevisions");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessmentRevisionCriterion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("CriterionSnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RevisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CriterionSnapshotId");
+
+                    b.HasIndex("RevisionId", "CriterionSnapshotId")
+                        .IsUnique();
+
+                    b.ToTable("LearningAssessmentRevisionCriteria");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessmentRevisionCriterionEvidence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RevisionCriterionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(12000)
+                        .HasColumnType("character varying(12000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("RevisionCriterionId");
+
+                    b.ToTable("LearningAssessmentRevisionCriterionEvidence");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningRecordTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ActivatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("TenantId", "CompanyId", "Status", "Version");
+
+                    b.ToTable("LearningRecordTemplates");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningRecordTemplateCriterion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TemplateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TemplateId", "SortOrder")
+                        .IsUnique();
+
+                    b.ToTable("LearningRecordTemplateCriteria");
                 });
 
             modelBuilder.Entity("Vokasia.Domain.Entities.Major", b =>
@@ -917,6 +1301,52 @@ namespace Vokasia.Infrastructure.Migrations
                     b.ToTable("OutboxMessages");
                 });
 
+            modelBuilder.Entity("Vokasia.Domain.Entities.PaymentSubmission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool?>("Approved")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ProofKey")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SubmittedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("VerificationReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("VerifiedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceId", "SubmittedAt");
+
+                    b.HasIndex("TenantId", "InvoiceId");
+
+                    b.ToTable("PaymentSubmissions");
+                });
+
             modelBuilder.Entity("Vokasia.Domain.Entities.Period", b =>
                 {
                     b.Property<Guid>("Id")
@@ -989,7 +1419,92 @@ namespace Vokasia.Infrastructure.Migrations
 
                     b.HasIndex("TenantId");
 
+                    b.HasIndex("TenantId", "StudentId");
+
                     b.ToTable("Placements");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.PlacementLearningRecordCriterionSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SnapshotId", "SortOrder")
+                        .IsUnique();
+
+                    b.ToTable("PlacementLearningRecordCriterionSnapshots");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.PlacementLearningRecordSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CompanyDisplayName")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PeriodDisplayName")
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly?>("PeriodEndDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("PeriodStartDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("PlacementId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SourceTemplateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SourceTemplateVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("PlacementId")
+                        .IsUnique();
+
+                    b.HasIndex("SourceTemplateId");
+
+                    b.HasIndex("TenantId", "CompanyId");
+
+                    b.ToTable("PlacementLearningRecordSnapshots");
                 });
 
             modelBuilder.Entity("Vokasia.Domain.Entities.Plan", b =>
@@ -997,6 +1512,15 @@ namespace Vokasia.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
 
                     b.Property<int>("MaxPlacements")
                         .HasColumnType("integer");
@@ -1008,8 +1532,14 @@ namespace Vokasia.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<decimal>("PriceAnnual")
+                        .HasColumnType("numeric");
+
                     b.Property<decimal>("PriceMonthly")
                         .HasColumnType("numeric");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
@@ -1021,6 +1551,13 @@ namespace Vokasia.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("DraftHeadline")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DraftSampleJournalIdsCsv")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("Headline")
                         .HasColumnType("text");
@@ -1071,12 +1608,17 @@ namespace Vokasia.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<int>("Kind")
                         .HasColumnType("integer");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<Guid>("RubricTemplateId")
                         .HasColumnType("uuid");
@@ -1097,17 +1639,29 @@ namespace Vokasia.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsDefault")
                         .HasColumnType("boolean");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "CompanyId", "IsActive", "Version");
 
                     b.ToTable("RubricTemplates");
                 });
@@ -1207,6 +1761,50 @@ namespace Vokasia.Infrastructure.Migrations
                     b.ToTable("StudentDailyStatuses");
                 });
 
+            modelBuilder.Entity("Vokasia.Domain.Entities.Subscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("EndsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PlanNameSnapshot")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("SourceInvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("StartsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "Status");
+
+                    b.ToTable("Subscriptions");
+                });
+
             modelBuilder.Entity("Vokasia.Domain.Entities.TeacherComment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1234,6 +1832,54 @@ namespace Vokasia.Infrastructure.Migrations
                     b.HasIndex("JournalEntryId");
 
                     b.ToTable("TeacherComments");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.TeacherMonitoringEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FollowUpContext")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid?>("FollowUpVisitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("PlacementId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TeacherUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Visibility")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FollowUpVisitId");
+
+                    b.HasIndex("PlacementId");
+
+                    b.HasIndex("TeacherUserId", "CreatedAt");
+
+                    b.HasIndex("TenantId", "PlacementId", "Status");
+
+                    b.ToTable("TeacherMonitoringEvents");
                 });
 
             modelBuilder.Entity("Vokasia.Domain.Entities.Tenant", b =>
@@ -1515,12 +2161,185 @@ namespace Vokasia.Infrastructure.Migrations
                     b.Navigation("Authorization");
                 });
 
+            modelBuilder.Entity("Vokasia.Domain.Entities.AssessmentReminderDelivery", b =>
+                {
+                    b.HasOne("Vokasia.Domain.Entities.Placement", null)
+                        .WithMany()
+                        .HasForeignKey("PlacementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessment", b =>
+                {
+                    b.HasOne("Vokasia.Domain.Entities.LearningAssessmentRevision", "LatestFinalizedRevision")
+                        .WithMany()
+                        .HasForeignKey("LatestFinalizedRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Vokasia.Domain.Entities.Placement", null)
+                        .WithMany()
+                        .HasForeignKey("PlacementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Vokasia.Domain.Entities.PlacementLearningRecordSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("SnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("LatestFinalizedRevision");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessmentCriterionEvidence", b =>
+                {
+                    b.HasOne("Vokasia.Domain.Entities.LearningAssessmentDraftCriterion", null)
+                        .WithMany("Evidence")
+                        .HasForeignKey("DraftCriterionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Vokasia.Domain.Entities.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessmentDraftCriterion", b =>
+                {
+                    b.HasOne("Vokasia.Domain.Entities.LearningAssessment", null)
+                        .WithMany("DraftCriteria")
+                        .HasForeignKey("AssessmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Vokasia.Domain.Entities.PlacementLearningRecordCriterionSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("CriterionSnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessmentRevision", b =>
+                {
+                    b.HasOne("Vokasia.Domain.Entities.LearningAssessment", null)
+                        .WithMany("Revisions")
+                        .HasForeignKey("AssessmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Vokasia.Domain.Entities.Placement", null)
+                        .WithMany()
+                        .HasForeignKey("PlacementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Vokasia.Domain.Entities.PlacementLearningRecordSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("SnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessmentRevisionCriterion", b =>
+                {
+                    b.HasOne("Vokasia.Domain.Entities.PlacementLearningRecordCriterionSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("CriterionSnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Vokasia.Domain.Entities.LearningAssessmentRevision", null)
+                        .WithMany("Criteria")
+                        .HasForeignKey("RevisionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessmentRevisionCriterionEvidence", b =>
+                {
+                    b.HasOne("Vokasia.Domain.Entities.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Vokasia.Domain.Entities.LearningAssessmentRevisionCriterion", null)
+                        .WithMany("Evidence")
+                        .HasForeignKey("RevisionCriterionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningRecordTemplate", b =>
+                {
+                    b.HasOne("Vokasia.Domain.Entities.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningRecordTemplateCriterion", b =>
+                {
+                    b.HasOne("Vokasia.Domain.Entities.LearningRecordTemplate", null)
+                        .WithMany("Criteria")
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.PlacementLearningRecordCriterionSnapshot", b =>
+                {
+                    b.HasOne("Vokasia.Domain.Entities.PlacementLearningRecordSnapshot", null)
+                        .WithMany("Criteria")
+                        .HasForeignKey("SnapshotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.PlacementLearningRecordSnapshot", b =>
+                {
+                    b.HasOne("Vokasia.Domain.Entities.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Vokasia.Domain.Entities.Placement", null)
+                        .WithMany()
+                        .HasForeignKey("PlacementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Vokasia.Domain.Entities.LearningRecordTemplate", null)
+                        .WithMany()
+                        .HasForeignKey("SourceTemplateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Vokasia.Domain.Entities.RubricAspect", b =>
                 {
                     b.HasOne("Vokasia.Domain.Entities.RubricTemplate", null)
                         .WithMany("Aspects")
                         .HasForeignKey("RubricTemplateId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.TeacherMonitoringEvent", b =>
+                {
+                    b.HasOne("Vokasia.Domain.Entities.Visit", null)
+                        .WithMany()
+                        .HasForeignKey("FollowUpVisitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Vokasia.Domain.Entities.Placement", null)
+                        .WithMany()
+                        .HasForeignKey("PlacementId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
@@ -1554,6 +2373,38 @@ namespace Vokasia.Infrastructure.Migrations
             modelBuilder.Entity("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreAuthorization", b =>
                 {
                     b.Navigation("Tokens");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessment", b =>
+                {
+                    b.Navigation("DraftCriteria");
+
+                    b.Navigation("Revisions");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessmentDraftCriterion", b =>
+                {
+                    b.Navigation("Evidence");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessmentRevision", b =>
+                {
+                    b.Navigation("Criteria");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningAssessmentRevisionCriterion", b =>
+                {
+                    b.Navigation("Evidence");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.LearningRecordTemplate", b =>
+                {
+                    b.Navigation("Criteria");
+                });
+
+            modelBuilder.Entity("Vokasia.Domain.Entities.PlacementLearningRecordSnapshot", b =>
+                {
+                    b.Navigation("Criteria");
                 });
 
             modelBuilder.Entity("Vokasia.Domain.Entities.RubricTemplate", b =>

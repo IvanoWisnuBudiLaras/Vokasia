@@ -43,9 +43,9 @@ export function Textarea({
         aria-invalid={!!error}
         aria-describedby={error ? `${textareaId}-error` : undefined}
         className={cn(
-          "min-h-32 resize-y rounded-[var(--radius-md)] border bg-surface px-3 py-2 text-base text-ink outline-none transition-[color,background-color,border-color] placeholder:text-ink-muted/80 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-muted disabled:opacity-[0.55]",
-          "hover:border-primary/50 focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-1",
-          error ? "border-status-red" : "border-border",
+          "min-h-32 resize-y rounded-lg border bg-surface-paper/50 px-3 py-3 text-base text-ink outline-none transition-all duration-[var(--dur-fast)] placeholder:text-ink-muted/60 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:opacity-[0.55]",
+          "hover:bg-surface hover:border-brand-accent/50 focus:bg-surface focus:border-brand-action focus:ring-2 focus:ring-brand-action/20",
+          error ? "border-status-red focus:border-status-red focus:ring-status-red/20" : "border-border/60",
           className
         )}
         {...rest}

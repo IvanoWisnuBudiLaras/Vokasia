@@ -9,9 +9,9 @@ export interface StatusBadgeProps {
 }
 
 const styleByStatus: Record<RagStatus, string> = {
-  green: "bg-status-green-bg text-status-green",
-  amber: "bg-status-amber-bg text-status-amber",
-  red: "bg-status-red-bg text-status-red",
+  green: "bg-status-green/10 text-status-green",
+  amber: "bg-status-amber/10 text-status-amber",
+  red: "bg-status-red/10 text-status-red",
 };
 
 const dotByStatus: Record<RagStatus, string> = {

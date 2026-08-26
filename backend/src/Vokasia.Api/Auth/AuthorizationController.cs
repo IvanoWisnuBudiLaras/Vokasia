@@ -56,12 +56,6 @@ public class AuthorizationController : ControllerBase
         var result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         if (result?.Succeeded != true)
         {
-            // GAP ditemukan+ditambal sesi VOK-H2-E3 (DECISIONS.md D17): Challenge() bawaan
-            // menghasilkan 401 + header Location (bukan 3xx sungguhan) — browser TIDAK mengikuti
-            // 401 otomatis, jadi flow interaktif nyata macet total di sini (ketahuan lewat smoke
-            // test HTTP asli, bukan test tersembunyi). Redirect() manual = 302 Found biasa, pasti
-            // diikuti browser (dan curl -L). Belum login -> arahkan ke halaman login sederhana
-            // (H1), UI penuh di H2-E2.
             var returnUrl = Request.PathBase + Request.Path + Request.QueryString;
             return Redirect($"/account/login?ReturnUrl={Uri.EscapeDataString(returnUrl)}");
         }
@@ -99,7 +93,9 @@ public class AuthorizationController : ControllerBase
         if (request.IsAuthorizationCodeGrantType())
         {
             var result = await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
-            return SignIn(result.Principal!, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            var principal = result.Principal!;
+            principal.SetRefreshTokenLifetime(AppTimeZone.CalculateDevRefreshTokenLifetime(DateTimeOffset.UtcNow));
+            return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
         if (request.IsRefreshTokenGrantType())
@@ -119,7 +115,9 @@ public class AuthorizationController : ControllerBase
 
             var identity = await _claimsFactory.GenerateClaimsAsync(user);
             identity.SetDestinations(GetDestinations);
-            return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            var principal = new ClaimsPrincipal(identity);
+            principal.SetRefreshTokenLifetime(AppTimeZone.CalculateDevRefreshTokenLifetime(DateTimeOffset.UtcNow));
+            return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
         if (request.GrantType == OpenIddictSetup.MagicLinkGrantType)
@@ -155,7 +153,9 @@ public class AuthorizationController : ControllerBase
 
             var mentorIdentity = await _claimsFactory.GenerateClaimsAsync(user);
             mentorIdentity.SetDestinations(GetDestinations);
-            return SignIn(new ClaimsPrincipal(mentorIdentity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            var mentorPrincipal = new ClaimsPrincipal(mentorIdentity);
+            mentorPrincipal.SetRefreshTokenLifetime(AppTimeZone.CalculateDevRefreshTokenLifetime(DateTimeOffset.UtcNow));
+            return SignIn(mentorPrincipal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
         if (request.GrantType == OpenIddictSetup.ImpersonationGrantType)
@@ -231,7 +231,9 @@ public class AuthorizationController : ControllerBase
         var identity = await _claimsFactory.GenerateClaimsAsync(targetUser);
         identity.AddClaim(new Claim("impersonator_id", actorId.ToString()));
         identity.SetDestinations(GetDestinations);
-        return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        var principal = new ClaimsPrincipal(identity);
+        principal.SetRefreshTokenLifetime(AppTimeZone.CalculateDevRefreshTokenLifetime(DateTimeOffset.UtcNow));
+        return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
     [HttpGet("~/connect/logout")]

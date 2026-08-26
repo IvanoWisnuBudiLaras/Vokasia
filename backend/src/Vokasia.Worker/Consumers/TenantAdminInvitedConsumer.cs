@@ -8,6 +8,7 @@ using Vokasia.Infrastructure.Email;
 using Vokasia.Infrastructure.Messaging;
 using Vokasia.Infrastructure.Persistence;
 using Vokasia.Infrastructure.Security;
+using Vokasia.Infrastructure.Configuration;
 
 namespace Vokasia.Worker.Consumers;
 
@@ -45,7 +46,7 @@ public class TenantAdminInvitedConsumer(VokasiaDbContext db, IdempotencyGuard gu
         var invitation = StaffInvitationToken.Create(DateTimeOffset.UtcNow);
         var invitedUser = await userManager.FindByIdAsync(msg.UserId.ToString()) ?? throw new InvalidOperationException("Invited user missing.");
         await userManager.SetAuthenticationTokenAsync(invitedUser, StaffInvitationToken.LoginProvider, StaffInvitationToken.Name, StaffInvitationToken.StoredValue(invitation.Hash, invitation.ExpiresAt));
-        var setupUrl = $"{(configuration["NEXT_PUBLIC_APP_URL"] ?? "http://localhost:3000").TrimEnd('/')}/set-password?token={Uri.EscapeDataString(invitation.Raw)}";
+        var setupUrl = $"{PublicAppOrigin.Resolve(configuration)}/set-password?token={Uri.EscapeDataString(invitation.Raw)}";
         var subject = $"Atur kata sandi Vokasia untuk {schoolName}";
         var html = $"<p>Halo {msg.FullName},</p><p><a href=\"{setupUrl}\">Atur kata sandi</a> dalam 24 jam.</p>";
         var text = $"Halo {msg.FullName}, atur kata sandi Anda melalui tautan ini: {setupUrl}. Tautan berlaku 24 jam.";

@@ -1,0 +1,13 @@
+import type { TeacherMonitoringWorkspaceDto, TeacherMonitoringEventDto } from "@/lib/apiTypes";
+
+const STATUS_LABEL: Record<TeacherMonitoringEventDto["status"], string> = {
+  ProgressingAsExpected: "Berjalan sesuai rencana", NeedsAttention: "Perlu perhatian", Problem: "Ada masalah",
+};
+
+export function TeacherMonitoringTimeline({ workspace }: { workspace: TeacherMonitoringWorkspaceDto }) {
+  const placementName = new Map(workspace.placements.map((item) => [item.placementId, `${item.studentName} · ${item.companyName}`]));
+  return <div className="flex flex-col gap-5">
+    <section className="border-y border-border py-4"><div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold text-ink">Riwayat monitoring</h2><span className="text-sm text-ink-muted">{workspace.events.length} catatan</span></div>{workspace.events.length === 0 ? <p className="mt-4 text-sm text-ink-muted">Belum ada catatan monitoring.</p> : <ol className="mt-4 divide-y divide-border">{workspace.events.map((item) => <li key={item.id} className="py-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold text-ink">{STATUS_LABEL[item.status]}</p><p className="text-sm text-ink-muted">{placementName.get(item.placementId) ?? "Placement"} · {item.visibility === "Internal" ? "Internal sekolah" : "Dapat dilihat siswa"}</p></div><time className="text-xs text-ink-muted">{new Date(item.createdAt).toLocaleDateString("id-ID")}</time></div>{item.note && <p className="mt-2 border-l-2 border-primary pl-3 text-sm text-ink">{item.note}</p>}{item.followUpContext && <p className="mt-2 text-xs text-ink-muted">Tindak lanjut: {item.followUpContext}</p>}</li>)}</ol>}</section>
+    <section className="border border-status-amber/40 bg-status-amber-bg p-4"><h2 className="font-semibold text-ink">Penilaian yang tertunda</h2><p className="mt-1 text-sm text-ink-muted">Temuan ini hanya untuk tindak lanjut. Skor tetap dikelola melalui alur penilaian Mentor Industri.</p>{workspace.overdueFindings.length === 0 ? <p className="mt-3 text-sm text-ink-muted">Tidak ada penilaian yang tertunda.</p> : <ul className="mt-3 divide-y divide-status-amber/30">{workspace.overdueFindings.map((item) => <li key={`${item.placementId}-${item.stage}`} className="py-3 text-sm"><span className="block font-medium text-ink">{item.studentName} · {item.companyName}</span><span className="block text-ink-muted">{item.stage} · jatuh tempo {item.dueDate} · {item.label}</span><span className="mt-1 block text-xs text-ink-muted">Baca saja — tidak ada perubahan skor di sini.</span></li>)}</ul>}</section>
+  </div>;
+}

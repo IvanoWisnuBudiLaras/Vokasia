@@ -3,6 +3,7 @@ import { EmptyState, ErrorState, Icon, StatusBadge } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
 import { getSession } from "@/lib/session";
 import {
+  ragLabel,
   ragToBadgeStatus,
   RagStatus,
   type Paged,
@@ -116,7 +117,7 @@ export default async function BimbinganPage({
                   <span className="font-medium text-ink">{item.studentName}</span>
                   <StatusBadge
                     status={ragToBadgeStatus(item.rag)}
-                    label={item.rag === RagStatus.Red ? "Merah" : item.rag === RagStatus.Amber ? "Kuning" : "Hijau"}
+                    label={ragLabel(item.rag)}
                   />
                 </a>
               </li>

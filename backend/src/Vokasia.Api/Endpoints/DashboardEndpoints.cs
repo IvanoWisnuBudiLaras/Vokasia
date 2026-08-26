@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Authorization;
+using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Infrastructure.Persistence;
 
@@ -24,6 +26,12 @@ public static class DashboardEndpoints
         app.MapGet("/api/dashboard/school/{periodId:guid}", GetSchoolDashboard)
             .WithTags("Dashboard")
             .RequireAuthorization(RbacPolicies.TenantMember);
+
+        var studentHome = app.MapGroup("/api/students/me/home")
+            .WithTags("Student Portal")
+            .AddEndpointFilter<ValidationFilter>()
+            .RequireAuthorization(RbacPolicies.StudentSelf);
+        studentHome.MapGet("", GetMyHome);
 
         return app;
     }
@@ -82,5 +90,69 @@ public static class DashboardEndpoints
             .ToListAsync(ct);
 
         return Results.Ok(new SchoolDashboardDto(journalTodayPct, pendingApprovals, lateVisits, flagged));
+    }
+
+    private static async Task<IResult> GetMyHome(VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
+    {
+        if (!tenant.UserId.HasValue || !tenant.TenantId.HasValue)
+        {
+            return Results.Forbid();
+        }
+
+        var student = await db.Students.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.UserId == tenant.UserId.Value, ct);
+        if (student is null)
+        {
+            return Results.NotFound();
+        }
+
+        var placement = await db.Placements.AsNoTracking()
+            .Where(p => p.StudentId == student.Id)
+            .OrderByDescending(p => p.Status == PlacementStatus.Active)
+            .ThenByDescending(p => p.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+        if (placement is null)
+        {
+            return Results.NotFound();
+        }
+
+        var companyName = await db.Companies.AsNoTracking()
+            .Where(c => c.Id == placement.CompanyId)
+            .Select(c => c.Name)
+            .FirstOrDefaultAsync(ct) ?? "Belum ditentukan";
+        var periodName = await db.Periods.AsNoTracking()
+            .Where(p => p.Id == placement.PeriodId)
+            .Select(p => p.Name)
+            .FirstOrDefaultAsync(ct) ?? "Belum ditentukan";
+        var teacherName = await db.Users.AsNoTracking()
+            .Where(u => u.Id == placement.TeacherId)
+            .Select(u => u.FullName)
+            .FirstOrDefaultAsync(ct);
+        var mentorName = placement.MentorUserId.HasValue
+            ? await db.Users.AsNoTracking()
+                .Where(u => u.Id == placement.MentorUserId.Value)
+                .Select(u => u.FullName)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
+        var revisionItems = await db.JournalEntries.AsNoTracking()
+            .Where(e => e.PlacementId == placement.Id && e.Status == JournalEntryStatus.Rejected)
+            .OrderByDescending(e => e.SubmittedAt)
+            .Take(3)
+            .Select(e => new StudentHomeRevisionDto(e.Id, e.SubmittedAt, e.MentorNote))
+            .ToListAsync(ct);
+
+        return Results.Ok(new StudentHomeDto(
+            placement.Status,
+            companyName,
+            periodName,
+            mentorName,
+            teacherName,
+            PlacementReady: true,
+            JournalActive: await db.JournalSlots.AnyAsync(s => s.PlacementId == placement.Id, ct),
+            AssessmentStarted: await db.Assessments.AnyAsync(a => a.PlacementId == placement.Id, ct) ||
+                               await db.LearningAssessments.AnyAsync(a => a.PlacementId == placement.Id, ct),
+            CertificateIssued: await db.Certificates.AnyAsync(c => c.PlacementId == placement.Id, ct),
+            revisionItems));
     }
 }

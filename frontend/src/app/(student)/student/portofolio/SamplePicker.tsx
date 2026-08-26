@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/ui";
 import type { JournalDto } from "@/lib/apiTypes";
+import { richTextPlainText } from "@/lib/richText";
 
 interface SamplePickerProps {
   approvedJournals: JournalDto[];
@@ -22,7 +23,7 @@ export function SamplePicker({ approvedJournals, selected, max, onChange }: Samp
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return q ? approvedJournals.filter((j) => j.text.toLowerCase().includes(q)) : approvedJournals;
+    return q ? approvedJournals.filter((j) => richTextPlainText(j.text).toLowerCase().includes(q)) : approvedJournals;
   }, [approvedJournals, search]);
 
   const atMax = selected.length >= max;
@@ -82,7 +83,7 @@ export function SamplePicker({ approvedJournals, selected, max, onChange }: Samp
                     <span className="block text-xs text-ink-muted">
                       {new Date(j.submittedAt).toLocaleDateString("id-ID")}
                     </span>
-                    <span className="line-clamp-2">{j.text}</span>
+                    <span className="line-clamp-2">{richTextPlainText(j.text)}</span>
                   </span>
                 </button>
               );

@@ -6,13 +6,13 @@ import { useSearchParams } from "next/navigation";
 export default function SetPasswordPage() {
   const params = useSearchParams();
   const token = params.get("token") ?? "";
-  const [state, setState] = useState<"loading" | "valid" | "invalid" | "expired" | "used" | "network" | "success">("loading");
+  const [state, setState] = useState<"loading" | "valid" | "invalid" | "expired" | "used" | "network" | "success">(() => token ? "loading" : "invalid");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token) { setState("invalid"); return; }
+    if (!token) return;
     fetch(`/api/staff-invitations/${encodeURIComponent(token)}`)
       .then(async (response) => {
         if (response.ok) setState("valid");

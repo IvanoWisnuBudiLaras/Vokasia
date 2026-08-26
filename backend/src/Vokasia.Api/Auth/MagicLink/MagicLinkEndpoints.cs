@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Vokasia.Api.RateLimiting;
 using Vokasia.Api.Validation;
+using Vokasia.Api.Authorization;
 
 namespace Vokasia.Api.Auth.MagicLink;
 

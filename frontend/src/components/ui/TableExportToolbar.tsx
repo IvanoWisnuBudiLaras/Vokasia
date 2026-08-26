@@ -8,17 +8,17 @@ import { Icon } from "./Icon";
 export interface ColumnDef<T> {
   key: keyof T | string;
   label: string;
-  format?: (value: any, row: T) => string;
+  format?: (value: unknown, row: T) => string;
 }
 
-export interface TableExportToolbarProps<T extends Record<string, any>> {
+export interface TableExportToolbarProps<T extends object> {
   data: T[];
   filename?: string;
   columns: ColumnDef<T>[];
   title?: string;
 }
 
-export function TableExportToolbar<T extends Record<string, any>>({
+export function TableExportToolbar<T extends object>({
   data,
   filename = "data_vokasia",
   columns,
@@ -34,13 +34,13 @@ export function TableExportToolbar<T extends Record<string, any>>({
         entityId: filename,
         metaJson: JSON.stringify({ count: data.length, exportType, timestamp: new Date().toISOString() }),
       });
-    } catch (err) {
+    } catch {
       // Audit log Best-effort
     }
   }
 
   function getFormattedValue(row: T, col: ColumnDef<T>): string {
-    const val = row[col.key as string];
+    const val = row[col.key as keyof T];
     if (col.format) {
       return col.format(val, row);
     }

@@ -10,7 +10,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
-    "test:unit": "bun test"
+    "test:unit": "bun test src"
   },
   "dependencies": {
     "@iconify/react": "^5.2.0",
@@ -18,8 +18,10 @@
     "@tanstack/react-query": "^5.101.3",
     "ioredis": "^5.4.1",
     "next": "16.2.10",
+    "quill": "^2.0.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-quill-new": "^3.8.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {

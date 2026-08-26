@@ -1,23 +1,25 @@
 import { ErrorState } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
-import type { InvoiceDto } from "@/lib/apiTypes";
+import type { BankTransferInstructionsDto, InvoiceDto, SubscriptionDto } from "@/lib/apiTypes";
 import { BillingTable } from "./BillingTable";
 
 export const dynamic = "force-dynamic";
 
-/**
- * VOK-H6-E2 §3 app/billing/page.tsx — Server Component, ListMyInvoices (TenantAdminOnly). Halaman
- * ini SENDIRI tetap bisa diakses lewat guard matrix /app (TenantAdmin/DeptHead/Teacher, VOK-H2-E2)
- * tp backend policy `/api/invoices` = TenantAdminOnly murni (lebih sempit dari guard) — DeptHead/
- * Teacher yang membuka /app/billing akan dapat 403 dari fetcher, ditangkap try/catch di bawah
- * (pola sama rekap/page.tsx: halaman boleh dibuka, backend yang menegakkan RBAC sesungguhnya).
- */
 export default async function BillingPage() {
   let invoices: InvoiceDto[] = [];
+  let subscription: SubscriptionDto | null = null;
+  let bankInstructions: BankTransferInstructionsDto | null = null;
   let loadError = false;
 
   try {
-    invoices = await fetcher<InvoiceDto[]>("/invoices");
+    const [invs, sub, bank] = await Promise.all([
+      fetcher<InvoiceDto[]>("/invoices"),
+      fetcher<SubscriptionDto>("/invoices/subscription").catch(() => null),
+      fetcher<BankTransferInstructionsDto>("/invoices/bank-instructions").catch(() => null),
+    ]);
+    invoices = invs;
+    subscription = sub;
+    bankInstructions = bank;
   } catch (err) {
     console.error("[app/billing] gagal memuat:", err);
     loadError = true;
@@ -28,7 +30,11 @@ export default async function BillingPage() {
       {loadError ? (
         <ErrorState message="Billing belum bisa dimuat (mungkin kamu tidak punya akses — hanya Admin Sekolah)." />
       ) : (
-        <BillingTable initialInvoices={invoices} />
+        <BillingTable
+          initialInvoices={invoices}
+          initialSubscription={subscription}
+          bankInstructions={bankInstructions}
+        />
       )}
     </div>
   );

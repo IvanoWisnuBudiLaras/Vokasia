@@ -10,6 +10,7 @@ using Minio;
 using Minio.DataModel.Args;
 using Microsoft.EntityFrameworkCore;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Authorization;
 using Vokasia.Api.Auth.MagicLink;
 using Vokasia.Api.Endpoints;
 using Vokasia.Api.Middleware;
@@ -18,6 +19,7 @@ using Vokasia.Api.Storage;
 using Vokasia.Infrastructure;
 using Vokasia.Infrastructure.Identity;
 using Vokasia.Infrastructure.Persistence;
+using Vokasia.Infrastructure.Queries;
 using Vokasia.Infrastructure.Seeding;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -102,6 +104,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 // sbg IValidator<T> DI, dibaca ValidationFilter (Endpoints/*.cs) per request type. Assembly-scan
 // (bukan daftar manual satu-satu) supaya validator baru otomatis kepakai tanpa sentuh Program.cs lagi.
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+builder.Services.AddScoped<LearningRecordQueryService>();
 
 // VOK-H3-E3 §3: rate limit login (/connect/token) + endpoint publik (/api/mentor-invites/validate).
 builder.Services.AddVokasiaRateLimiting(builder.Configuration);
@@ -170,6 +173,7 @@ app.MapControllers();
 app.MapPeriodsEndpoints();
 app.MapStudentsEndpoints();
 app.MapCompaniesAndPlacementsEndpoints();
+app.MapTenantOperationsEndpoints();
 app.MapSchoolUsersEndpoints();
 app.MapAccountEndpoints(); // VOK-H2-E3: tambal gap /account/login (LoginPath H1-E3, lihat DECISIONS.md D17)
 app.MapAuditEndpoints(); // VOK-H2-E3 §2: WriteAuditLog — dipanggil BFF (TokenReuseDetected dst.)
@@ -181,9 +185,17 @@ app.MapDashboardEndpoints(); // VOK-H4-E1 §4: GetSchoolDashboard (W3)
 app.MapVisitEndpoints(); // VOK-H5-E1 §1: kunjungan monitoring guru ke DUDI
 app.MapRubricEndpoints(); // VOK-H5-E1 §2: template rubrik penilaian
 app.MapAssessmentEndpoints(); // VOK-H5-E1 §3: skor dua sisi + finalisasi
+app.MapLearningRecordTemplateEndpoints(); // V3 Slice 1: private DUDI templates + immutable placement snapshots
+app.MapLearningAssessmentEndpoints(); // V3 Slice 2: Mentor Middle/Final draft and immutable finalization
+app.MapLearningRecordReadEndpoints(); // V3 Slice 3: private Student finalized Learning Record reads
+app.MapTeacherMonitoringEndpoints(); // V3 Slice 4: private Teacher monitoring and read-only exceptions
+app.MapLearningRecordReportingEndpoints(); // V3 Slice 5: server-side Learning Record report
+app.MapLearningRecordReportExportEndpoints(); // V3 Slice 6: private PDF/XLSX Learning Record exports
 app.MapGradeRecapEndpoints(); // VOK-H5-E1 §4: rekap nilai + export async
+app.MapReportingEndpoints(); // Slice 4: decision-oriented school reports
 app.MapCertificateEndpoints(); // VOK-H5-E1 §5: unduh sertifikat + verifikasi publik
 app.MapSaTenantsEndpoints(); // VOK-H6-E1 §1: /sa/tenants — wizard provisioning + CRUD
+app.MapSaAdminEndpoints(); // Slice 5: SuperAdmin tenant usage and user administration
 app.MapSaPlansEndpoints(); // VOK-H6-E1 §3: /sa/plans — paket langganan (minimal, flags menyusul)
 app.MapPortfolioEndpoints(); // VOK-H6-E1 §6: portofolio siswa + /p/{slug} publik
 app.MapBillingEndpoints(); // VOK-H6-E1 §5: invoice (SA semua + confirm, TenantAdmin miliknya + proof)
@@ -246,7 +258,7 @@ catch (Exception ex)
     app.Logger.LogWarning(ex, "Gagal ensure bucket MinIO saat startup - endpoint upload foto jurnal mungkin tak berfungsi sampai MinIO tersedia.");
 }
 
-// CLI hook VOK-H2-E1: `dotnet run --project src/Vokasia.Api -- seed demo` / `seed reset`
+// CLI hook: `seed dev` / `seed test-assessments` / `seed reset --force`
 if (args is ["seed", ..])
 {
     using var scope = app.Services.CreateScope();
@@ -254,15 +266,24 @@ if (args is ["seed", ..])
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
     var sw = System.Diagnostics.Stopwatch.StartNew();
     var forceReset = args.Contains("reset") || args.Contains("--force");
-    var result = await DemoSeeder.SeedDemoDataAsync(db, userManager, forceReset: forceReset);
+
+    var result = await DevSeeder.SeedAsync(db, userManager, forceReset: forceReset);
+    if (args.Contains("test-assessments") || args.Contains("assessments"))
+    {
+        await TestAssessmentSeeder.SeedTestAssessmentsAsync(db);
+        result += " + TestAssessments (Siswa 1: Mid-Term, Siswa 2: Final/Lulus)";
+    }
     sw.Stop();
-    Console.WriteLine($"[seed demo] {result} ({sw.Elapsed.TotalSeconds:F1}s)");
+    Console.WriteLine($"[seed] {result} ({sw.Elapsed.TotalSeconds:F1}s)");
     return;
 }
 
 app.Run();
 
-public partial class Program { } // agar Vokasia.Tests bisa pakai WebApplicationFactory<Program>
+namespace Vokasia.Api
+{
+    public partial class Program { }
+}
 
 internal sealed class PostgresHealthCheck(
     IServiceScopeFactory scopeFactory) : IHealthCheck

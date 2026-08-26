@@ -10,19 +10,10 @@ export interface TeacherScoreEditorProps {
   placementId: string;
 }
 
-/** Sisi sekolah/guru = SEMUA aspek yang BUKAN mentor-side (Softskill dkk) — cermin `!IsMentorSide` backend. */
 function isMentorSide(kind: number): boolean {
   return kind === RubricAspectKind.Teknis || kind === RubricAspectKind.Kehadiran;
 }
 
-/**
- * VOK-H5-E2 §2 TeacherScoreEditor({placementId}) — sisi guru dari ScoreForm (Softskill dkk),
- * submit via SubmitTeacherScores. Sama struktur persis MentorScoreEditor.tsx, sengaja TIDAK
- * diekstrak jadi 1 komponen umum: jalur mentor (aspek Teknis+Kehadiran, endpoint mentor-scores)
- * vs guru (aspek lain, endpoint teacher-scores) beda cukup banyak (filter aspek+endpoint+lokasi
- * segment /mentor vs /app) - duplikasi kecil di sini lebih jelas dibaca drpd 1 komponen dgn banyak
- * prop kondisional.
- */
 export function TeacherScoreEditor({ placementId }: TeacherScoreEditorProps) {
   const [assessment, setAssessment] = useState<AssessmentDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,8 +23,7 @@ export function TeacherScoreEditor({ placementId }: TeacherScoreEditorProps) {
     setLoading(true);
     setError(false);
     try {
-      const data = await apiClient.get<AssessmentDto>(`/placements/${placementId}/assessment`);
-      setAssessment(data);
+      setAssessment(await apiClient.get<AssessmentDto>(`/placements/${placementId}/assessment`));
     } catch {
       setError(true);
     } finally {
@@ -42,27 +32,29 @@ export function TeacherScoreEditor({ placementId }: TeacherScoreEditorProps) {
   }
 
   useEffect(() => {
+    // Loading is an external side effect; it updates the view when the request resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placementId]);
 
-  if (loading) {
-    return <p className="text-sm text-ink-muted">Memuat rubrik penilaian…</p>;
-  }
+  if (loading) return <p className="text-sm text-ink-muted">Memuat rubrik penilaian…</p>;
+  if (error || !assessment) return <ErrorState message="Rubrik penilaian belum bisa dimuat." onRetry={load} />;
 
-  if (error || !assessment) {
-    return <ErrorState message="Rubrik penilaian belum bisa dimuat." onRetry={load} />;
-  }
-
-  const teacherAspects = assessment.aspects.filter((a) => !isMentorSide(a.kind));
-
+  const teacherAspects = assessment.aspects.filter((aspect) => !isMentorSide(aspect.kind));
   if (teacherAspects.length === 0) {
     return <EmptyState icon={<Icon name="clipboard-check" size={32} />} title="Belum ada rubrik" description="Admin sekolah belum membuat rubrik penilaian untuk sekolah ini." />;
   }
 
-  const aspects: ScoreAspectInput[] = teacherAspects.map((a) => ({ id: a.aspectId, name: a.aspectName, kind: a.kind, weight: a.weight }));
-  const values = Object.fromEntries(teacherAspects.map((a) => [a.aspectId, a.teacherValue]));
+  const aspects: ScoreAspectInput[] = teacherAspects.map((aspect) => ({
+    id: aspect.aspectId,
+    name: aspect.aspectName,
+    kind: aspect.kind,
+    weight: aspect.weight,
+    description: aspect.description,
+  }));
+  const values = Object.fromEntries(teacherAspects.map((aspect) => [aspect.aspectId, aspect.teacherValue]));
+  const comments = Object.fromEntries(teacherAspects.map((aspect) => [aspect.aspectId, aspect.teacherComment]));
 
   return (
     <div className="flex flex-col gap-3">
@@ -74,9 +66,10 @@ export function TeacherScoreEditor({ placementId }: TeacherScoreEditorProps) {
       <ScoreForm
         aspects={aspects}
         values={values}
+        comments={comments}
         readOnly={assessment.isFinal}
-        onSave={async (aspectId, value) => {
-          await apiClient.post(`/placements/${placementId}/assessment/teacher-scores`, [{ aspectId, value }]);
+        onSave={async (aspectId, value, comment) => {
+          await apiClient.post(`/placements/${placementId}/assessment/teacher-scores`, [{ aspectId, value, comment }]);
         }}
       />
     </div>

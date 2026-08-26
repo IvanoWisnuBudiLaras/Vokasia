@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Authorization;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
@@ -13,6 +14,9 @@ namespace Vokasia.Api.Endpoints;
 /// <summary>VOK-H2-E1 §3: CRUD siswa + import CSV (kolom umum Dapodik). Data minimal (NFR-SEC-05).</summary>
 public static class StudentsEndpoints
 {
+    private const long MaxImportBytes = 5 * 1024 * 1024;
+    private const int MaxImportRows = 10_000;
+
     public static IEndpointRouteBuilder MapStudentsEndpoints(this IEndpointRouteBuilder app)
     {
         // VOK-H3-E3 §2: ValidationFilter global (baru CreateStudentRequest/UpdateStudentRequest tanpa
@@ -44,9 +48,33 @@ public static class StudentsEndpoints
             return Results.Forbid();
         }
 
+        if (file.Length <= 0)
+        {
+            return Results.Ok(new ImportResultDto(0, [new ImportRowError(0, "file", "File CSV kosong.")]));
+        }
+
+        if (file.Length > MaxImportBytes)
+        {
+            return Results.BadRequest(new ImportResultDto(0, [new ImportRowError(0, "file", "Ukuran file maksimal 5 MB.")]));
+        }
+
         var errors = new List<ImportRowError>();
-        var imported = 0;
         var majorCache = await db.Majors.Where(m => m.TenantId == tenant.TenantId).ToDictionaryAsync(m => m.Name, m => m.Id, StringComparer.OrdinalIgnoreCase, ct);
+        var existingStudents = await db.Students.AsNoTracking()
+            .Select(s => new { s.FullName, s.Nisn, s.MajorId, s.Classroom })
+            .ToListAsync(ct);
+        var existingNisns = existingStudents
+            .Where(s => !string.IsNullOrWhiteSpace(s.Nisn))
+            .Select(s => Normalize(s.Nisn!))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var existingNaturalKeys = existingStudents
+            .Select(s => NaturalKey(s.FullName, s.MajorId, s.Classroom))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var seenNisns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenNaturalKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pendingStudents = new List<Student>();
+        var validRows = 0;
+        var dataRows = 0;
 
         using var reader = new StreamReader(file.OpenReadStream());
         var headerLine = await reader.ReadLineAsync(ct);
@@ -55,8 +83,17 @@ public static class StudentsEndpoints
             return Results.Ok(new ImportResultDto(0, [new ImportRowError(0, "*", "File CSV kosong.")]));
         }
 
-        var headers = headerLine.Split(',').Select(h => h.Trim()).ToArray();
-        int idx(string name) => Array.FindIndex(headers, h => string.Equals(h, name, StringComparison.OrdinalIgnoreCase));
+        IReadOnlyList<string> headers;
+        try
+        {
+            headers = StudentCsvParser.ParseLine(headerLine).Select(h => h.Trim().TrimStart('\uFEFF')).ToArray();
+        }
+        catch (FormatException)
+        {
+            return Results.Ok(new ImportResultDto(0, [new ImportRowError(0, "header", "Format header CSV tidak valid.")]));
+        }
+
+        int idx(string name) => Array.FindIndex(headers.ToArray(), h => string.Equals(h, name, StringComparison.OrdinalIgnoreCase));
         var (iFullName, iNisn, iMajor, iClassroom) = (idx("FullName"), idx("Nisn"), idx("MajorName"), idx("Classroom"));
 
         if (iFullName < 0 || iMajor < 0 || iClassroom < 0)
@@ -74,7 +111,24 @@ public static class StudentsEndpoints
                 continue;
             }
 
-            var cols = line.Split(',').Select(c => c.Trim()).ToArray();
+            dataRows++;
+            if (dataRows > MaxImportRows)
+            {
+                errors.Add(new ImportRowError(rowNum, "file", $"Maksimal {MaxImportRows:N0} baris data per import."));
+                break;
+            }
+
+            IReadOnlyList<string> cols;
+            try
+            {
+                cols = StudentCsvParser.ParseLine(line);
+            }
+            catch (FormatException)
+            {
+                errors.Add(new ImportRowError(rowNum, "row", "Format CSV tidak valid. Gunakan tanda kutip untuk nilai yang mengandung koma."));
+                continue;
+            }
+
             var fullName = cols.ElementAtOrDefault(iFullName) ?? "";
             var majorName = cols.ElementAtOrDefault(iMajor) ?? "";
             var classroom = cols.ElementAtOrDefault(iClassroom) ?? "";
@@ -97,38 +151,54 @@ public static class StudentsEndpoints
 
             if (!majorCache.TryGetValue(majorName, out var majorId))
             {
-                var major = new Major { Id = Guid.NewGuid(), TenantId = tenant.TenantId.Value, Name = majorName };
-                if (!dryRun)
-                {
-                    db.Majors.Add(major);
-                }
-
-                majorId = major.Id;
-                majorCache[majorName] = majorId;
+                errors.Add(new ImportRowError(rowNum, nameof(ImportStudentRow.MajorName), "Jurusan belum terdaftar. Tambahkan jurusan terlebih dahulu."));
+                continue;
             }
 
-            if (!dryRun)
+            var normalizedNisn = string.IsNullOrWhiteSpace(nisn) ? null : Normalize(nisn);
+            var naturalKey = NaturalKey(fullName, majorId, classroom);
+            if (normalizedNisn is not null && (!seenNisns.Add(normalizedNisn) || existingNisns.Contains(normalizedNisn)))
             {
-                db.Students.Add(new Student
-                {
-                    Id = Guid.NewGuid(),
-                    TenantId = tenant.TenantId.Value,
-                    FullName = fullName,
-                    Nisn = string.IsNullOrWhiteSpace(nisn) ? null : nisn,
-                    MajorId = majorId,
-                    Classroom = classroom,
-                });
+                errors.Add(new ImportRowError(rowNum, nameof(ImportStudentRow.Nisn), "NISN sudah ada di file atau database tenant."));
+                continue;
             }
 
-            imported++;
+            if (!seenNaturalKeys.Add(naturalKey) || existingNaturalKeys.Contains(naturalKey))
+            {
+                errors.Add(new ImportRowError(rowNum, "FullName", "Siswa dengan nama, jurusan, dan kelas yang sama sudah ada."));
+                continue;
+            }
+
+            pendingStudents.Add(new Student
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenant.TenantId.Value,
+                FullName = fullName,
+                Nisn = string.IsNullOrWhiteSpace(nisn) ? null : nisn,
+                MajorId = majorId,
+                Classroom = classroom,
+            });
+            validRows++;
         }
 
-        if (!dryRun && imported > 0)
+        if (!dryRun && errors.Count == 0 && pendingStudents.Count > 0)
         {
-            await db.SaveChangesAsync(ct);
+            db.Students.AddRange(pendingStudents);
+            try
+            {
+                // SaveChanges wraps this batch in one transaction: no partial import.
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                // Do not surface provider/SQL details. A concurrent write can make the duplicate
+                // snapshot stale, so ask the importer to validate again.
+                return Results.Conflict(new ImportResultDto(0,
+                [new ImportRowError(0, "database", "Import gagal disimpan karena data berubah. Jalankan validasi lagi lalu coba ulang.")]));
+            }
         }
 
-        return Results.Ok(new ImportResultDto(imported, errors));
+        return Results.Ok(new ImportResultDto(dryRun ? validRows : errors.Count == 0 ? validRows : 0, errors));
     }
 
     private static async Task<IResult> CreateStudent(CreateStudentRequest req, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
@@ -136,6 +206,11 @@ public static class StudentsEndpoints
         if (!tenant.TenantId.HasValue)
         {
             return Results.Forbid();
+        }
+
+        if (!await db.Majors.AnyAsync(m => m.Id == req.MajorId && m.TenantId == tenant.TenantId, ct))
+        {
+            return Results.BadRequest(new { message = "Jurusan tidak ditemukan pada tenant ini." });
         }
 
         var student = new Student
@@ -153,12 +228,17 @@ public static class StudentsEndpoints
         return Results.Created($"/api/students/{student.Id}", ToDto(student));
     }
 
-    private static async Task<IResult> UpdateStudent(Guid id, UpdateStudentRequest req, VokasiaDbContext db, CancellationToken ct)
+    private static async Task<IResult> UpdateStudent(Guid id, UpdateStudentRequest req, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
     {
         var student = await db.Students.FirstOrDefaultAsync(s => s.Id == id, ct);
         if (student is null)
         {
             return Results.NotFound();
+        }
+
+        if (!tenant.TenantId.HasValue || !await db.Majors.AnyAsync(m => m.Id == req.MajorId && m.TenantId == tenant.TenantId, ct))
+        {
+            return Results.BadRequest(new { message = "Jurusan tidak ditemukan pada tenant ini." });
         }
 
         student.FullName = req.FullName;
@@ -169,6 +249,11 @@ public static class StudentsEndpoints
 
         return Results.Ok(ToDto(student));
     }
+
+    private static string Normalize(string value) => value.Trim().ToUpperInvariant();
+
+    private static string NaturalKey(string fullName, Guid majorId, string classroom) =>
+        $"{Normalize(fullName)}|{majorId:D}|{Normalize(classroom)}";
 
     private static async Task<IResult> ListStudents(
         VokasiaDbContext db, CancellationToken ct,
@@ -196,6 +281,7 @@ public static class StudentsEndpoints
 
         return Results.Ok(new Paged<StudentDto>(items, page, pageSize, total));
     }
+
 
     private static async Task<IResult> ListMajors(VokasiaDbContext db, CancellationToken ct)
     {

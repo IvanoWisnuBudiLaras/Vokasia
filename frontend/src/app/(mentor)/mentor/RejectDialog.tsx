@@ -82,7 +82,7 @@ export function RejectDialog({ studentName, busy, onClose, onSubmit }: RejectDia
       >
         <div className="flex items-center justify-between">
           <h2 id={dialogTitleId} className="text-base font-semibold text-ink">
-            Tolak jurnal {studentName}
+            Minta revisi jurnal {studentName}
           </h2>
           <button
             type="button"
@@ -109,7 +109,7 @@ export function RejectDialog({ studentName, busy, onClose, onSubmit }: RejectDia
         </div>
 
         <label htmlFor={reasonId} className="sr-only">
-          Alasan penolakan
+          Alasan revisi
         </label>
         <textarea
           ref={textareaRef}
@@ -120,7 +120,7 @@ export function RejectDialog({ studentName, busy, onClose, onSubmit }: RejectDia
           disabled={busy}
           aria-invalid={tooShort}
           aria-describedby={reasonHelpId}
-          placeholder="Tulis alasan penolakan (minimal 5 karakter)…"
+          placeholder="Tulis alasan revisi yang spesifik (minimal 5 karakter)…"
           className={cn(
             "min-h-24 resize-y rounded-[var(--radius-md)] border px-3 py-2 text-base outline-none focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:opacity-[0.55]",
             tooShort ? "border-status-amber" : "border-border"
@@ -153,7 +153,7 @@ export function RejectDialog({ studentName, busy, onClose, onSubmit }: RejectDia
             disabled={!canSubmit}
             loading={busy}
           >
-            Tolak Jurnal
+            Minta revisi
           </Button>
         </div>
       </div>

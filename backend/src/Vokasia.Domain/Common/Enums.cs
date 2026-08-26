@@ -22,6 +22,8 @@ public enum JournalEntryStatus { Submitted, Approved, Rejected }
 
 public enum PhotoStatus { Pending, Processed, Failed }
 
+public enum CertificateVerificationStatus { Valid, Revoked }
+
 /// <summary>Red-Amber-Green — status harian siswa dipakai dashboard W3 & ghosting detection (FR-JRN-07).</summary>
 public enum RagStatus { Green, Amber, Red }
 
@@ -29,12 +31,30 @@ public enum RubricAspectKind { Teknis, Softskill, Kehadiran }
 
 public enum ScoredBy { Mentor, Teacher }
 
-public enum InvoiceStatus { Issued, ProofUploaded, Paid }
+/// <summary>V3.1 Manual Billing — invoice lifecycle. Annual only. No monthly.</summary>
+public enum InvoiceStatus { Unpaid, PendingVerification, Paid, Rejected, Expired }
+
+/// <summary>V3.1 Manual Billing — subscription lifecycle.</summary>
+public enum SubscriptionStatus { Pending, Active, Expired, Suspended }
 
 /// <summary>VOK-H5-E1 §4 — format export rekap nilai (FR-ASM-06). Dipakai request DTO (Api) + ExportRequest entity + Worker consumer.</summary>
 public enum ExportFormat { Xlsx, Pdf }
 
 public enum ExportStatus { Requested, Completed, Failed }
+
+public enum LearningRecordTemplateStatus { Draft, Active, Superseded }
+
+public enum LearningAssessmentStage { Middle, Final }
+
+public enum LearningAssessmentStatus { Draft, Finalized, Reopened }
+
+public enum LearningAssessmentOperationalState { NotDue, Due, Overdue, Complete }
+
+public enum LearningRecordMonitoringStatus { ProgressingAsExpected, NeedsAttention, Problem }
+
+public enum LearningRecordMonitoringVisibility { StudentVisible, Internal }
+
+public enum LearningAssessmentReminderType { Due, Overdue }
 
 /// <summary>
 /// VOK-H6-E1 §3 — key FeatureFlag terdaftar (FR-SA-03, ticket literal: "key terdaftar enum
@@ -69,6 +89,7 @@ public enum NotificationType
     PlacementWelcome,
     /// <summary>VOK-H5-E1 §3 — OpenAssessmentPhase cron: periode masuk fase penilaian (H-14 dari EndDate).</summary>
     AssessmentPhaseOpened,
+    LearningAssessmentReminder,
     /// <summary>VOK-H5-E1 §4 — ExportRequestedConsumer: file rekap (Xlsx/Pdf) siap diunduh (presigned 24 jam).</summary>
     ExportReady,
 }

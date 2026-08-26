@@ -2,14 +2,18 @@ import { EmptyState, ErrorState } from "@/components/ui";
 import { MaterialIcon } from "@/components/ui/MaterialIcon";
 import { fetcher } from "@/lib/fetcher";
 import { getSession } from "@/lib/session";
-import { JournalEntryStatus, type TodayJournalDto } from "@/lib/apiTypes";
+import type { StudentHomeDto, TodayJournalDto } from "@/lib/apiTypes";
 import { TodayJournalCard } from "./TodayJournalCard";
-import { PageHeading } from "@/components/PageHeading";
 
 export const dynamic = "force-dynamic";
 
 type LoadResult =
   | { kind: "ok"; data: TodayJournalDto }
+  | { kind: "not-found" }
+  | { kind: "error" };
+
+type HomeResult =
+  | { kind: "ok"; data: StudentHomeDto }
   | { kind: "not-found" }
   | { kind: "error" };
 
@@ -19,10 +23,20 @@ async function loadToday(): Promise<LoadResult> {
     return { kind: "ok", data };
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
-    if (message.includes("-> 404")) {
-      return { kind: "not-found" };
-    }
+    if (message.includes("-> 404")) return { kind: "not-found" };
     console.error("[student/today] gagal memuat jurnal hari ini:", err);
+    return { kind: "error" };
+  }
+}
+
+async function loadHome(): Promise<HomeResult> {
+  try {
+    const data = await fetcher<StudentHomeDto>("/students/me/home");
+    return { kind: "ok", data };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (message.includes("-> 404")) return { kind: "not-found" };
+    console.error("[student/home] gagal memuat ringkasan PKL:", err);
     return { kind: "error" };
   }
 }
@@ -31,44 +45,92 @@ function formatTanggal(): string {
   return new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
-/**
- * VOK-H3-E2 §1 student/page.tsx (Server Component) — render TodayJournalDto (GetTodayJournal).
- *
- * [GAP header "perusahaan" - PRD W1 minta tanggal+perusahaan]: TodayJournalDto (backend H3-E1,
- * Endpoints/Dtos.cs) TIDAK membawa nama perusahaan/DUDI sama sekali (hanya slot/entry/competencies/
- * weekStatus/streak — dikonfirmasi baca langsung JournalEndpoints.cs GetTodayJournal). Satu-satunya
- * endpoint placement (`GET /placements`) butuh RbacPolicies.TenantMember (klaim tenant_id staf
- * sekolah) dan tak difilter per-siswa — TIDAK bisa dipanggil sesi siswa utk "placement milikku
- * sendiri" (persis gap yang SUDAH dicatat D16 sesi H2-E2, bukan temuan baru sesi ini). Header di
- * bawah sengaja HANYA tanggal, bukan mengarang nama perusahaan kosong/statis — konsisten dgn
- * WeekStrip.tsx (2 status jujur, bukan 3 status karangan). Perbaikan butuh field baru di backend,
- * di luar wilayah ticket ini (`frontend/` saja).
- */
-export default async function StudentTodayPage() {
-  const session = await getSession();
-  const result = await loadToday();
+const checklist = [
+  ["Penempatan", "placementReady"],
+  ["Jurnal aktif", "journalActive"],
+  ["Penilaian", "assessmentStarted"],
+  ["Sertifikat", "certificateIssued"],
+] as const;
 
+function statusLabel(status: number) {
+  if (status === 1) return "PKL selesai";
+  if (status === 2) return "PKL dihentikan";
+  return "PKL aktif";
+}
+
+function formatRevisionDate(iso: string) {
+  return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+}
+
+function StudentHomeSummary({ data }: { data: StudentHomeDto }) {
   return (
-    <div className="flex flex-col gap-5">
-      <PageHeading eyebrow="TUGAS UTAMA" title="Apa yang harus saya kerjakan sekarang?" description={formatTanggal()} />
-
-      {result.kind === "ok" && result.data.entry?.status === JournalEntryStatus.Rejected && (
-        <section className="border-l-4 border-status-red bg-status-red-bg p-4" aria-labelledby="revision-heading">
-          <div className="flex items-start gap-3">
-            <MaterialIcon name="warning" label="Perlu diperbaiki" />
-            <div>
-              <h2 id="revision-heading" className="font-semibold text-status-red">Perbaiki jurnal hari ini</h2>
-              <p className="mt-1 text-sm text-ink">Baca alasan mentor, perbaiki isi jurnal, lalu kirim ulang.</p>
-            </div>
+    <>
+      <section aria-labelledby="placement-summary-heading" className="border-y border-border py-4">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="placement-summary-heading" className="text-sm font-semibold text-ink">Ringkasan PKL</h2>
+            <span className="text-sm font-semibold text-status-green">{statusLabel(data.status)}</span>
           </div>
+          <dl className="grid grid-cols-2 gap-x-5 gap-y-3 text-sm sm:grid-cols-4">
+            {[
+              ["Perusahaan", data.companyName],
+              ["Periode", data.periodName],
+              ["Mentor industri", data.mentorName ?? "Belum ditentukan"],
+              ["Guru pembimbing", data.teacherName ?? "Belum ditentukan"],
+            ].map(([label, value]) => (
+              <div key={label} className="min-w-0">
+                <dt className="text-xs text-ink-muted">{label}</dt>
+                <dd className="mt-1 truncate font-semibold text-ink" title={value}>{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
+
+      <section aria-labelledby="placement-checklist-heading" className="border-b border-border py-4">
+        <h2 id="placement-checklist-heading" className="text-sm font-semibold text-ink">Tahapan PKL</h2>
+        <ol className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {checklist.map(([label, key]) => (
+            <li key={label} className="flex items-center gap-2 text-sm text-ink">
+              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${data[key] ? "bg-status-green-bg text-status-green" : "bg-surface-muted text-ink-muted"}`} aria-hidden="true">
+                {data[key] ? "✓" : "–"}
+              </span>
+              <span>{label}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      {data.revisionItems.length > 0 && (
+        <section aria-labelledby="attention-heading" className="rounded-lg bg-status-amber-bg p-4">
+          <h2 id="attention-heading" className="text-sm font-semibold text-ink">Perlu perhatian</h2>
+          <ul className="mt-2 flex flex-col gap-2 text-sm text-ink">
+            {data.revisionItems.slice(0, 3).map((item) => (
+              <li key={item.id} className="flex flex-wrap items-center justify-between gap-2">
+                <span><span className="font-medium">Perlu revisi</span> · {formatRevisionDate(item.submittedAt)}</span>
+                <a href="#jurnal-hari-ini" className="font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-focus">Perbaiki jurnal</a>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
+    </>
+  );
+}
 
-      {/* Presensi belum masuk MVP; tidak ditampilkan sebagai data seolah sudah aktif. */}
-      <div className="flex items-start gap-3 rounded-[var(--radius-md)] border border-dashed border-border bg-surface-muted p-3 text-sm text-ink-muted">
-        <MaterialIcon name="period" label="Tanggal" />
-        <span>Presensi belum tersedia di aplikasi ini. Fokuskan dulu pada pengisian jurnal kegiatan harian.</span>
+export default async function StudentTodayPage() {
+  const session = await getSession();
+  const [home, result] = await Promise.all([loadHome(), loadToday()]);
+
+  return (
+    <div className="flex max-w-4xl flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-3xl font-extrabold tracking-tight text-ink">Hari Ini</h1>
+        <p className="text-base text-ink-muted">{formatTanggal()}</p>
       </div>
+
+      {home.kind === "error" && <ErrorState message="Ringkasan PKL belum bisa dimuat. Coba muat ulang halaman." />}
+      {home.kind === "ok" && <StudentHomeSummary data={home.data} />}
 
       {result.kind === "error" && <ErrorState message="Jurnal hari ini belum bisa dimuat. Coba muat ulang halaman." />}
 
@@ -76,21 +138,16 @@ export default async function StudentTodayPage() {
         <EmptyState
           icon={<MaterialIcon name="journal" decorative />}
           title="Belum ada slot jurnal untuk hari ini"
-          description="Slot jurnal dibuat otomatis tiap pagi (05:00 WIB) untuk hari kerja. Kalau hari ini libur atau kamu belum punya penempatan aktif, slot memang belum tersedia."
+          description="Slot jurnal dibuat otomatis tiap pagi untuk hari kerja. Kalau hari ini libur atau kamu belum punya penempatan aktif, slot memang belum tersedia."
         />
       )}
-
       {result.kind === "ok" && (
-        <>
-          <TodayJournalCard
-            slot={result.data.slot}
-            initialEntry={result.data.entry}
-            competencies={result.data.competencies}
-            initialWeekStatus={result.data.weekStatus}
-            streak={result.data.streak}
-            draftScope={session ? `${session.tenantId ?? "tanpa-tenant"}:${session.id}` : null}
-          />
-        </>
+        <TodayJournalCard
+          slot={result.data.slot}
+          initialEntry={result.data.entry}
+          competencies={result.data.competencies}
+          draftScope={session ? `${session.tenantId ?? "tanpa-tenant"}:${session.id}` : null}
+        />
       )}
     </div>
   );

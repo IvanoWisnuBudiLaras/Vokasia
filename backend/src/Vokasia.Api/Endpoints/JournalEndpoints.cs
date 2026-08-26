@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Minio;
 using Minio.DataModel.Args;
 using Vokasia.Api.Auth;
-using Vokasia.Api.Security;
+using Vokasia.Api.Authorization;
 using Vokasia.Api.Storage;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
@@ -49,7 +49,7 @@ public static class JournalEndpoints
         journals.MapPost("/{slotId:guid}/submit", SubmitJournal).RequireAuthorization(RbacPolicies.StudentSelf);
         journals.MapPost("/upload-url", GetPresignedUploadUrl).RequireAuthorization(RbacPolicies.StudentSelf);
         journals.MapPost("/{id:guid}/photos", AttachPhoto).RequireAuthorization(RbacPolicies.StudentSelf);
-        journals.MapGet("/", ListJournals).RequireAuthorization(RbacPolicies.StudentSelf);
+        journals.MapGet("", ListJournals).RequireAuthorization(RbacPolicies.StudentSelf);
 
         // --- §3 mentor — MentorOwnPlacement ---
         // SENGAJA TIDAK `.RequireAuthorization(RbacPolicies.MentorOwnPlacement)` di level route:
@@ -127,7 +127,27 @@ public static class JournalEndpoints
         var slot = await db.JournalSlots.FirstOrDefaultAsync(s => s.PlacementId == placement.Id && s.Date == today, ct);
         if (slot is null)
         {
-            return Results.NotFound(new { message = "Belum ada slot jurnal untuk hari ini (cron 05:00 WIB belum jalan atau hari ini libur)." });
+            if (today.DayOfWeek is not DayOfWeek.Saturday and not DayOfWeek.Sunday)
+            {
+                var isHoliday = await db.Holidays.AsNoTracking().AnyAsync(h => h.PeriodId == placement.PeriodId && h.Date == today, ct);
+                if (!isHoliday)
+                {
+                    slot = new JournalSlot
+                    {
+                        Id = Guid.NewGuid(),
+                        TenantId = placement.TenantId,
+                        PlacementId = placement.Id,
+                        Date = today,
+                        Status = JournalSlotStatus.Empty
+                    };
+                    db.JournalSlots.Add(slot);
+                    await db.SaveChangesAsync(ct);
+                }
+            }
+        }
+        if (slot is null)
+        {
+            return Results.NotFound(new { message = "Belum ada slot jurnal untuk hari ini (hari ini libur atau akhir pekan)." });
         }
 
         JournalDto? entryDto = null;
@@ -322,7 +342,7 @@ public static class JournalEndpoints
 
     private static async Task<IResult> ListJournals(
         VokasiaDbContext db, ITenantContext tenant, CancellationToken ct,
-        [FromQuery] Guid? placementId = null, [FromQuery] JournalEntryStatus? status = null,
+        [FromQuery] Guid? placementId = null, [FromQuery] string? status = null,
         [FromQuery] DateOnly? from = null, [FromQuery] DateOnly? to = null,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
@@ -345,30 +365,53 @@ public static class JournalEndpoints
         var scopedPlacementIds = placementId.HasValue ? [placementId.Value] : ownPlacementIds;
 
         var query = db.JournalEntries.AsNoTracking().Where(e => scopedPlacementIds.Contains(e.PlacementId));
-        if (status.HasValue)
+        
+        if (!string.IsNullOrWhiteSpace(status))
         {
-            query = query.Where(e => e.Status == status.Value);
-        }
-        if (from.HasValue || to.HasValue)
-        {
-            var slotIdsInRange = db.JournalSlots.Where(s =>
-                (!from.HasValue || s.Date >= from.Value) && (!to.HasValue || s.Date <= to.Value)).Select(s => s.Id);
-            query = query.Where(e => slotIdsInRange.Contains(e.SlotId));
+            if (int.TryParse(status, out var statusInt) && Enum.IsDefined(typeof(JournalEntryStatus), statusInt))
+            {
+                var parsedStatus = (JournalEntryStatus)statusInt;
+                query = query.Where(e => e.Status == parsedStatus);
+            }
+            else if (Enum.TryParse<JournalEntryStatus>(status, ignoreCase: true, out var parsedEnum))
+            {
+                query = query.Where(e => e.Status == parsedEnum);
+            }
         }
 
+        if (from.HasValue || to.HasValue)
+        {
+            var slotQuery = db.JournalSlots.AsNoTracking().AsQueryable();
+            if (from.HasValue) slotQuery = slotQuery.Where(s => s.Date >= from.Value);
+            if (to.HasValue) slotQuery = slotQuery.Where(s => s.Date <= to.Value);
+            var slotIds = await slotQuery.Select(s => s.Id).ToListAsync(ct);
+            query = query.Where(e => slotIds.Contains(e.SlotId));
+        }
         var total = await query.CountAsync(ct);
-        // Proyeksi langsung + subquery berkorelasi utk Photos/CompetencyIds - EF Core menerjemahkan
-        // ini jadi 1 query utama (LEFT JOIN/subquery correlated), BUKAN N+1 round-trip terpisah per
-        // baris (AC: "1 query utama, log EF dibuktikan") - dibuktikan tuntas thd Postgres nyata,
-        // lihat DECISIONS.md.
-        var items = await query
+        var entries = await query
             .OrderByDescending(e => e.SubmittedAt)
             .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(e => new JournalDto(
-                e.Id, e.SlotId, e.PlacementId, e.Text, e.Status, e.MentorNote, e.SubmittedAt, e.ApprovedAt,
-                db.JournalPhotos.Where(p => p.JournalEntryId == e.Id).Select(p => new PhotoDto(p.Id, p.ObjectKey, p.ThumbKey, p.Status)).ToList(),
-                db.JournalCompetencies.Where(jc => jc.JournalEntryId == e.Id).Select(jc => jc.CompetencyId).ToList()))
             .ToListAsync(ct);
+
+        var entryIds = entries.Select(e => e.Id).ToList();
+        var allPhotos = await db.JournalPhotos.AsNoTracking()
+            .Where(p => entryIds.Contains(p.JournalEntryId))
+            .Select(p => new { p.JournalEntryId, Dto = new PhotoDto(p.Id, p.ObjectKey, p.ThumbKey, p.Status) })
+            .ToListAsync(ct);
+
+        var allCompetencies = await db.JournalCompetencies.AsNoTracking()
+            .Where(jc => entryIds.Contains(jc.JournalEntryId))
+            .Select(jc => new { jc.JournalEntryId, jc.CompetencyId })
+            .ToListAsync(ct);
+
+        var photosGrouped = allPhotos.GroupBy(p => p.JournalEntryId).ToDictionary(g => g.Key, g => g.Select(x => x.Dto).ToList());
+        var compGrouped = allCompetencies.GroupBy(jc => jc.JournalEntryId).ToDictionary(g => g.Key, g => g.Select(x => x.CompetencyId).ToList());
+
+        var items = entries.Select(e => new JournalDto(
+            e.Id, e.SlotId, e.PlacementId, e.Text, e.Status, e.MentorNote, e.SubmittedAt, e.ApprovedAt,
+            photosGrouped.GetValueOrDefault(e.Id, []),
+            compGrouped.GetValueOrDefault(e.Id, [])
+        )).ToList();
 
         return Results.Ok(new Paged<JournalDto>(items, page, pageSize, total));
     }
@@ -564,7 +607,7 @@ public static class JournalEndpoints
 
     // ---------- §4 guru ----------
 
-    private static async Task<IResult> AddTeacherComment(Guid id, AddCommentRequest req, System.Security.Claims.ClaimsPrincipal user, VokasiaDbContext db, ITenantContext tenant, Vokasia.Infrastructure.Messaging.INotifier notifier, CancellationToken ct)
+    private static async Task<IResult> AddTeacherComment(Guid id, AddCommentRequest req, System.Security.Claims.ClaimsPrincipal user, IAuthorizationService authService, VokasiaDbContext db, ITenantContext tenant, Vokasia.Infrastructure.Messaging.INotifier notifier, CancellationToken ct)
     {
         if (!tenant.UserId.HasValue)
         {
@@ -578,8 +621,12 @@ public static class JournalEndpoints
         }
 
         var placement = await db.Placements.AsNoTracking().FirstOrDefaultAsync(p => p.Id == entry.PlacementId, ct);
-        if (placement is null || !Enum.TryParse<UserRole>(tenant.Role, ignoreCase: true, out var role) ||
-            !TeacherPlacementScope.CanAccess(role, tenant.UserId.Value, placement.TeacherId))
+        if (placement is null)
+        {
+            return Results.NotFound();
+        }
+        var authResult = await authService.AuthorizeAsync(user, placement, new TeacherPlacementScopeRequirement());
+        if (!authResult.Succeeded)
         {
             return Results.Forbid();
         }
@@ -607,7 +654,7 @@ public static class JournalEndpoints
     /// filter `teacherId` di CompaniesAndPlacements.cs: TenantAdmin/DeptHead tetap boleh lintas
     /// placement dalam tenant yang sama, sedangkan Teacher harus menjadi guru penanggung jawab.
     /// </summary>
-    private static async Task<IResult> ListJournalsForTeacher(Guid placementId, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
+    private static async Task<IResult> ListJournalsForTeacher(Guid placementId, System.Security.Claims.ClaimsPrincipal user, IAuthorizationService authService, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
     {
         if (!tenant.UserId.HasValue || !Enum.TryParse<UserRole>(tenant.Role, ignoreCase: true, out var role))
         {
@@ -622,7 +669,7 @@ public static class JournalEndpoints
 
         var canAccess = role == UserRole.IndustryMentor
             ? placement.MentorUserId == tenant.UserId.Value
-            : TeacherPlacementScope.CanAccess(role, tenant.UserId.Value, placement.TeacherId);
+            : (await authService.AuthorizeAsync(user, placement, new TeacherPlacementScopeRequirement())).Succeeded;
 
         if (!canAccess)
         {

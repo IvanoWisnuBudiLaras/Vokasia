@@ -92,6 +92,7 @@ builder.Services.AddHangfireServer();
 
 builder.Services.AddScoped<JournalCronJobs>();
 builder.Services.AddScoped<AssessmentCronJobs>(); // VOK-H5-E1 §3: OpenAssessmentPhase
+builder.Services.AddScoped<LearningRecordReminderJobs>();
 builder.Services.AddScoped<BillingCronJobs>(); // VOK-H6-E1 §5: GenerateMonthlyInvoices
 
 // VOK-H4-E1 §1/§2: MassTransit+RabbitMQ HANYA di Worker (bukan Api - lihat doc-comment
@@ -109,6 +110,7 @@ builder.Services.AddVokasiaMassTransit(builder.Configuration, x =>
     // VOK-H4-E3 §2: dua consumer BARU utk event yg SUDAH ditulis outbox sejak H4-E1 tapi belum
     // pernah punya consumer (lihat doc-comment masing-masing event, OutboxEventContracts.cs).
     x.AddConsumer<JournalReminderEmailConsumer>();
+    x.AddConsumer<LearningAssessmentReminderEmailConsumer>();
     x.AddConsumer<GhostingAlertEmailConsumer>();
     // VOK-H5-E1 §4: export rekap nilai async.
     x.AddConsumer<ExportRequestedConsumer>();
@@ -194,6 +196,12 @@ recurringJobs.AddOrUpdate<AssessmentCronJobs>(
     "open-assessment-phase",
     job => job.OpenAssessmentPhase(null),
     "0 6 * * *",
+    new RecurringJobOptions { TimeZone = JournalCronJobs.JakartaTimeZone });
+
+recurringJobs.AddOrUpdate<LearningRecordReminderJobs>(
+    "enqueue-learning-record-reminders",
+    job => job.EnqueueMentorReminders(null),
+    "0 8 * * *",
     new RecurringJobOptions { TimeZone = JournalCronJobs.JakartaTimeZone });
 
 // VOK-H5-E1 §5: 06:30 WIB, SETELAH open-assessment-phase (06:00) - urutan tak saling bergantung

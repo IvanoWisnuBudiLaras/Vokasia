@@ -13,6 +13,18 @@ public record UpdatePeriodRequest(string Name, DateOnly StartDate, DateOnly EndD
 public record HolidayDto(DateOnly Date, string Label);
 
 public record StudentDto(Guid Id, string FullName, string? Nisn, Guid MajorId, string Classroom, Guid? UserId);
+public record StudentHomeRevisionDto(Guid Id, DateTimeOffset SubmittedAt, string? MentorNote);
+public record StudentHomeDto(
+    PlacementStatus Status,
+    string CompanyName,
+    string PeriodName,
+    string? MentorName,
+    string? TeacherName,
+    bool PlacementReady,
+    bool JournalActive,
+    bool AssessmentStarted,
+    bool CertificateIssued,
+    List<StudentHomeRevisionDto> RevisionItems);
 public record SaStudentDto(Guid Id, Guid TenantId, string SchoolName, string FullName, string? Nisn, string MajorName, string Classroom);
 public record CreateStudentRequest(string FullName, string? Nisn, Guid MajorId, string Classroom);
 public record MajorOptionDto(Guid Id, string Name);
@@ -34,6 +46,9 @@ public record CompanySearchDto(Guid Id, string Name, string? City);
 
 public record CreatePlacementRequest(Guid StudentId, Guid CompanyId, Guid PeriodId, Guid TeacherId, string? MentorEmail);
 public record PlacementDto(Guid Id, Guid StudentId, Guid CompanyId, Guid PeriodId, Guid TeacherId, Guid? MentorUserId, PlacementStatus Status);
+public record TenantMentorSummaryDto(Guid Id, string FullName, string Email, int AssignedStudentCount, int PendingJournalCount, int IncompleteAssessmentCount, bool IsActive);
+public record TenantMentorStudentDto(Guid PlacementId, string StudentName, string CompanyName, PlacementStatus PlacementStatus, int PendingJournalCount, string AssessmentStatus);
+public record TenantMentorDetailDto(Guid Id, string FullName, string Email, bool IsActive, DateTimeOffset? LastJournalAt, List<TenantMentorStudentDto> Students);
 public record BulkResult(List<Guid> SuccessIds, List<ImportRowError> Errors);
 
 public record InviteUserRequest(string Email, string FullName, UserRole Role);
@@ -99,14 +114,14 @@ public record JournalWithCommentsDto(JournalDto Entry, List<CommentDto> Comments
 public record VisitDto(Guid Id, Guid PlacementId, Guid TeacherId, DateOnly Date, string Notes, string? PhotoKey, string? SignatureKey, DateTimeOffset CreatedAt);
 public record CreateVisitRequest(DateOnly Date, string Notes, string? PhotoKey, string? SignatureDataUrl);
 
-public record RubricAspectInput(string Name, RubricAspectKind Kind, int Weight);
-public record RubricAspectDto(Guid Id, string Name, RubricAspectKind Kind, int Weight);
-public record CreateRubricRequest(string Name, List<RubricAspectInput> Aspects);
+public record RubricAspectInput(string Name, RubricAspectKind Kind, int Weight, string? Description = null);
+public record RubricAspectDto(Guid Id, string Name, RubricAspectKind Kind, int Weight, string? Description = null);
+public record CreateRubricRequest(string Name, List<RubricAspectInput> Aspects, Guid? CompanyId = null);
 public record UpdateRubricRequest(string Name, List<RubricAspectInput> Aspects);
-public record RubricDto(Guid Id, string Name, bool IsDefault, List<RubricAspectDto> Aspects);
+public record RubricDto(Guid Id, string Name, bool IsDefault, List<RubricAspectDto> Aspects, Guid? CompanyId = null, int Version = 1, bool IsActive = true);
 
-public record ScoreInput(Guid AspectId, decimal Value);
-public record AssessmentAspectDto(Guid AspectId, string AspectName, RubricAspectKind Kind, int Weight, decimal? MentorValue, decimal? TeacherValue);
+public record ScoreInput(Guid AspectId, decimal Value, string? Comment = null);
+public record AssessmentAspectDto(Guid AspectId, string AspectName, RubricAspectKind Kind, int Weight, decimal? MentorValue, decimal? TeacherValue, string? Description = null, string? MentorComment = null, string? TeacherComment = null);
 public record AssessmentDto(Guid Id, Guid PlacementId, List<AssessmentAspectDto> Aspects, bool MentorDone, bool TeacherDone, decimal? FinalScore, bool IsFinal);
 
 public record FinalizeAssessmentRequest(Guid PeriodId, Guid? PlacementId);
@@ -114,6 +129,7 @@ public record IncompleteAssessmentDto(Guid PlacementId, List<string> MissingAspe
 public record FinalizeAssessmentResult(List<Guid> Finalized, List<IncompleteAssessmentDto> Incomplete);
 
 public record RecapRowDto(Guid PlacementId, string StudentName, string CompanyName, decimal? MentorAvg, decimal? TeacherAvg, decimal? FinalScore, string Status);
+public record JournalReportRowDto(Guid JournalId, Guid PlacementId, string StudentName, string CompanyName, DateOnly Date, JournalEntryStatus Status, DateTimeOffset SubmittedAt, string? MentorNote);
 
 // ExportFormat/ExportStatus pindah ke Vokasia.Domain.Common (dipakai jg oleh ExportRequest entity
 // + Vokasia.Worker consumer, dua assembly terpisah dari Vokasia.Api - lihat Enums.cs).
@@ -132,7 +148,18 @@ public record ExportAcceptedDto(Guid ExportId);
 public record MentorAssessmentPlacementDto(Guid PlacementId, string StudentName, string CompanyName, string PeriodName);
 
 public record CertificateDownloadDto(string DownloadUrl);
-public record VerifyCertificateDto(string StudentName, string SchoolName, string CompanyName, string PeriodLabel, DateTimeOffset IssuedAt, bool Valid);
+public record VerifyCertificateDto(
+    string CertificateNumber,
+    string StudentName,
+    string SchoolName,
+    string MajorName,
+    string CompanyName,
+    string PeriodLabel,
+    DateTimeOffset IssuedAt,
+    CertificateVerificationStatus Status,
+    DateTimeOffset? RevokedAt,
+    string? PublicRevocationReason,
+    bool Valid);
 
 // VOK-H6-E1 §1: /sa/tenants — wizard provisioning + CRUD.
 public record CreateTenantRequest(string SchoolName, string? Npsn, string City, string AdminEmail, string AdminName, Guid PlanId);
@@ -141,6 +168,10 @@ public record TenantDto(Guid Id, string SchoolName, string? Npsn, string? City, 
 public record TenantStatsDto(int StudentCount, int ActivePlacementCount, int StaffCount);
 public record TenantDetailDto(TenantDto Tenant, TenantStatsDto Stats);
 public record DeactivateTenantRequest(string Reason);
+public record SaUserDto(Guid Id, Guid TenantId, string TenantName, string Email, string FullName, UserRole Role, bool IsActive, DateTimeOffset CreatedAt);
+public record SaUserDetailDto(SaUserDto User, List<string> KeyAccess, List<AuditDto> RecentActivity);
+public record SaTenantUsageDto(int ActiveUsers, int InactiveUsers, int ActiveStudents, int ActivePlacements, int ActiveMentors, int ActiveTeachers);
+public record SaUserActionRequest(string? Reason);
 
 // VOK-H6-E1 §3: Plans (minimal CRUD sekarang — feature flags menyusul di slice terpisah).
 public record PlanRequest(string Name, decimal PriceMonthly, int MaxStudents, int MaxPlacements);
@@ -148,18 +179,57 @@ public record PlanDto(Guid Id, string Name, decimal PriceMonthly, int MaxStudent
 
 // VOK-H6-E1 §6: Portfolio publik siswa (FR-CRT-03).
 public record PortfolioJournalSampleDto(Guid JournalEntryId, string Text, DateTimeOffset SubmittedAt);
-public record PortfolioCertificateDto(string CertCode, DateTimeOffset IssuedAt);
-public record PortfolioDto(string? Headline, List<string> VerifiedCompetencies, List<PortfolioJournalSampleDto> SampleJournals, PortfolioCertificateDto? Certificate, bool IsPublished, string? Slug);
-public record UpdatePortfolioRequest(string? Headline, List<Guid> SampleJournalIds);
+public record PortfolioCertificateDto(string CertCode, DateTimeOffset IssuedAt, CertificateVerificationStatus Status, DateTimeOffset? RevokedAt, string? PublicRevocationReason);
+public record PortfolioDto(
+    string? Headline,
+    List<string> VerifiedCompetencies,
+    List<PortfolioJournalSampleDto> SampleJournals,
+    PortfolioCertificateDto? Certificate,
+    bool IsPublished,
+    string? Slug,
+    bool HasUnpublishedChanges,
+    List<string> MissingPublicationRequirements);
+public record UpdatePortfolioRequest(string? Headline);
 public record PublishPortfolioResult(string Slug);
+public record PublicPortfolioEvidenceDto(string Context, DateTimeOffset SubmittedAt, string? MediaUrl);
+public record PublicPortfolioCertificateDto(string CertificateNumber, DateTimeOffset IssuedAt, CertificateVerificationStatus Status, DateTimeOffset? RevokedAt, string? PublicRevocationReason);
 
 /// <summary>NFR-SEC-05: TANPA NISN/kontak — ditegakkan STRUKTURAL (tak ada properti utk itu di sini) + assert reflection runtime di PublishPortfolio (lihat PortfolioEndpoints.AssertPublicDtoHasNoSensitiveFields).</summary>
-public record PublicPortfolioDto(string StudentName, string SchoolName, string MajorName, int Year, string CompanyName, string DurationLabel, List<string> VerifiedCompetencies, List<string> SampleThumbnailUrls, bool HasCertificate);
+public record PublicPortfolioDto(
+    string StudentName,
+    string SchoolName,
+    string MajorName,
+    string PeriodLabel,
+    string CompanyName,
+    string DurationLabel,
+    string? Description,
+    List<string> VerifiedCompetencies,
+    List<PublicPortfolioEvidenceDto> Evidence,
+    PublicPortfolioCertificateDto? Certificate);
 
-// VOK-H6-E1 §5: Billing (FR-BIL-01..03).
-public record InvoiceDto(Guid Id, Guid TenantId, DateOnly PeriodMonth, decimal Amount, InvoiceStatus Status, string? ProofKey);
-public record UploadPaymentProofRequest(string ObjectKey);
+public record RevokeCertificateRequest(string PublicReason, string? InternalNote);
 
+// V3.1 Manual Billing (FR-BIL-01..03, MVP Annual).
+public record BankTransferInstructionsDto(string BankName, string AccountNumber, string AccountHolder);
+public record SubscriptionDto(Guid Id, Guid TenantId, Guid PlanId, string PlanName, DateTimeOffset StartsAt, DateTimeOffset EndsAt, SubscriptionStatus Status, int StudentCapacity, decimal AnnualPrice);
+public record PaymentSubmissionDto(Guid Id, Guid InvoiceId, Guid SubmittedBy, DateTimeOffset SubmittedAt, string ProofKey, string? Note, bool? Approved, DateTimeOffset? VerifiedAt, string? VerificationReason);
+public record InvoiceDto(
+    Guid Id,
+    Guid TenantId,
+    string InvoiceNumber,
+    string PlanName,
+    decimal Amount,
+    int StudentCapacity,
+    DateOnly PeriodMonth,
+    DateTimeOffset IssuedAt,
+    DateTimeOffset DueAt,
+    DateTimeOffset? PaidAt,
+    InvoiceStatus Status,
+    string? ProofKey,
+    string? RejectionReason);
+
+public record UploadPaymentProofRequest(string ObjectKey, string? Note = null);
+public record RejectPaymentRequest(string Reason);
 // VOK-H6-E1 §3: Feature flags (FR-SA-03).
 public record SetFeatureFlagRequest(FeatureFlagKey Key, bool Enabled);
 

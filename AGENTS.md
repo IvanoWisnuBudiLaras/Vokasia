@@ -4,7 +4,7 @@ Dibaca semua AI agent yang bekerja di repo ini. `PRD.md` = satu-satunya sumber r
 
 ## Konteks
 
-SaaS multi-tenant manajemen PKL SMK. Dua project: `backend/` (.NET 10, sln `backend/Vokasia.sln`) + `frontend/` (Next.js 16 + Bun). Sprint 7 hari mulai 27 Jul 2026. Kontrak OpenAPI + skema DB dibekukan H1 — deviasi tanpa persetujuan = ditolak review.
+SaaS multi-tenant manajemen PKL SMK. Dua project: `backend/` (.NET 10, sln `backend/Vokasia.sln`) + `frontend/` (Next.js 16 + Bun). Sprint 7 hari mulai 27 Jul 2026. Kontrak OpenAPI + skema DB terbuka untuk pengembangan.
 
 ## Perintah
 

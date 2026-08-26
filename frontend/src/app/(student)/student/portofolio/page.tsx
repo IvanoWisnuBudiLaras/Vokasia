@@ -1,41 +1,29 @@
 import { ErrorState } from "@/components/ui";
 import { fetcher } from "@/lib/fetcher";
-import { JournalEntryStatus, type JournalDto, type Paged, type PortfolioDto } from "@/lib/apiTypes";
+import type { PortfolioDto } from "@/lib/apiTypes";
 import { PortfolioEditor } from "./PortfolioEditor";
 
 export const dynamic = "force-dynamic";
 
-/**
- * VOK-H6-E2 §3 student/portofolio/page.tsx — Server Component: ambil PortfolioDto milik siswa
- * (GetMyPortfolio) + daftar jurnal Approved milik siswa (sumber SamplePicker, reuse endpoint
- * GET /journals?status=1 yg SUDAH ADA sejak H3/H4 — bukan endpoint baru; lihat JournalEndpoints
- * .ListJournals, StudentSelf, otomatis terlingkup ke placement milik pemanggil sendiri).
- * pageSize=100 dianggap cukup utk 1 siswa selama masa PKL (~6 bln x ~20 hari kerja/bln < 150,
- * tapi Approved-only jauh lebih sedikit dari total submit — longgar; TIDAK ada UI pagination di
- * SamplePicker krn AC ticket cuma minta kurasi maks 6 sampel, bukan browsing arsip penuh).
- */
 export default async function StudentPortfolioPage() {
   let portfolio: PortfolioDto | null = null;
-  let approvedJournals: JournalDto[] = [];
   let loadError = false;
 
   try {
-    [portfolio, approvedJournals] = await Promise.all([
-      fetcher<PortfolioDto>("/portfolio"),
-      fetcher<Paged<JournalDto>>(`/journals?status=${JournalEntryStatus.Approved}&pageSize=100`).then((p) => p.items),
-    ]);
+    portfolio = await fetcher<PortfolioDto>("/portfolio");
   } catch (err) {
     console.error("[student/portofolio] gagal memuat:", err);
     loadError = true;
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold text-ink">Portofolio</h1>
-
+    <div className="flex flex-col gap-5 rounded-[var(--radius-lg)] border border-border/50 bg-surface p-6 shadow-sm">
+      <div className="flex flex-col gap-1 border-b border-border pb-4">
+        <h1 className="text-2xl font-bold tracking-tight text-ink">Portofolio</h1>
+        <p className="text-sm text-ink-muted">Kelola dan publikasikan portofolio PKL kamu agar dapat dilihat publik dan industri.</p>
+      </div>
       {loadError && <ErrorState message="Portofolio belum bisa dimuat." />}
-
-      {!loadError && portfolio && <PortfolioEditor initialPortfolio={portfolio} approvedJournals={approvedJournals} />}
+      {!loadError && portfolio && <PortfolioEditor initialPortfolio={portfolio} />}
     </div>
   );
 }

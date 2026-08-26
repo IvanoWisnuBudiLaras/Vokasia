@@ -2,6 +2,7 @@
 
 import { Icon } from "@/components/ui";
 import { MaterialButton } from "@/components/ui/MaterialButton";
+import { RichTextContent } from "@/components/ui/RichTextContent";
 import { cn } from "@/lib/cn";
 import type { JournalDto } from "@/lib/apiTypes";
 
@@ -44,7 +45,13 @@ export function ApprovalCard({
   onReject,
 }: ApprovalCardProps) {
   return (
-    <div className={cn("flex flex-col gap-2 rounded-[var(--radius-md)] border border-border bg-surface p-3", selected && "border-primary bg-primary-muted/30")}>
+    <div
+      id={`approval-${journal.id}`}
+      className={cn(
+        "flex flex-col gap-2 border-l-4 border-t border-border border-l-status-amber bg-surface px-1 py-3 sm:px-3",
+        selected && "bg-primary-muted/30"
+      )}
+    >
       <div className="flex items-start gap-2">
         <label
           className={cn(
@@ -69,12 +76,12 @@ export function ApprovalCard({
           className="min-h-[var(--tap-min)] flex-1 rounded-[var(--radius-sm)] px-1 text-left outline-none transition-[color,background-color,border-color] hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 active:bg-primary-muted"
         >
           <p className="text-sm font-medium text-ink">{studentName}</p>
-          <p className={cn("text-sm text-ink-muted", !expanded && "line-clamp-2")}>{journal.text}</p>
-          {journal.photos.length > 0 && (
-            <span className="mt-1 inline-flex items-center gap-1 text-xs text-ink-muted">
-              <Icon name="image" size={16} /> {journal.photos.length} foto
-            </span>
-          )}
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
+            <span>{new Date(journal.submittedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
+            <span className="font-medium text-status-amber">Menunggu review</span>
+          </div>
+          <RichTextContent value={journal.text} className={cn("mt-1 text-sm text-ink", !expanded && "line-clamp-2")} />
+          {journal.photos.length > 0 && <span className="mt-1 inline-flex items-center gap-1 text-xs text-ink-muted"><Icon name="image" size={16} /> {journal.photos.length} foto</span>}
         </button>
         <span className="mt-3 text-ink-muted" aria-hidden="true">
           <Icon name={expanded ? "chevron-up" : "chevron-down"} size={16} />
@@ -88,7 +95,7 @@ export function ApprovalCard({
             onClick={onReject}
             disabled={busy}
           >
-            <Icon name="x" size={16} /> Tolak dan kirim alasan
+            <Icon name="x" size={16} /> Minta revisi
           </MaterialButton>
           <MaterialButton
             className="w-full whitespace-nowrap bg-primary text-primary-ink min-[24rem]:w-auto min-[24rem]:flex-1"
@@ -96,7 +103,7 @@ export function ApprovalCard({
             disabled={busy}
             aria-busy={busy}
           >
-            <Icon name="check" size={16} /> Setujui jurnal
+            <Icon name="check" size={16} /> Setujui
           </MaterialButton>
         </div>
       )}

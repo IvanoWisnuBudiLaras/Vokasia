@@ -1,36 +1,49 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Minio;
 using Minio.DataModel.Args;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Authorization;
 using Vokasia.Api.RateLimiting;
 using Vokasia.Api.Storage;
+using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
+using Vokasia.Domain.Entities;
 using Vokasia.Infrastructure.Persistence;
 
 namespace Vokasia.Api.Endpoints;
 
-/// <summary>
-/// VOK-H5-E1 §5 — GetCertificate (unduh presigned, siswa sendiri/admin) + VerifyCertificate
-/// (publik, rate-limit "public", TANPA data sensitif - FR-CRT-02: tanpa NISN/kontak/nilai).
-/// </summary>
+/// <summary>Certificate download, public verification, and tenant-admin revocation.</summary>
 public static class CertificateEndpoints
 {
     private const string BucketConfigKey = "Minio:Bucket";
     private const string DefaultBucket = "vokasia-journal";
-    private const int PresignedExpirySeconds = 24 * 60 * 60;
 
     public static IEndpointRouteBuilder MapCertificateEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/placements/{placementId:guid}/certificate", GetCertificate).RequireAuthorization();
 
-        // Anonim BY DESIGN (verifikasi publik oleh siapa saja yg pegang kertas sertifikat/CertCode)
-        // - rate limit "public" (pola sama MagicLinkEndpoints.Validate, brute-force CertCode acak).
-        app.MapGet("/api/verify/{certCode}", VerifyCertificate).RequireRateLimiting(VokasiaRateLimiting.PublicPolicy);
+        var revoke = app.MapGroup("/api/placements/{placementId:guid}/certificate")
+            .WithTags("Certificate")
+            .RequireAuthorization(RbacPolicies.TenantAdminOnly)
+            .AddEndpointFilter<ValidationFilter>();
+        revoke.MapPost("/revoke", RevokeCertificate);
+
+        app.MapGet("/api/verify/{certCode}", VerifyCertificate)
+            .RequireRateLimiting(VokasiaRateLimiting.PublicPolicy);
+        app.MapGet("/api/verify/{certCode}/pdf", GetPublicCertificatePdf)
+            .RequireRateLimiting(VokasiaRateLimiting.PublicPolicy);
 
         return app;
     }
 
-    private static async Task<IResult> GetCertificate(Guid placementId, ITenantContext tenant, VokasiaDbContext db, IBrowserObjectStorageSigner storageSigner, IConfiguration config, CancellationToken ct)
+    private static async Task<IResult> GetCertificate(
+        Guid placementId,
+        ITenantContext tenant,
+        VokasiaDbContext db,
+        IBrowserObjectStorageSigner storageSigner,
+        IConfiguration config,
+        CancellationToken ct)
     {
         if (!tenant.UserId.HasValue)
         {
@@ -44,17 +57,13 @@ public static class CertificateEndpoints
         }
 
         var isAdmin = tenant.Role is nameof(UserRole.TenantAdmin) or nameof(UserRole.DeptHead) or nameof(UserRole.SuperAdmin);
-        if (!isAdmin)
+        if (!isAdmin && !await db.Students.AsNoTracking().AnyAsync(s => s.Id == placement.StudentId && s.UserId == tenant.UserId, ct))
         {
-            var isOwnStudent = await db.Students.AsNoTracking().AnyAsync(s => s.Id == placement.StudentId && s.UserId == tenant.UserId, ct);
-            if (!isOwnStudent)
-            {
-                return Results.Forbid();
-            }
+            return Results.Forbid();
         }
 
         var certificate = await db.Certificates.AsNoTracking().FirstOrDefaultAsync(c => c.PlacementId == placementId, ct);
-        if (certificate is null)
+        if (certificate is null || !ObjectStorageKeyPolicy.IsOwnedKey(certificate.PdfKey, certificate.TenantId, "certificates"))
         {
             return Results.NotFound();
         }
@@ -63,31 +72,122 @@ public static class CertificateEndpoints
         var url = await storageSigner.PresignedGetObjectAsync(new PresignedGetObjectArgs()
             .WithBucket(bucket)
             .WithObject(certificate.PdfKey)
-            .WithExpiry(PresignedExpirySeconds));
-
+            .WithExpiry(24 * 60 * 60));
         return Results.Ok(new CertificateDownloadDto(url));
+    }
+
+    private static async Task<IResult> RevokeCertificate(
+        Guid placementId,
+        RevokeCertificateRequest req,
+        ITenantContext tenant,
+        VokasiaDbContext db,
+        CancellationToken ct)
+    {
+        var placement = await db.Placements.FirstOrDefaultAsync(p => p.Id == placementId, ct);
+        if (placement is null)
+        {
+            return Results.NotFound();
+        }
+
+        var certificate = await db.Certificates.FirstOrDefaultAsync(c => c.PlacementId == placementId, ct);
+        if (certificate is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (certificate.RevokedAt.HasValue)
+        {
+            return Results.Conflict(new { message = "Sertifikat sudah dicabut." });
+        }
+
+        certificate.RevokedAt = DateTimeOffset.UtcNow;
+        certificate.PublicRevocationReason = req.PublicReason.Trim();
+        certificate.InternalRevocationNote = string.IsNullOrWhiteSpace(req.InternalNote) ? null : req.InternalNote.Trim();
+        db.AuditLogs.Add(new AuditLog
+        {
+            Id = Guid.NewGuid(),
+            TenantId = placement.TenantId,
+            ActorUserId = tenant.UserId!.Value,
+            Action = "CertificateRevoked",
+            Entity = nameof(Certificate),
+            EntityId = certificate.Id.ToString(),
+            MetaJson = JsonSerializer.Serialize(new { certificate.CertCode, certificate.PublicRevocationReason }),
+        });
+        await db.SaveChangesAsync(ct);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> VerifyCertificate(string certCode, VokasiaDbContext db, CancellationToken ct)
     {
-        // TenantId ambient null di sini (endpoint publik, tak ada JWT) -> filter tenant EF otomatis
-        // "mati" (pola sama JournalEndpoints mentor lintas-tenant) - pencarian CertCode SENGAJA
-        // lintas SEMUA tenant (siapa pun bisa verifikasi sertifikat sekolah mana pun, itu tujuannya).
         var result = await (
             from cert in db.Certificates.AsNoTracking()
             where cert.CertCode == certCode
-            join p in db.Placements.AsNoTracking() on cert.PlacementId equals p.Id
-            join s in db.Students.AsNoTracking() on p.StudentId equals s.Id
-            join c in db.Companies.AsNoTracking() on p.CompanyId equals c.Id
-            join per in db.Periods.AsNoTracking() on p.PeriodId equals per.Id
-            join t in db.Tenants.AsNoTracking() on p.TenantId equals t.Id
-            select new VerifyCertificateDto(s.FullName, t.SchoolName, c.Name, per.Name, cert.IssuedAt, true)
-            ).FirstOrDefaultAsync(ct);
+            join placement in db.Placements.AsNoTracking() on cert.PlacementId equals placement.Id
+            join student in db.Students.AsNoTracking() on placement.StudentId equals student.Id
+            join major in db.Majors.AsNoTracking() on student.MajorId equals major.Id into majorRows
+            from major in majorRows.DefaultIfEmpty()
+            join company in db.Companies.AsNoTracking() on placement.CompanyId equals company.Id
+            join period in db.Periods.AsNoTracking() on placement.PeriodId equals period.Id
+            join tenant in db.Tenants.AsNoTracking() on placement.TenantId equals tenant.Id
+            select new
+            {
+                cert.CertCode,
+                StudentName = student.FullName,
+                SchoolName = tenant.SchoolName,
+                MajorName = major == null ? "-" : major.Name,
+                CompanyName = company.Name,
+                PeriodLabel = period.Name,
+                cert.IssuedAt,
+                cert.RevokedAt,
+                cert.PublicRevocationReason,
+            }
+        ).FirstOrDefaultAsync(ct);
 
-        // AC: "certCode valid/palsu, Then verify 200 minimal-data / 404" - 404 (bukan 200
-        // {Valid=false}) supaya tak beri sinyal berbeda antara "salah ketik" vs "kode ada tapi
-        // tak valid" (kode yg tersimpan MEMANG selalu valid sejak diterbitkan - tak ada status
-        // revoked di skema H5-E1, jadi "ada di DB" = "valid", "tak ada" = 404 murni).
-        return result is null ? Results.NotFound() : Results.Ok(result);
+        if (result is null)
+        {
+            return Results.NotFound();
+        }
+
+        var status = result.RevokedAt.HasValue ? CertificateVerificationStatus.Revoked : CertificateVerificationStatus.Valid;
+        return Results.Ok(new VerifyCertificateDto(
+            result.CertCode,
+            result.StudentName,
+            result.SchoolName,
+            result.MajorName,
+            result.CompanyName,
+            result.PeriodLabel,
+            result.IssuedAt,
+            status,
+            result.RevokedAt,
+            result.PublicRevocationReason,
+            status == CertificateVerificationStatus.Valid));
+    }
+
+    private static async Task<IResult> GetPublicCertificatePdf(
+        string certCode,
+        VokasiaDbContext db,
+        IMinioClient minio,
+        IConfiguration config,
+        CancellationToken ct)
+    {
+        var certificate = await db.Certificates.AsNoTracking().FirstOrDefaultAsync(c => c.CertCode == certCode, ct);
+        if (certificate is null || !ObjectStorageKeyPolicy.IsOwnedKey(certificate.PdfKey, certificate.TenantId, "certificates"))
+        {
+            return Results.NotFound();
+        }
+
+        try
+        {
+            await using var pdf = new MemoryStream();
+            await minio.GetObjectAsync(new GetObjectArgs()
+                .WithBucket(config[BucketConfigKey] ?? DefaultBucket)
+                .WithObject(certificate.PdfKey)
+                .WithCallbackStream(stream => stream.CopyTo(pdf)), ct);
+            return Results.File(pdf.ToArray(), "application/pdf");
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            return Results.NotFound();
+        }
     }
 }

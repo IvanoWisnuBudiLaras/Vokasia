@@ -1,48 +1,79 @@
 "use client";
 
 import { useState } from "react";
-import { Card, StatusBadge } from "@/components/ui";
+import { StatusBadge } from "@/components/ui";
 import { MaterialIcon } from "@/components/ui/MaterialIcon";
-import type { CompetencyDto, JournalDto, JournalSlotDto, WeekDayStatusDto } from "@/lib/apiTypes";
-import { JournalEntryStatus, JournalSlotStatus } from "@/lib/apiTypes";
+import { RichTextContent } from "@/components/ui/RichTextContent";
+import type { CompetencyDto, JournalDto, JournalSlotDto } from "@/lib/apiTypes";
+import { JournalEntryStatus } from "@/lib/apiTypes";
 import { JournalForm } from "./JournalForm";
-import { WeekStrip } from "./WeekStrip";
 
 interface TodayJournalCardProps {
   slot: JournalSlotDto;
   initialEntry: JournalDto | null;
   competencies: CompetencyDto[];
-  initialWeekStatus: WeekDayStatusDto[];
-  streak: number;
   draftScope: string | null;
 }
 
-function statusBadge(status: number) {
-  if (status === JournalEntryStatus.Approved) return <StatusBadge status="green" label="Disetujui" />;
-  if (status === JournalEntryStatus.Rejected) return <StatusBadge status="red" label="Perlu diperbaiki" />;
-  return <StatusBadge status="amber" label="Menunggu persetujuan" />;
+function submittedAgo(iso: string): string {
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
+  if (minutes < 1) return "baru saja";
+  if (minutes < 60) return `${minutes} menit lalu`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} jam lalu`;
+  return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
 }
 
-export function TodayJournalCard({ slot, initialEntry, competencies, initialWeekStatus, streak, draftScope }: TodayJournalCardProps) {
+function statusBadge(entry: JournalDto) {
+  if (entry.status === JournalEntryStatus.Approved) {
+    return <StatusBadge status="green" label="Disetujui mentor ✓" />;
+  }
+  if (entry.status === JournalEntryStatus.Rejected) {
+    return <StatusBadge status="red" label="Perlu revisi" />;
+  }
+  return <StatusBadge status="amber" label={`Menunggu review mentor · dikirim ${submittedAgo(entry.submittedAt)}`} />;
+}
+
+function todayStatus(entry: JournalDto | null): string {
+  if (!entry) return "Belum diisi";
+  if (entry.status === JournalEntryStatus.Approved) return "Disetujui mentor";
+  if (entry.status === JournalEntryStatus.Rejected) return "Perlu revisi";
+  return "Menunggu review mentor";
+}
+
+export function TodayJournalCard({ slot, initialEntry, competencies, draftScope }: TodayJournalCardProps) {
   const [entry, setEntry] = useState(initialEntry);
-  const [weekStatus, setWeekStatus] = useState(initialWeekStatus);
 
   function handleSubmitted(nextEntry: JournalDto) {
     setEntry(nextEntry);
-    setWeekStatus((previous) => previous.map((day) => day.date === slot.date ? { ...day, status: JournalSlotStatus.Filled } : day));
   }
 
   const needsForm = entry === null || entry.status === JournalEntryStatus.Rejected;
 
   return (
     <div className="flex flex-col gap-4">
-      <Card title="Jurnal hari ini">
-        <div className="mb-4 flex items-center justify-between gap-3 border-b border-border pb-3">
+      <section aria-labelledby="student-summary-heading" className="border-y border-border py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 id="student-summary-heading" className="text-sm font-semibold text-ink">Tugas utama hari ini</h2>
+            <p className="mt-1 text-sm text-ink-muted">Fokus pada jurnal yang perlu kamu selesaikan sekarang.</p>
+          </div>
+          <div className="flex gap-5 text-sm">
+            <div>
+              <span className="block text-xs text-ink-muted">Status jurnal</span>
+              <span className="font-semibold text-ink">{todayStatus(entry)}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="jurnal-hari-ini" aria-labelledby="today-journal-heading" className="border-y border-border bg-surface px-0 py-5 sm:px-1">
+        <div className="mb-4 flex items-start justify-between gap-3 border-b border-border pb-3">
           <div className="flex items-center gap-2 text-sm text-ink-muted">
             <MaterialIcon name="journal" decorative />
-            <span>Streak jurnal: <strong className="text-ink">{streak} hari</strong></span>
+            <h2 id="today-journal-heading" className="font-semibold text-ink">Jurnal hari ini</h2>
           </div>
-          {entry && statusBadge(entry.status)}
+          {entry && <div className="text-right">{statusBadge(entry)}</div>}
         </div>
 
         {needsForm ? (
@@ -55,14 +86,12 @@ export function TodayJournalCard({ slot, initialEntry, competencies, initialWeek
           />
         ) : (
           <div className="flex flex-col gap-3">
-            <p className="whitespace-pre-wrap text-sm leading-6 text-ink">{entry.text}</p>
+            <RichTextContent value={entry.text} className="flex flex-col gap-2 text-sm leading-6 text-ink" />
             {entry.mentorNote && <p className="text-sm text-ink-muted">Catatan mentor: {entry.mentorNote}</p>}
             {entry.photos.length > 0 && <p className="inline-flex items-center gap-1 text-xs text-ink-muted"><MaterialIcon name="journal" decorative />{entry.photos.length} foto terlampir</p>}
           </div>
         )}
-      </Card>
-
-      <WeekStrip days={weekStatus} streak={streak} />
+      </section>
     </div>
   );
 }

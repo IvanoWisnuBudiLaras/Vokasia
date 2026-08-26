@@ -47,19 +47,32 @@ public class BillingCronJobs(VokasiaDbContext db, ILogger<BillingCronJobs> logge
             logger.LogInformation("GenerateMonthlyInvoices: {Month} semua tenant aktif sudah punya invoice bulan ini (idempoten, nol baru).", periodMonth);
             return;
         }
-
         var planIds = toInvoice.Select(t => t.PlanId!.Value).Distinct().ToList();
-        var plans = await db.Plans.AsNoTracking().Where(p => planIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.PriceMonthly);
+        var plans = await db.Plans.AsNoTracking().Where(p => planIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p);
+
 
         foreach (var t in toInvoice)
         {
-            if (!plans.TryGetValue(t.PlanId!.Value, out var price))
+            if (!plans.TryGetValue(t.PlanId!.Value, out var plan))
             {
                 logger.LogWarning("GenerateMonthlyInvoices: tenant {TenantId} punya PlanId {PlanId} yang tak ditemukan - dilewati.", t.Id, t.PlanId);
                 continue;
             }
 
-            var invoice = new Invoice { Id = Guid.NewGuid(), TenantId = t.Id, PeriodMonth = periodMonth, Amount = price, Status = InvoiceStatus.Issued };
+            var invoice = new Invoice
+            {
+                Id = Guid.NewGuid(),
+                TenantId = t.Id,
+                InvoiceNumber = BillingRules.GenerateInvoiceNumber(periodMonth.Year),
+                PlanId = plan.Id,
+                PlanNameSnapshot = plan.Name,
+                AmountSnapshot = plan.PriceAnnual,
+                StudentCapacitySnapshot = plan.MaxStudents,
+                PeriodMonth = periodMonth,
+                IssuedAt = DateTimeOffset.UtcNow,
+                DueAt = DateTimeOffset.UtcNow.AddDays(30),
+                Status = InvoiceStatus.Unpaid,
+            };
             db.Invoices.Add(invoice);
             db.OutboxMessages.Add(new OutboxMessage
             {

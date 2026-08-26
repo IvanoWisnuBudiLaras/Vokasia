@@ -46,6 +46,8 @@ export function ApprovalList({ initialGroups }: ApprovalListProps) {
   const [batchBusy, setBatchBusy] = useState(false);
   const [banner, setBanner] = useState<{ type: "error" | "info"; message: string } | null>(null);
   const [rejectTarget, setRejectTarget] = useState<FlatEntry | null>(null);
+  const [confirmBatch, setConfirmBatch] = useState(false);
+  const [nextReviewId, setNextReviewId] = useState<string | null>(null);
 
   const flat = useMemo(() => flatten(groups), [groups]);
   const total = flat.length;
@@ -87,6 +89,8 @@ export function ApprovalList({ initialGroups }: ApprovalListProps) {
 
   async function approveOne(id: string) {
     const snapshot = groups;
+    const nextId = flatten(snapshot).findIndex((item) => item.journal.id === id);
+    const nextReview = flatten(snapshot)[nextId + 1]?.journal.id ?? null;
     setBanner(null);
     markBusy(id, true);
     setGroups((prev) => removeIds(prev, new Set([id])));
@@ -94,6 +98,8 @@ export function ApprovalList({ initialGroups }: ApprovalListProps) {
     try {
       await apiClient.post(`/journals/${id}/approve`, { note: null });
       unselect(id);
+      setNextReviewId(nextReview);
+      setBanner({ type: "info", message: "Jurnal disetujui." });
     } catch (err) {
       setGroups(snapshot);
       setBanner({ type: "error", message: err instanceof ApiError ? err.message : "Gagal menyetujui jurnal." });
@@ -104,6 +110,9 @@ export function ApprovalList({ initialGroups }: ApprovalListProps) {
 
   async function submitReject(id: string, reason: string) {
     const snapshot = groups;
+    const entries = flatten(snapshot);
+    const currentIndex = entries.findIndex((item) => item.journal.id === id);
+    const nextReview = entries[currentIndex + 1]?.journal.id ?? null;
     setBanner(null);
     markBusy(id, true);
     setGroups((prev) => removeIds(prev, new Set([id])));
@@ -112,6 +121,8 @@ export function ApprovalList({ initialGroups }: ApprovalListProps) {
       await apiClient.post(`/journals/${id}/reject`, { reason });
       setRejectTarget(null);
       unselect(id);
+      setNextReviewId(nextReview);
+      setBanner({ type: "info", message: "Permintaan revisi dikirim." });
     } catch (err) {
       setGroups(snapshot); // dialog sengaja TETAP terbuka supaya mentor bisa coba lagi
       setBanner({ type: "error", message: err instanceof ApiError ? err.message : "Gagal menolak jurnal." });
@@ -122,6 +133,7 @@ export function ApprovalList({ initialGroups }: ApprovalListProps) {
 
   async function approveBatch() {
     if (selectedIds.size === 0) return;
+    setConfirmBatch(false);
     const snapshot = groups;
     const idsToApprove = new Set(selectedIds);
     setBanner(null);
@@ -158,10 +170,21 @@ export function ApprovalList({ initialGroups }: ApprovalListProps) {
     } catch (err) {
       setGroups(snapshot);
       setSelectedIds(idsToApprove);
-      setBanner({ type: "error", message: err instanceof ApiError ? err.message : "Gagal memproses batch approve." });
+      setBanner({ type: "error", message: err instanceof ApiError ? err.message : "Gagal menyetujui jurnal yang dipilih." });
     } finally {
       setBatchBusy(false);
     }
+  }
+
+  function requestBatchApproval() {
+    if (selectedIds.size > 0) setConfirmBatch(true);
+  }
+
+  function reviewNext() {
+    if (!nextReviewId) return;
+    setExpandedIds((previous) => new Set(previous).add(nextReviewId));
+    setNextReviewId(null);
+    requestAnimationFrame(() => document.getElementById(`approval-${nextReviewId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
   }
 
   if (total === 0) {
@@ -182,13 +205,14 @@ export function ApprovalList({ initialGroups }: ApprovalListProps) {
         busy={batchBusy}
         onSelectAll={() => setSelectedIds(new Set(flat.map((f) => f.journal.id)))}
         onClear={() => setSelectedIds(new Set())}
-        onApprove={approveBatch}
+        onApprove={requestBatchApproval}
       />
 
       {banner && (
-        <p role="status" className={banner.type === "error" ? "text-sm text-status-red" : "text-sm text-status-green"}>
-          {banner.message}
-        </p>
+        <div className="flex flex-wrap items-center gap-3" role="status">
+          <p className={banner.type === "error" ? "text-sm text-status-red" : "text-sm text-status-green"}>{banner.message}</p>
+          {nextReviewId && <button type="button" onClick={reviewNext} className="min-h-[var(--tap-min)] text-sm font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2">Review berikutnya</button>}
+        </div>
       )}
 
       <ul className="flex flex-col gap-2">
@@ -216,6 +240,19 @@ export function ApprovalList({ initialGroups }: ApprovalListProps) {
           onClose={() => setRejectTarget(null)}
           onSubmit={(reason) => submitReject(rejectTarget.journal.id, reason)}
         />
+      )}
+
+      {confirmBatch && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-4 sm:items-center" role="presentation" onKeyDown={(event) => { if (event.key === "Escape") setConfirmBatch(false); }}>
+          <div role="alertdialog" aria-modal="true" aria-labelledby="batch-approval-title" aria-describedby="batch-approval-description" className="w-full max-w-md border border-border bg-surface p-5 shadow-lg">
+            <h2 id="batch-approval-title" className="text-lg font-semibold text-ink">Setujui jurnal terpilih?</h2>
+            <p id="batch-approval-description" className="mt-2 text-sm text-ink-muted">Setujui {selectedIds.size} jurnal dari {new Set(flat.filter((entry) => selectedIds.has(entry.journal.id)).map((entry) => entry.studentName)).size} siswa?</p>
+            <div className="mt-5 flex flex-col gap-2 min-[24rem]:flex-row min-[24rem]:justify-end">
+              <button type="button" autoFocus onClick={() => setConfirmBatch(false)} className="min-h-[var(--tap-min)] border border-border px-4 text-sm font-semibold text-ink outline-none hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus">Batal</button>
+              <button type="button" onClick={approveBatch} className="min-h-[var(--tap-min)] bg-primary px-4 text-sm font-semibold text-primary-ink outline-none hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-focus">Setujui jurnal</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

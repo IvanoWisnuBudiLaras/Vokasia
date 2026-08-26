@@ -9,7 +9,7 @@ export interface StudentsTableProps {
   totalCount: number;
 }
 
-export function StudentsTable({ initialStudents, totalCount }: StudentsTableProps) {
+export function StudentsTable({ initialStudents }: StudentsTableProps) {
   const [query, setQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -65,7 +65,7 @@ export function StudentsTable({ initialStudents, totalCount }: StudentsTableProp
             columns={[
               { key: "schoolName", label: "Sekolah (Tenant)" },
               { key: "fullName", label: "Nama Siswa" },
-              { key: "nisn", label: "NISN", format: (val) => val ?? "-" },
+              { key: "nisn", label: "NISN", format: (val) => String(val ?? "-") },
               { key: "majorName", label: "Jurusan" },
               { key: "classroom", label: "Kelas" },
             ]}

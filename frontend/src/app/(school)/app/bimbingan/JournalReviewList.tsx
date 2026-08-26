@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button, EmptyState, ErrorState, Icon, StatusBadge, StudentPortfolioModal, Textarea } from "@/components/ui";
 import { apiClient, ApiError } from "@/lib/apiClient";
 import { JournalEntryStatus, type JournalWithCommentsDto } from "@/lib/apiTypes";
+import { RichTextContent } from "@/components/ui/RichTextContent";
 
 export interface JournalReviewListProps {
   placementId: string;
@@ -99,7 +100,7 @@ export function JournalReviewList({ placementId, studentId, studentName = "Siswa
               </span>
               {statusBadge(entry.status)}
             </div>
-            <p className="mt-2 text-sm text-ink">{entry.text}</p>
+            <RichTextContent value={entry.text} className="mt-2 text-sm text-ink" />
             {entry.photos.length > 0 && (
               <p className="mt-1 inline-flex items-center gap-1 text-xs text-ink-muted">
                 <Icon name="image" size={16} /> {entry.photos.length} foto

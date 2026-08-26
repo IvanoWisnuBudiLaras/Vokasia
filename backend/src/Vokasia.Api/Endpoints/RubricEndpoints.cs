@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Vokasia.Api.Auth;
-using Vokasia.Api.Security;
+using Vokasia.Api.Authorization;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
@@ -27,6 +27,7 @@ public static class RubricEndpoints
         var rubrics = app.MapGroup("/api/rubrics").WithTags("Rubrics").AddEndpointFilter<ValidationFilter>();
         rubrics.MapPost("/", CreateRubricTemplate).RequireAuthorization(RbacPolicies.TenantAdminOnly);
         rubrics.MapPut("/{id:guid}", UpdateRubric).RequireAuthorization(RbacPolicies.TenantAdminOnly);
+        rubrics.MapGet("/", ListRubrics).RequireAuthorization(RbacPolicies.TenantMember);
 
         var periods = app.MapGroup("/api/periods").WithTags("Rubrics");
         periods.MapGet("/{periodId:guid}/rubric", GetRubric).RequireAuthorization(RbacPolicies.TenantMember);
@@ -36,6 +37,24 @@ public static class RubricEndpoints
 
     private static bool WeightsSumTo100(IReadOnlyCollection<RubricAspectInput> aspects) =>
         RubricValidation.HasValidWeights(aspects.Select(a => a.Weight).ToArray());
+
+    private static async Task<IResult> ListRubrics(VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
+    {
+        if (!tenant.TenantId.HasValue)
+        {
+            return Results.Forbid();
+        }
+
+        var templates = await db.RubricTemplates.AsNoTracking()
+            .Include(t => t.Aspects)
+            .Where(t => t.TenantId == tenant.TenantId && t.IsActive)
+            .OrderByDescending(t => t.IsDefault)
+            .ThenBy(t => t.CompanyId)
+            .ThenByDescending(t => t.Version)
+            .ToListAsync(ct);
+
+        return Results.Ok(templates.Select(ToDto).ToList());
+    }
 
     private static async Task<IResult> CreateRubricTemplate(CreateRubricRequest req, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
     {
@@ -49,13 +68,25 @@ public static class RubricEndpoints
             return Results.UnprocessableEntity(new { message = "Total bobot (Weight) seluruh aspek rubrik harus tepat 100." });
         }
 
+        if (req.CompanyId.HasValue && !await db.TenantCompanies.AnyAsync(tc => tc.CompanyId == req.CompanyId.Value && tc.TenantId == tenant.TenantId, ct))
+        {
+            return Results.BadRequest(new { message = "DUDI tidak terhubung ke tenant ini." });
+        }
+
+        var matchingScope = db.RubricTemplates.Where(t => t.TenantId == tenant.TenantId && t.CompanyId == req.CompanyId);
+        var version = (await matchingScope.Select(t => (int?)t.Version).MaxAsync(ct) ?? 0) + 1;
+        var isDefault = !req.CompanyId.HasValue && !await db.RubricTemplates.AnyAsync(t => t.TenantId == tenant.TenantId && t.CompanyId == null && t.IsDefault && t.IsActive, ct);
+
         var template = new RubricTemplate
         {
             Id = Guid.NewGuid(),
             TenantId = tenant.TenantId.Value,
             Name = req.Name,
-            IsDefault = !await db.RubricTemplates.AnyAsync(t => t.TenantId == tenant.TenantId, ct), // rubric pertama tenant otomatis jadi default.
-            Aspects = req.Aspects.Select(a => new RubricAspect { Id = Guid.NewGuid(), Name = a.Name, Kind = a.Kind, Weight = a.Weight }).ToList(),
+            CompanyId = req.CompanyId,
+            Version = version,
+            IsDefault = isDefault,
+            IsActive = true,
+            Aspects = req.Aspects.Select(a => new RubricAspect { Id = Guid.NewGuid(), Name = a.Name, Description = a.Description, Kind = a.Kind, Weight = a.Weight }).ToList(),
         };
         foreach (var aspect in template.Aspects)
         {
@@ -89,15 +120,39 @@ public static class RubricEndpoints
             return Results.Conflict(new { message = "Rubrik sudah dipakai assessment yang difinalisasi - tidak bisa diubah." });
         }
 
-        template.Name = req.Name;
-        db.RubricAspects.RemoveRange(template.Aspects);
-        var newAspects = req.Aspects.Select(a => new RubricAspect { Id = Guid.NewGuid(), RubricTemplateId = template.Id, Name = a.Name, Kind = a.Kind, Weight = a.Weight }).ToList();
-        db.RubricAspects.AddRange(newAspects);
+        // Once a draft assessment references a template, its aspects are a snapshot. Keep the
+        // historical template intact and publish a new version instead of mutating rows that an
+        // in-progress assessment may already be using.
+        var wasDefault = template.IsDefault;
+        template.IsActive = false;
+        template.IsDefault = false;
+        var newTemplate = new RubricTemplate
+        {
+            Id = Guid.NewGuid(),
+            TenantId = template.TenantId,
+            Name = req.Name,
+            CompanyId = template.CompanyId,
+            Version = template.Version + 1,
+            IsDefault = wasDefault,
+            IsActive = true,
+            Aspects = req.Aspects.Select(a => new RubricAspect
+            {
+                Id = Guid.NewGuid(),
+                Name = a.Name,
+                Description = a.Description,
+                Kind = a.Kind,
+                Weight = a.Weight,
+            }).ToList(),
+        };
+        foreach (var aspect in newTemplate.Aspects)
+        {
+            aspect.RubricTemplateId = newTemplate.Id;
+        }
+        db.RubricTemplates.Add(newTemplate);
 
         await db.SaveChangesAsync(ct);
 
-        template.Aspects = newAspects;
-        return Results.Ok(ToDto(template));
+        return Results.Ok(ToDto(newTemplate));
     }
 
     private static async Task<IResult> GetRubric(Guid periodId, VokasiaDbContext db, ITenantContext tenant, CancellationToken ct)
@@ -116,7 +171,9 @@ public static class RubricEndpoints
         // Lihat doc-comment kelas [CAKUPAN] - periodId hanya utk validasi keberadaan, rubric
         // yang dikembalikan adalah default TENANT (bukan spesifik per periode).
         var template = await db.RubricTemplates.Include(t => t.Aspects)
-            .FirstOrDefaultAsync(t => t.TenantId == tenant.TenantId && t.IsDefault, ct);
+            .Where(t => t.TenantId == tenant.TenantId && t.CompanyId == null && t.IsDefault && t.IsActive)
+            .OrderByDescending(t => t.Version)
+            .FirstOrDefaultAsync(ct);
         if (template is null)
         {
             return Results.NotFound();
@@ -127,5 +184,6 @@ public static class RubricEndpoints
 
     internal static RubricDto ToDto(RubricTemplate t) => new(
         t.Id, t.Name, t.IsDefault,
-        t.Aspects.Select(a => new RubricAspectDto(a.Id, a.Name, a.Kind, a.Weight)).ToList());
+        t.Aspects.Select(a => new RubricAspectDto(a.Id, a.Name, a.Kind, a.Weight, a.Description)).ToList(),
+        t.CompanyId, t.Version, t.IsActive);
 }

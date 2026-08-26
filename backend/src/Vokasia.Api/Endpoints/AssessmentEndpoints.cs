@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Vokasia.Api.Auth;
+using Vokasia.Api.Authorization;
 using Vokasia.Api.Validation;
 using Vokasia.Domain.Common;
 using Vokasia.Domain.Entities;
@@ -67,13 +68,20 @@ public static class AssessmentEndpoints
     /// <summary>Teknis+Kehadiran = sisi DUDI/mentor; sisanya (Softskill) = sisi sekolah/guru (AC §3).</summary>
     internal static bool IsMentorSide(RubricAspectKind kind) => kind is RubricAspectKind.Teknis or RubricAspectKind.Kehadiran;
 
-    private static async Task<RubricTemplate?> ResolveRubricAsync(VokasiaDbContext db, Assessment? existing, Guid tenantId, CancellationToken ct)
+    private static async Task<RubricTemplate?> ResolveRubricAsync(VokasiaDbContext db, Assessment? existing, Guid tenantId, Guid companyId, CancellationToken ct)
     {
         if (existing is not null)
         {
             return await db.RubricTemplates.Include(t => t.Aspects).FirstOrDefaultAsync(t => t.Id == existing.RubricTemplateId, ct);
         }
-        return await db.RubricTemplates.Include(t => t.Aspects).FirstOrDefaultAsync(t => t.TenantId == tenantId && t.IsDefault, ct);
+        return await db.RubricTemplates.Include(t => t.Aspects)
+            .Where(t => t.TenantId == tenantId && t.CompanyId == companyId && t.IsActive)
+            .OrderByDescending(t => t.Version)
+            .FirstOrDefaultAsync(ct)
+            ?? await db.RubricTemplates.Include(t => t.Aspects)
+                .Where(t => t.TenantId == tenantId && t.CompanyId == null && t.IsDefault && t.IsActive)
+                .OrderByDescending(t => t.Version)
+                .FirstOrDefaultAsync(ct);
     }
 
     private static async Task<IResult> SubmitMentorScores(
@@ -134,7 +142,7 @@ public static class AssessmentEndpoints
         }
 
         var assessment = await db.Assessments.FirstOrDefaultAsync(a => a.PlacementId == placement.Id, ct);
-        var rubric = await ResolveRubricAsync(db, assessment, placement.TenantId, ct);
+        var rubric = await ResolveRubricAsync(db, assessment, placement.TenantId, placement.CompanyId, ct);
         if (rubric is null)
         {
             return Results.UnprocessableEntity(new { message = "Belum ada rubrik default utk tenant ini - admin harus buat rubrik dulu." });
@@ -163,21 +171,26 @@ public static class AssessmentEndpoints
             AssessmentImmutabilityGuard.EnsureMutable(assessment);
         }
 
+        var existingScores = await db.AssessmentScores
+            .Where(s => s.AssessmentId == assessment.Id)
+            .ToDictionaryAsync(s => s.RubricAspectId, ct);
         foreach (var input in req)
         {
-            var existingScore = await db.AssessmentScores.FirstOrDefaultAsync(s => s.AssessmentId == assessment.Id && s.RubricAspectId == input.AspectId, ct);
-            if (existingScore is null)
+            if (!existingScores.TryGetValue(input.AspectId, out var existingScore))
             {
-                db.AssessmentScores.Add(new AssessmentScore
+                var newScore = new AssessmentScore
                 {
                     Id = Guid.NewGuid(), AssessmentId = assessment.Id, RubricAspectId = input.AspectId,
-                    ScoredBy = side, ScoredByUserId = scorerUserId, Value = input.Value,
-                });
+                    ScoredBy = side, ScoredByUserId = scorerUserId, Value = input.Value, Comment = input.Comment,
+                };
+                db.AssessmentScores.Add(newScore);
+                existingScores[input.AspectId] = newScore;
             }
             else
             {
                 existingScore.Value = input.Value;
                 existingScore.ScoredByUserId = scorerUserId;
+                existingScore.Comment = input.Comment;
             }
         }
 
@@ -219,7 +232,7 @@ public static class AssessmentEndpoints
         // perlu cek ulang TenantId di sini (sama alasan dgn GetPlacement di CompaniesAndPlacements).
 
         var assessment = await db.Assessments.FirstOrDefaultAsync(a => a.PlacementId == placementId, ct);
-        var rubric = await ResolveRubricAsync(db, assessment, placement.TenantId, ct);
+        var rubric = await ResolveRubricAsync(db, assessment, placement.TenantId, placement.CompanyId, ct);
         if (rubric is null)
         {
             return Results.NotFound();
@@ -240,7 +253,9 @@ public static class AssessmentEndpoints
             scoresByAspect.TryGetValue(a.Id, out var score);
             var mentorValue = score is { ScoredBy: ScoredBy.Mentor } ? score.Value : (decimal?)null;
             var teacherValue = score is { ScoredBy: ScoredBy.Teacher } ? score.Value : (decimal?)null;
-            return new AssessmentAspectDto(a.Id, a.Name, a.Kind, a.Weight, mentorValue, teacherValue);
+            var mentorComment = score is { ScoredBy: ScoredBy.Mentor } ? score.Comment : null;
+            var teacherComment = score is { ScoredBy: ScoredBy.Teacher } ? score.Comment : null;
+            return new AssessmentAspectDto(a.Id, a.Name, a.Kind, a.Weight, mentorValue, teacherValue, a.Description, mentorComment, teacherComment);
         }).ToList();
 
         var mentorAspects = rubric.Aspects.Where(a => IsMentorSide(a.Kind)).ToList();
@@ -280,7 +295,7 @@ public static class AssessmentEndpoints
                 continue; // idempoten - sudah final sebelumnya, tak diutak-atik/tak dilaporkan ulang.
             }
 
-            var rubric = await ResolveRubricAsync(db, assessment, placement.TenantId, ct);
+            var rubric = await ResolveRubricAsync(db, assessment, placement.TenantId, placement.CompanyId, ct);
             if (rubric is null || rubric.Aspects.Count == 0)
             {
                 incomplete.Add(new IncompleteAssessmentDto(placement.Id, ["(belum ada rubrik aktif utk tenant)"]));

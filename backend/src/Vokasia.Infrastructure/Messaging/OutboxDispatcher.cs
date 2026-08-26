@@ -49,12 +49,14 @@ public class OutboxDispatcher(IServiceScopeFactory scopeFactory, ILogger<OutboxD
         ["MentorInvited"] = typeof(MentorInvitedEvent),
         ["PlacementCreated"] = typeof(PlacementCreatedEvent),
         ["JournalReminderEmailRequested"] = typeof(JournalReminderEmailRequestedEvent),
+        ["LearningAssessmentReminderEmailRequested"] = typeof(LearningAssessmentReminderEmailRequestedEvent),
         // VOK-H4-E3: GAP ditutup - sebelum baris ini, Type ini SELALU "tak dikenal" (lihat doc-comment
         // GhostingAlertEmailRequestedEvent, OutboxEventContracts.cs).
         ["GhostingAlertEmailRequested"] = typeof(GhostingAlertEmailRequestedEvent),
         // VOK-H5-E1: didaftarkan SEJAK AWAL (bukan ditambal belakangan spt GhostingAlert) - lihat
         // doc-comment masing-masing event, OutboxEventContracts.cs.
         ["AssessmentFinalized"] = typeof(AssessmentFinalizedEvent),
+        ["LearningAssessmentReopened"] = typeof(LearningAssessmentReopenedEvent),
         ["ExportRequested"] = typeof(ExportRequestedEvent),
         ["CertificateRequested"] = typeof(CertificateRequestedEvent),
         // VOK-H6-E1 §1: didaftarkan SEJAK AWAL (bukan ditambal belakangan) — lihat doc-comment TenantAdminInvitedEvent.

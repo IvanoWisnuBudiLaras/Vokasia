@@ -1,4 +1,5 @@
 using System.Net;
+using Vokasia.Domain.Common;
 
 namespace Vokasia.Infrastructure.Email;
 
@@ -45,6 +46,26 @@ public static class EmailTemplateRenderer
         return (subject, Layout(subject, bodyHtml), LayoutText(subject, bodyText));
     }
 
+    public static (string Subject, string Html, string Text) LearningRecordReminder(
+        string studentName,
+        LearningAssessmentStage stage,
+        LearningAssessmentReminderType reminderType,
+        DateOnly dueDate)
+    {
+        var stageLabel = stage == LearningAssessmentStage.Middle ? "Penilaian Tengah" : "Penilaian Akhir";
+        var isOverdue = reminderType == LearningAssessmentReminderType.Overdue;
+        var subject = isOverdue
+            ? $"Tertunda: Learning Record {stageLabel}"
+            : $"Pengingat: Learning Record {stageLabel} perlu diisi";
+        var stateLabel = isOverdue ? "sudah tertunda" : "perlu diisi";
+        var bodyHtml = $"""
+            <p>Halo Mentor, Learning Record <strong>{E(stageLabel)}</strong> untuk <strong>{E(studentName)}</strong> {stateLabel}.</p>
+            <p>Tanggal penilaian: <strong>{dueDate:d MMMM yyyy}</strong>. Silakan buka Vokasia untuk melengkapi skor, catatan keseluruhan, dan bukti jurnal bila diperlukan.</p>
+            """;
+        var bodyText = $"Halo Mentor, Learning Record {stageLabel} untuk {studentName} {stateLabel}. Tanggal penilaian: {dueDate:d MMMM yyyy}. Silakan buka Vokasia untuk melengkapinya.";
+        return (subject, Layout(subject, bodyHtml), LayoutText(subject, bodyText));
+    }
+
     public static (string Subject, string Html, string Text) GhostingAlert(string studentName, string companyName, int emptyDays, string dashboardUrl)
     {
         var subject = $"Perhatian: {studentName} belum mengisi jurnal {emptyDays} hari kerja";
@@ -65,6 +86,17 @@ public static class EmailTemplateRenderer
             <p><a href="{E(downloadUrl)}">Unduh file di sini</a> (tautan berlaku sampai {expiresAt:d MMMM yyyy HH:mm}).</p>
             """;
         var bodyText = $"Halo {requestedBy}, file export Anda sudah siap. Unduh: {downloadUrl} (berlaku sampai {expiresAt:d MMMM yyyy HH:mm}).";
+        return (subject, Layout(subject, bodyHtml), LayoutText(subject, bodyText));
+    }
+
+    public static (string Subject, string Html, string Text) ExportReadyPrivateReport(string requestedBy, string reportUrl)
+    {
+        var subject = "Export Learning Record siap diproses";
+        var bodyHtml = $"""
+            <p>Halo {E(requestedBy)}, file export Learning Record Anda sudah siap.</p>
+            <p><a href="{E(reportUrl)}">Buka laporan untuk mengunduhnya</a>. Akses file tetap memerlukan sesi Vokasia Anda.</p>
+            """;
+        var bodyText = $"Halo {requestedBy}, file export Learning Record Anda sudah siap. Buka laporan: {reportUrl}. Akses file tetap memerlukan sesi Vokasia Anda.";
         return (subject, Layout(subject, bodyHtml), LayoutText(subject, bodyText));
     }
 

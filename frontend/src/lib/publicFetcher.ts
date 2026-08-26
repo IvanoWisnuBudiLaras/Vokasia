@@ -15,10 +15,10 @@
  * publik utk soal rate-limit. Diperbaiki dgn cara paling jujur: HAPUS asumsi prefix otomatis di sini,
  * caller (page.tsx masing2) WAJIB menulis path LENGKAP persis sesuai rute backend asli.
  *
- * `next: { revalidate }` dipasang supaya Next.js App Router men-cache respons di edge/server (ISR
- * fetch cache) SELARAS dgn `Cache-Control: public, max-age=300` yang backend sendiri kirim utk
- * GetPublicPortfolio (AC ticket literal: "cacheable Cache-Control 5 mnt") — 404 (`notFound()`
- * dipanggil caller) TIDAK ikut di-cache (Next.js tidak cache response yang dilempar sbg exception).
+ * Public page fetches are deliberately `no-store`: publication and hide/revoke state must become
+ * authoritative immediately, including when an earlier route response was rendered. The backend
+ * still advertises a controlled five-minute Cache-Control policy for direct public API consumers;
+ * the Next BFF prioritizes credential/publication correctness over ISR staleness.
  */
 export async function publicFetcher<T>(
   fullPath: string,
@@ -28,7 +28,9 @@ export async function publicFetcher<T>(
   const apiBase = process.env.API_INTERNAL_URL ?? "http://localhost:5000";
   const url = new URL(fullPath, apiBase);
 
-  const res = await fetch(url, { next: { revalidate: revalidateSeconds, tags: cacheTags } });
+  void revalidateSeconds;
+  void cacheTags;
+  const res = await fetch(url, { cache: "no-store" });
 
   if (res.status === 404) {
     return { status: 404, data: null };

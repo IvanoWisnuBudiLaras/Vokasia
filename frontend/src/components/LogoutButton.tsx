@@ -1,16 +1,12 @@
+"use client";
+
 import { Button } from "@/components/ui";
 
-/**
- * VOK-H2-E2 §components/LogoutButton.tsx — POST /api/auth/logout (BFF, H2-E3) -> redirect /login.
- * Form HTML biasa (bukan onClick+fetch): jalan tanpa JS, konsisten dgn "Server Components default"
- * (AGENTS.md #10) — tidak butuh "use client" sama sekali.
- */
+/** Logout navigation clears the BFF session and lets the API emit Clear-Site-Data. */
 export function LogoutButton() {
   return (
-    <form action="/api/auth/logout" method="POST">
-      <Button type="submit" variant="danger-outline" size="md">
-        Keluar
-      </Button>
-    </form>
+    <Button type="button" variant="danger-outline" size="md" onClick={() => window.location.assign("/api/auth/logout")}>
+      Keluar
+    </Button>
   );
 }
